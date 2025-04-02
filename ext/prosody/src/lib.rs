@@ -1,5 +1,6 @@
 #![allow(clippy::multiple_crate_versions)]
 #![allow(missing_docs, dead_code)] // todo: remove
+#![allow(clippy::unwrap_used)] // todo: remove
 
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};

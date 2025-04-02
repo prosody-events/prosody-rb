@@ -1,12 +1,11 @@
-use crate::bridge::core::RubyBridge;
+use crate::bridge::core::{RubyBridge, RubyCallable, RustCallable};
 use crate::{ROOT_MOD, RUNTIME};
 use educe::Educe;
 use magnus::value::{Lazy, ReprValue};
-use magnus::{method, Class, Error, Module, RClass, RModule, Ruby, Value};
-use std::sync::Arc;
-use tracing::error;
+use magnus::{method, Class, Error, Fixnum, Module, RModule, Ruby, Value};
+use std::time::Duration;
+use tokio::time::sleep;
 
-mod bidirectional;
 mod core;
 
 #[allow(clippy::expect_used)]
@@ -16,32 +15,43 @@ pub static BRIDGE_MOD: Lazy<RModule> = Lazy::new(|ruby| {
         .expect("Failed to define Bridge module")
 });
 
-#[allow(clippy::expect_used)]
-pub static THREAD_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
-    ruby.class_object()
-        .const_get("Thread")
-        .expect("Failed to load Thread class")
-});
+struct TestCallable;
 
-#[allow(clippy::expect_used)]
-pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
-    ruby.get_inner(&THREAD_CLASS)
-        .const_get("Queue")
-        .expect("Failed to load Queue class")
-});
+impl RubyCallable for TestCallable {
+    type Output = ();
+
+    fn execute(self, ruby: &Ruby) -> Self::Output {
+        ruby.module_kernel()
+            .funcall::<_, _, Value>("puts", ("hello",))
+            .unwrap();
+    }
+}
+
+impl RustCallable for TestCallable {
+    type Output = i64;
+
+    async fn execute(self) -> Self::Output {
+        sleep(Duration::from_secs(1)).await;
+        1 + 1
+    }
+
+    fn translate(output: Self::Output, _ruby: &Ruby) -> Value {
+        Fixnum::from_i64(output).unwrap().as_value()
+    }
+}
 
 #[derive(Clone, Educe, Default)]
 #[educe(Debug)]
 #[magnus::wrap(class = "Prosody::Bridge::DynamicBridge", free_immediately)]
 pub struct DynamicBridge {
     #[educe(Debug(ignore))]
-    inner: Arc<RubyBridge<Box<dyn (Fn(&Ruby)) + Send>, ()>>,
+    inner: RubyBridge<TestCallable, TestCallable>,
 }
 
 impl DynamicBridge {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RubyBridge::new()),
+            inner: RubyBridge::default(),
         }
     }
 
@@ -49,25 +59,13 @@ impl DynamicBridge {
         this.inner.initialize(ruby);
     }
 
-    pub fn poll(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        this.inner
-            .poll(ruby)
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
+    pub fn test_ruby_exec(this: &Self) {
+        let inner = this.inner.clone();
+        RUNTIME.spawn(async move { inner.ruby_exec(TestCallable).await });
     }
 
-    pub fn feed(ruby: &Ruby, this: &Self) {
-        // this.inner.rust_async(ruby).unwrap();
-        let inner = this.inner.clone();
-        RUNTIME.spawn(async move {
-            inner
-                .ruby_exec(Box::new(|r| {
-                    if let Err(error) = r.module_kernel().funcall::<_, _, Value>("puts", ("hello",))
-                    {
-                        error!("Error while calling puts: {error:?}");
-                    }
-                }))
-                .await
-        });
+    pub fn test_rust_exec(ruby: &Ruby, this: &Self) -> Value {
+        this.inner.rust_exec(ruby, TestCallable).unwrap()
     }
 }
 
@@ -77,8 +75,8 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let class = module.define_class("DynamicBridge", ruby.class_object())?;
     class.define_alloc_func::<DynamicBridge>();
     class.define_method("initialize", method!(DynamicBridge::initialize, 0))?;
-    class.define_method("poll", method!(DynamicBridge::poll, 0))?;
-    class.define_method("feed", method!(DynamicBridge::feed, 0))?;
+    class.define_method("test_ruby_exec", method!(DynamicBridge::test_ruby_exec, 0))?;
+    class.define_method("test_rust_exec", method!(DynamicBridge::test_rust_exec, 0))?;
 
     Ok(())
 }

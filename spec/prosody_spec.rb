@@ -5,12 +5,14 @@ RSpec.describe Prosody do
     expect(Prosody::VERSION).not_to be nil
   end
 
-  it "bridges" do
+  it "bridge ruby exec" do
     bridge = Prosody::Bridge::DynamicBridge.new
+    bridge.test_ruby_exec
+  end
 
-    5.times do
-      bridge.feed
-    end
+  it "bridge rust exec" do
+    bridge = Prosody::Bridge::DynamicBridge.new
+    puts bridge.test_rust_exec
   end
 
 end
