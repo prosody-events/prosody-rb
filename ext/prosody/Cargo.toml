@@ -1,0 +1,23 @@
+[package]
+name = "prosody"
+version = "0.1.0"
+edition = "2021"
+authors = ["Joshua Griffith <Joshua.Griffith@fnf.com>"]
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kanal.workspace = true
+magnus.workspace = true
+educe.workspace = true
+prosody.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+futures.workspace = true
+thiserror.workspace = true
+rb-sys.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
