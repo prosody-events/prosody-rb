@@ -24,7 +24,7 @@ opt-level = 1
 
 [workspace.lints.rust]
 missing_docs = "warn"
-unsafe_code = "warn"
+unsafe_code = "allow"
 
 [workspace.lints.clippy]
 blocks_in_conditions = "allow"

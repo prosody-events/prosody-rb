@@ -10,6 +10,7 @@ use tokio::runtime::Runtime;
 
 mod bridge;
 mod gvl;
+mod util;
 
 #[allow(clippy::expect_used)]
 static RUNTIME: LazyLock<Runtime> =

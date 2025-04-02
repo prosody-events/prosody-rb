@@ -1,11 +1,12 @@
 use crate::bridge::core::{RubyBridge, RubyCallable, RustCallable};
-use crate::{ROOT_MOD, RUNTIME};
+use crate::{id, ROOT_MOD, RUNTIME};
 use educe::Educe;
 use magnus::value::{Lazy, ReprValue};
 use magnus::{method, Class, Error, Fixnum, Module, RModule, Ruby, Value};
 use std::time::Duration;
 use tokio::time::sleep;
 
+mod callback;
 mod core;
 
 #[allow(clippy::expect_used)]
@@ -22,7 +23,7 @@ impl RubyCallable for TestCallable {
 
     fn execute(self, ruby: &Ruby) -> Self::Output {
         ruby.module_kernel()
-            .funcall::<_, _, Value>("puts", ("hello",))
+            .funcall::<_, _, Value>(id!("puts"), ("hello",))
             .unwrap();
     }
 }

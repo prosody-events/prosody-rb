@@ -1,9 +1,10 @@
+use crate::bridge::callback::AsyncCallback;
 use crate::gvl::{without_gvl, GvlError};
-use crate::RUNTIME;
+use crate::{id, RUNTIME};
 use futures::executor::block_on;
 use futures::TryFutureExt;
 use kanal::{bounded, AsyncReceiver, AsyncSender};
-use magnus::value::{Lazy, Opaque, ReprValue};
+use magnus::value::{Lazy, ReprValue};
 use magnus::{Module, RClass, Ruby, Value};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -13,14 +14,14 @@ use tracing::{error, warn};
 #[allow(clippy::expect_used)]
 pub static THREAD_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
     ruby.class_object()
-        .const_get("Thread")
+        .const_get(id!("Thread"))
         .expect("Failed to load Thread class")
 });
 
 #[allow(clippy::expect_used)]
 pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
     ruby.get_inner(&THREAD_CLASS)
-        .const_get("Queue")
+        .const_get(id!("Queue"))
         .expect("Failed to load Queue class")
 });
 
@@ -63,7 +64,7 @@ where
     },
     Callback {
         output: U::Output,
-        queue: Opaque<Value>,
+        queue: AsyncCallback,
     },
 }
 
@@ -142,17 +143,17 @@ where
     pub fn rust_exec(&self, ruby: &Ruby, callable: U) -> Result<Value, BridgeError> {
         let queue: Value = ruby
             .get_inner(&QUEUE_CLASS)
-            .funcall("new", ())
+            .funcall(id!("new"), ())
             .map_err(|e| BridgeError::QueueCreate(e.to_string()))?;
 
         let tx = self.tx.clone();
-        let opaque_queue = Opaque::from(queue);
+        let callback = AsyncCallback::from_queue(queue);
 
         RUNTIME.spawn(async move {
             if let Err(error) = tx
                 .send(Command::Callback {
                     output: callable.execute().await,
-                    queue: opaque_queue,
+                    queue: callback,
                 })
                 .await
             {
@@ -161,7 +162,7 @@ where
         });
 
         queue
-            .funcall("pop", ())
+            .funcall(id!("pop"), ())
             .map_err(|e| BridgeError::QueuePop(e.to_string()))
     }
 
@@ -200,15 +201,9 @@ where
                 .send(callable.execute(ruby))
                 .map_err(|_| BridgeError::CallerWentAway),
 
-            Command::Callback { output, queue } => {
-                let value = U::translate(output, ruby);
-                let queue = ruby.get_inner(queue);
-                queue
-                    .funcall::<_, _, Value>("push", (value,))
-                    .map_err(|e| BridgeError::QueuePush(e.to_string()))?;
-
-                Ok(())
-            }
+            Command::Callback { output, queue } => queue
+                .complete(ruby, U::translate(output, ruby))
+                .map_err(|e| BridgeError::QueuePush(e.to_string())),
         }
     }
 }
