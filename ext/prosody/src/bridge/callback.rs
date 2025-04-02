@@ -19,12 +19,12 @@ impl AsyncCallback {
         }
     }
 
-    pub fn complete<V>(&self, _ruby: &Ruby, value: V) -> Result<(), Error>
+    pub fn complete<V>(&self, ruby: &Ruby, value: V) -> Result<(), Error>
     where
         V: IntoValue,
     {
         self.queue
-            .funcall(id!("push"), (value.into_value(),))
+            .funcall(id!("push"), (value.into_value_with(ruby),))
             .map(|_: Value| ())
     }
 }

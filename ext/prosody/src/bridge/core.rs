@@ -1,4 +1,5 @@
 use crate::bridge::callback::AsyncCallback;
+use crate::bridge::{RubyCallable, RustCallable};
 use crate::gvl::{without_gvl, GvlError};
 use crate::{id, RUNTIME};
 use futures::executor::block_on;
@@ -26,32 +27,6 @@ pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
 });
 
 const DEFAULT_BUFFER_SIZE: usize = 64;
-
-pub trait RubyCallable: Send + 'static {
-    type Output: Send;
-
-    fn execute(self, ruby: &Ruby) -> Self::Output;
-}
-
-pub trait RustCallable: Send + 'static {
-    type Output: Send;
-
-    fn execute(self) -> impl Future<Output = Self::Output> + Send;
-
-    fn translate(output: Self::Output, ruby: &Ruby) -> Value;
-}
-
-impl<F, T> RubyCallable for F
-where
-    F: FnOnce(&Ruby) -> T + Send + 'static,
-    T: Send,
-{
-    type Output = T;
-
-    fn execute(self, ruby: &Ruby) -> Self::Output {
-        self(ruby)
-    }
-}
 
 enum Command<T, U>
 where
@@ -202,7 +177,7 @@ where
                 .map_err(|_| BridgeError::CallerWentAway),
 
             Command::Callback { output, queue } => queue
-                .complete(ruby, U::translate(output, ruby))
+                .complete(ruby, output)
                 .map_err(|e| BridgeError::QueuePush(e.to_string())),
         }
     }
@@ -221,6 +196,9 @@ pub enum BridgeError {
 
     #[error("Failed push value onto queue: {0:#}")]
     QueuePush(String),
+
+    #[error("Failed convert result into a value: {0:#}")]
+    Convert(String),
 
     #[error("Command was cancelled by Ruby runtime")]
     Cancelled,

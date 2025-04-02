@@ -1,13 +1,23 @@
-use crate::bridge::core::{RubyBridge, RubyCallable, RustCallable};
+use crate::bridge::core::RubyBridge;
 use crate::{id, ROOT_MOD, RUNTIME};
 use educe::Educe;
 use magnus::value::{Lazy, ReprValue};
-use magnus::{method, Class, Error, Fixnum, Module, RModule, Ruby, Value};
-use std::time::Duration;
-use tokio::time::sleep;
+use magnus::{method, Class, Error, IntoValue, Module, RModule, Ruby, Value};
 
 mod callback;
 mod core;
+
+pub trait RubyCallable: Send + 'static {
+    type Output: Send;
+
+    fn execute(self, ruby: &Ruby) -> Self::Output;
+}
+
+pub trait RustCallable: Send + 'static {
+    type Output: IntoValue + Send;
+
+    fn execute(self) -> impl Future<Output = Self::Output> + Send;
+}
 
 #[allow(clippy::expect_used)]
 pub static BRIDGE_MOD: Lazy<RModule> = Lazy::new(|ruby| {
@@ -32,12 +42,7 @@ impl RustCallable for TestCallable {
     type Output = i64;
 
     async fn execute(self) -> Self::Output {
-        sleep(Duration::from_secs(1)).await;
         1 + 1
-    }
-
-    fn translate(output: Self::Output, _ruby: &Ruby) -> Value {
-        Fixnum::from_i64(output).unwrap().as_value()
     }
 }
 

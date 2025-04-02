@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 kanal.workspace = true
-magnus.workspace = true
+magnus = { workspace = true, default-features = false }
 educe.workspace = true
 prosody.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
