@@ -70,7 +70,7 @@ where
     {
         // SAFETY: `data` is guaranteed to come from `Box::into_raw(Box<F>)`.
         // We reconstruct exactly once, transferring ownership back into Rust.
-        let func: Box<F> = Box::from_raw(data.cast());
+        let func: Box<F> = unsafe { Box::from_raw(data.cast()) };
 
         // Catch unwind so we don't panic across FFI.
         let result = catch_unwind(AssertUnwindSafe(|| (*func)())).map_err(|_| GvlError::Panicked);
@@ -95,7 +95,7 @@ where
         if catch_unwind(AssertUnwindSafe(|| {
             // SAFETY: closure_ptr was allocated via `Box::into_raw`. We only
             // borrow it here, not freeing it. That’s safe for multiple calls.
-            (*closure_ptr)();
+            unsafe { (*closure_ptr)() };
         }))
         .is_err()
         {
@@ -133,7 +133,7 @@ where
     let result = unsafe { *Box::from_raw(raw_result.cast()) };
 
     // SAFETY: Now that `rb_thread_call_without_gvl` has returned, Ruby will no
-    // longer call our `anon_unblock` callback. Thus it's safe to free the
+    // longer call our `anon_unblock` callback. Thus, it's safe to free the
     // `unblock` closure exactly once here.
     unsafe {
         let _ = Box::from_raw(unblock_ptr);

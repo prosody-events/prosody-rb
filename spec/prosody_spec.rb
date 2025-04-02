@@ -5,10 +5,6 @@ RSpec.describe Prosody do
     expect(Prosody::VERSION).not_to be nil
   end
 
-  it "calls Rust" do
-    expect(Prosody::hello("World")).to eq "Hello from Rust, World!"
-  end
-
   it "bridges" do
     bridge = Prosody::Bridge::DynamicBridge.new
 
