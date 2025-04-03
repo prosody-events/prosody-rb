@@ -4,7 +4,7 @@
 
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
-use prosody::tracing::{initialize_tracing, Identity};
+use prosody::tracing::{Identity, initialize_tracing};
 use std::sync::LazyLock;
 use tokio::runtime::Runtime;
 

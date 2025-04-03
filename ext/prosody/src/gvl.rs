@@ -1,6 +1,6 @@
 use rb_sys::rb_thread_call_without_gvl;
 use std::ffi::c_void;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use thiserror::Error;
 use tracing::error;
 
