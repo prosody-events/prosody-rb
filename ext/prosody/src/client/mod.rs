@@ -4,7 +4,7 @@ use crate::handler::RubyHandler;
 use magnus::{Class, Error, Module, Ruby};
 use prosody::high_level::HighLevelClient;
 
-// mod config;
+mod config;
 
 #[derive(Debug)]
 #[magnus::wrap(class = "Prosody::NativeClient", free_immediately)]
@@ -19,7 +19,7 @@ impl NativeClient {
 
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    // config::init(ruby)?;
+    config::init(ruby)?;
     let class = module.define_class("NativeClient", ruby.class_object())?;
 
     // class.define_alloc_func::<NativeClient>();
