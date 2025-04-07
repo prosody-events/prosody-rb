@@ -14,6 +14,8 @@ use tracing::{debug, error, warn};
 
 mod callback;
 
+const POLL_BATCH_SIZE: usize = 16;
+
 #[allow(clippy::expect_used)]
 pub static THREAD_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
     ruby.class_object()
@@ -123,7 +125,20 @@ fn poll(rx: &mut Receiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError>
             }
         })?;
 
-        maybe_command.ok_or(BridgeError::Shutdown)
+        let first_command = maybe_command.ok_or(BridgeError::Shutdown)?;
+
+        let mut commands = Vec::with_capacity(POLL_BATCH_SIZE);
+        commands.push(first_command);
+
+        while commands.len() < POLL_BATCH_SIZE {
+            if let Ok(command) = rx.try_recv() {
+                commands.push(command);
+            } else {
+                break;
+            }
+        }
+
+        Result::<_, BridgeError>::Ok(commands)
     };
 
     let cancel_fn = || {
@@ -136,8 +151,10 @@ fn poll(rx: &mut Receiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError>
         }
     };
 
-    let command = without_gvl(poll_fn, cancel_fn)??;
-    command(ruby);
+    let commands = without_gvl(poll_fn, cancel_fn)??;
+    for command in commands {
+        command(ruby);
+    }
 
     Ok(())
 }
