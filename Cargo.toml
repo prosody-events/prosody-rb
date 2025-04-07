@@ -7,15 +7,17 @@ members = ["./ext/prosody"]
 resolver = "2"
 
 [workspace.dependencies]
-kanal = "0.1"
 magnus = { version = "0.7", default-features = false }
 educe = "0.6"
 prosody = { git = "https://github.com/cincpro/prosody.git", rev = "79da6bf9b42ce00577fc5c4f800bb0c80d18bfae" } # replace once we have a package manager
-tokio = { version = "1.28", features = ["rt-multi-thread", "macros"] }
+tokio = "1.44"
 futures = "0.3"
 thiserror = "2.0"
 rb-sys = "0.9"
 tracing = "0.1"
+serde_magnus = "0.9"
+parking_lot = "0.12"
+paste = "1.0"
 
 [profile.release]
 opt-level = 1

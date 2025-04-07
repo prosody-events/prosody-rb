@@ -1,0 +1,169 @@
+module Prosody
+  class Configuration
+    # Class methods
+    def self.config_param: (Symbol | String, ?converter: ^(untyped) -> untyped, ?default: untyped) -> void
+
+    def self.duration_converter: (untyped) -> Float
+
+    # Constructor
+    def initialize: (?Hash[Symbol, untyped] kwargs) ?{ (Configuration) -> void } -> void
+
+    # Vec[String] fields
+    # @return [Array<String>, nil] List of bootstrap servers or nil
+    def bootstrap_servers: () -> Array[String]?
+
+    # @param value [String, Array<String>, nil] Server(s) to set
+    # @return [Array<String>, nil] Processed server list
+    def bootstrap_servers=: (String | Array[String]?) -> Array[String]?
+
+    # @return [Array<String>, nil] List of subscribed topics or nil
+    def subscribed_topics: () -> Array[String]?
+
+    # @param value [String, Array<String>, nil] Topic(s) to subscribe to
+    # @return [Array<String>, nil] Processed topic list
+    def subscribed_topics=: (String | Array[String]?) -> Array[String]?
+
+    # @return [Array<String>, nil] List of allowed events or nil
+    def allowed_events: () -> Array[String]?
+
+    # @param value [String, Array<String>, nil] Event(s) to allow
+    # @return [Array<String>, nil] Processed event list
+    def allowed_events=: (String | Array[String]?) -> Array[String]?
+
+    # Boolean field
+    # @return [Boolean, nil] Whether mock mode is enabled
+    def mock: () -> bool?
+
+    # @param value [Boolean, nil] Enable/disable mock mode
+    # @return [Boolean, nil] Processed mock value
+    def mock=: (bool?) -> bool?
+
+    # Duration fields (stored as float seconds)
+    # @return [Float, nil] Send timeout in seconds
+    def send_timeout: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Timeout to set
+    # @return [Float, nil] Timeout in seconds
+    def send_timeout=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # @return [Float, nil] Stall threshold in seconds
+    def stall_threshold: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Threshold to set
+    # @return [Float, nil] Threshold in seconds
+    def stall_threshold=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # @return [Float, nil] Shutdown timeout in seconds
+    def shutdown_timeout: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Timeout to set
+    # @return [Float, nil] Timeout in seconds
+    def shutdown_timeout=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # @return [Float, nil] Poll interval in seconds
+    def poll_interval: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Interval to set
+    # @return [Float, nil] Interval in seconds
+    def poll_interval=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # @return [Float, nil] Commit interval in seconds
+    def commit_interval: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Interval to set
+    # @return [Float, nil] Interval in seconds
+    def commit_interval=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # @return [Float, nil] Retry base in seconds
+    def retry_base: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Base to set
+    # @return [Float, nil] Base in seconds
+    def retry_base=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # @return [Float, nil] Maximum retry delay in seconds
+    def max_retry_delay: () -> Float?
+
+    # @param value [ActiveSupport::Duration, Numeric, nil] Delay to set
+    # @return [Float, nil] Delay in seconds
+    def max_retry_delay=: (ActiveSupport::Duration | Numeric | nil) -> Float?
+
+    # Numeric fields
+    # @return [Integer, nil] Idempotence cache size
+    def idempotence_cache_size: () -> Integer?
+
+    # @param value [Integer, nil] Cache size to set
+    # @return [Integer, nil] Processed cache size
+    def idempotence_cache_size=: (Integer?) -> Integer?
+
+    # @return [Integer, nil] Maximum concurrency
+    def max_concurrency: () -> Integer?
+
+    # @param value [Integer, nil] Concurrency to set
+    # @return [Integer, nil] Processed concurrency
+    def max_concurrency=: (Integer?) -> Integer?
+
+    # @return [Integer, nil] Maximum uncommitted messages
+    def max_uncommitted: () -> Integer?
+
+    # @param value [Integer, nil] Maximum to set
+    # @return [Integer, nil] Processed maximum
+    def max_uncommitted=: (Integer?) -> Integer?
+
+    # @return [Integer, nil] Maximum enqueued per key
+    def max_enqueued_per_key: () -> Integer?
+
+    # @param value [Integer, nil] Maximum to set
+    # @return [Integer, nil] Processed maximum
+    def max_enqueued_per_key=: (Integer?) -> Integer?
+
+    # @return [Integer, nil] Maximum retries
+    def max_retries: () -> Integer?
+
+    # @param value [Integer, nil] Maximum to set
+    # @return [Integer, nil] Processed maximum
+    def max_retries=: (Integer?) -> Integer?
+
+    # String fields
+    # @return [String, nil] Group ID
+    def group_id: () -> String?
+
+    # @param value [String, nil] Group ID to set
+    # @return [String, nil] Processed group ID
+    def group_id=: (String?) -> String?
+
+    # @return [String, nil] Source system
+    def source_system: () -> String?
+
+    # @param value [String, nil] Source system to set
+    # @return [String, nil] Processed source system
+    def source_system=: (String?) -> String?
+
+    # @return [String, nil] Failure topic
+    def failure_topic: () -> String?
+
+    # @param value [String, nil] Failure topic to set
+    # @return [String, nil] Processed failure topic
+    def failure_topic=: (String?) -> String?
+
+    # Mode field – returns either :low_latency, :best_effort, or :pipeline
+    # @return [Symbol, nil] Current mode
+    def mode: () -> (:low_latency | :best_effort | :pipeline)?
+
+    # @param value [Symbol, String, nil] Mode to set
+    # @return [Symbol, nil] Processed mode
+    def mode=: ((:low_latency | :best_effort | :pipeline | String)?) -> (:low_latency | :best_effort | :pipeline)?
+
+    # Probe port field – returns false, an Integer, or nil
+    # @return [Integer, false, nil] Current probe port or disabled state
+    def probe_port: () -> (false | Integer | nil)
+
+    # @param value [Symbol, String, Integer, false, nil] Probe port to set
+    # @return [Integer, false, nil] Processed probe port
+    def probe_port=: (:disabled | "disabled" | Integer | false | nil) -> (false | Integer | nil)
+
+    # Hash conversion
+    # @return [Hash] Configuration as a native hash
+    def to_native_hash: () -> Hash[Symbol, untyped]
+  end
+end

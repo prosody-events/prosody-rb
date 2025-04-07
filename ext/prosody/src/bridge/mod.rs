@@ -4,16 +4,13 @@ use crate::{ROOT_MOD, RUNTIME, id};
 use educe::Educe;
 use futures::TryFutureExt;
 use futures::executor::block_on;
-use kanal::AsyncSender;
-use kanal::{AsyncReceiver, bounded};
 use magnus::value::{Lazy, ReprValue};
-use magnus::{Class, Error, IntoValue, Module, RClass, Ruby, Value, method};
-use std::time::Duration;
+use magnus::{Error, IntoValue, Module, Object, RClass, Ruby, Value, function};
 use thiserror::Error;
+use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::sync::oneshot;
-use tokio::time::sleep;
 use tokio::{select, try_join};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 mod callback;
 
@@ -31,54 +28,36 @@ pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
         .expect("Failed to load Queue class")
 });
 
-const DEFAULT_BUFFER_SIZE: usize = 64;
-
 type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
 
-#[derive(Educe)]
+#[derive(Educe, Clone)]
 #[educe(Debug)]
-#[magnus::wrap(class = "Prosody::Bridge", free_immediately)]
-pub struct RubyBridge {
+#[magnus::wrap(class = "Prosody::Bridge", free_immediately, frozen_shareable, size)]
+pub struct Bridge {
     #[educe(Debug(ignore))]
-    tx: AsyncSender<RubyFunction>,
-
-    #[educe(Debug(ignore))]
-    rx: AsyncReceiver<RubyFunction>,
+    tx: Sender<RubyFunction>,
 }
 
-impl Clone for RubyBridge {
-    fn clone(&self) -> Self {
-        Self {
-            tx: self.tx.clone(),
-            rx: self.rx.clone(),
-        }
-    }
-}
+impl Bridge {
+    pub fn new(ruby: &Ruby, buffer_size: usize) -> Self {
+        let (tx, mut rx) = channel(buffer_size);
 
-impl Default for RubyBridge {
-    fn default() -> Self {
-        Self::new(DEFAULT_BUFFER_SIZE)
-    }
-}
-
-impl RubyBridge {
-    fn new(buffer_size: usize) -> Self {
-        let (tx, rx) = bounded(buffer_size);
-        Self {
-            tx: tx.to_async(),
-            rx: rx.to_async(),
-        }
-    }
-
-    fn initialize(ruby: &Ruby, this: &Self) {
-        let instance: Self = this.clone();
-        ruby.thread_create_from_fn::<_, ()>(move |ruby| {
+        ruby.thread_create_from_fn(move |ruby| {
             loop {
-                if let Err(e) = instance.poll(ruby) {
-                    error!("Error during poll: {e:?}");
+                let Err(error) = poll(&mut rx, ruby) else {
+                    continue;
+                };
+
+                if matches!(error, BridgeError::Shutdown) {
+                    debug!("shutting down Ruby bridge");
+                    break;
                 }
+
+                error!("error during Ruby bridge poll: {error:#}");
             }
         });
+
+        Self { tx }
     }
 
     pub async fn ruby_exec<F, T>(&self, function: F) -> Result<T, BridgeError>
@@ -91,7 +70,7 @@ impl RubyBridge {
         let function = |ruby: &Ruby| {
             let result = function(ruby);
             if result_tx.send(result).is_err() {
-                error!("Failed to send result");
+                error!("failed to send Ruby bridge result");
             }
         };
 
@@ -130,48 +109,48 @@ impl RubyBridge {
 
         queue.funcall(id!("pop"), ())
     }
+}
 
-    fn poll(&self, ruby: &Ruby) -> Result<(), BridgeError> {
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        let mut maybe_cancel_tx = Some(cancel_tx);
+fn poll(rx: &mut Receiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError> {
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    let mut maybe_cancel_tx = Some(cancel_tx);
 
-        let poll_fn = || {
-            let maybe_command = block_on(async {
-                select! {
-                    _ = cancel_rx => Err(BridgeError::Cancelled),
-                    result = self.rx.recv() => Ok(result.ok()),
-                }
-            })?;
-
-            maybe_command.ok_or(BridgeError::Shutdown)
-        };
-
-        let cancel_fn = || {
-            let Some(cancel_tx) = maybe_cancel_tx.take() else {
-                return;
-            };
-
-            if cancel_tx.send(()).is_err() {
-                warn!("Failed to cancel poll operation");
+    let poll_fn = || {
+        let maybe_command = block_on(async {
+            select! {
+                _ = cancel_rx => Err(BridgeError::Cancelled),
+                result = rx.recv() => Ok(result),
             }
+        })?;
+
+        maybe_command.ok_or(BridgeError::Shutdown)
+    };
+
+    let cancel_fn = || {
+        let Some(cancel_tx) = maybe_cancel_tx.take() else {
+            return;
         };
 
-        let command = without_gvl(poll_fn, cancel_fn)??;
-        command(ruby);
+        if cancel_tx.send(()).is_err() {
+            warn!("Failed to cancel poll operation");
+        }
+    };
 
-        Ok(())
-    }
+    let command = without_gvl(poll_fn, cancel_fn)??;
+    command(ruby);
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]
 pub enum BridgeError {
-    #[error("An error occurred while polling: {0:#}")]
+    #[error("an error occurred while polling: {0:#}")]
     Gvl(#[from] GvlError),
 
-    #[error("Command was cancelled by Ruby runtime")]
+    #[error("command was cancelled by Ruby runtime")]
     Cancelled,
 
-    #[error("Bridge was shutdown")]
+    #[error("Ruby bridge was shutdown")]
     Shutdown,
 }
 
@@ -179,8 +158,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
     let class = module.define_class("Bridge", ruby.class_object())?;
 
-    class.define_alloc_func::<RubyBridge>();
-    class.define_method("initialize", method!(RubyBridge::initialize, 0))?;
+    class.define_singleton_method("new", function!(Bridge::new, 1))?;
 
     Ok(())
 }

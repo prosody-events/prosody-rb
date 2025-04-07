@@ -19,7 +19,7 @@ impl AsyncCallback {
         }
     }
 
-    pub fn complete<V>(&self, ruby: &Ruby, value: V) -> Result<(), Error>
+    pub fn complete<V>(self, ruby: &Ruby, value: V) -> Result<(), Error>
     where
         V: IntoValue,
     {

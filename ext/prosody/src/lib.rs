@@ -9,7 +9,9 @@ use std::sync::LazyLock;
 use tokio::runtime::Runtime;
 
 mod bridge;
+mod client;
 mod gvl;
+mod handler;
 mod util;
 
 #[allow(clippy::expect_used)]
@@ -28,6 +30,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     initialize_tracing::<Identity>(None).expect("Failed to initialize tracing system");
 
     bridge::init(ruby)?;
+    client::init(ruby)?;
 
     Ok(())
 }

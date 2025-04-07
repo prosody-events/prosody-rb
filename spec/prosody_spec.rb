@@ -5,4 +5,7 @@ RSpec.describe Prosody do
     expect(Prosody::VERSION).not_to be nil
   end
 
+  it "creates a client" do
+    expect { Prosody::NativeClient.new }.not_to raise_error
+  end
 end
