@@ -1,12 +1,16 @@
 module Prosody
   class Configuration
+    # Instance variables
+    @config: Hash[Symbol, untyped]
+
     # Class methods
     def self.config_param: (Symbol | String, ?converter: ^(untyped) -> untyped, ?default: untyped) -> void
 
     def self.duration_converter: (untyped) -> Float
 
-    # Constructor
-    def initialize: (?Hash[Symbol, untyped] kwargs) ?{ (Configuration) -> void } -> void
+    # Constructor with a properly typed block parameter.
+    def initialize: (?Hash[Symbol, untyped] kwargs) { (Configuration) -> void } -> void
+      | (?Hash[Symbol, untyped] kwargs) -> void
 
     # Vec[String] fields
     # @return [Array<String>, nil] List of bootstrap servers or nil

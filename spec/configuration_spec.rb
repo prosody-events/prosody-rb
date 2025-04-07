@@ -199,7 +199,7 @@ RSpec.describe Prosody::Configuration do
         send_timeout: 5.0,
         group_id: "group1",
         idempotence_cache_size: 100,
-        subscribed_topics: ["topic1", "topic2"],
+        subscribed_topics: %w[topic1 topic2],
         allowed_events: ["event1"],
         source_system: "system1",
         max_concurrency: 10,
