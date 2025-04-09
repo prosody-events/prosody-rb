@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "spec_helper"
+
 RSpec.describe Prosody::Configuration do
   subject(:config) { described_class.new }
 
@@ -253,13 +255,13 @@ RSpec.describe Prosody::Configuration do
     end
   end
 
-  describe "#to_native_hash" do
+  describe "#to_hash" do
     it "returns a hash with only non-nil values" do
       config.bootstrap_servers = "server1"
       config.mode = :pipeline
       config.send_timeout = 5.0
 
-      native_hash = config.to_native_hash
+      native_hash = config.to_hash
 
       expect(native_hash).to include(
         bootstrap_servers: ["server1"],
@@ -271,7 +273,7 @@ RSpec.describe Prosody::Configuration do
     end
 
     it "returns an empty hash when all values are nil" do
-      expect(config.to_native_hash).to eq({})
+      expect(config.to_hash).to eq({})
     end
   end
 end

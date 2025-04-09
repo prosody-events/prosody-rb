@@ -1,11 +1,14 @@
 use crate::bridge::callback::AsyncCallback;
 use crate::gvl::{GvlError, without_gvl};
 use crate::{ROOT_MOD, RUNTIME, id};
+use atomic_take::AtomicTake;
 use educe::Educe;
 use futures::TryFutureExt;
 use futures::executor::block_on;
 use magnus::value::{Lazy, ReprValue};
-use magnus::{Error, IntoValue, Module, Object, RClass, Ruby, Value, function};
+use magnus::{Error, Module, Object, RClass, Ruby, Value, function};
+use parking_lot::Mutex;
+use std::any::Any;
 use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::sync::oneshot;
@@ -31,6 +34,10 @@ pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
 });
 
 type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
+
+#[derive(Debug)]
+#[magnus::wrap(class = "Prosody::DynamicResult", free_immediately)]
+struct DynamicResult(AtomicTake<Box<dyn Any + Send>>);
 
 #[derive(Educe, Clone)]
 #[educe(Debug)]
@@ -86,10 +93,10 @@ impl Bridge {
         Ok(result)
     }
 
-    pub fn rust_exec<Fut>(&self, ruby: &Ruby, future: Fut) -> Result<Value, Error>
+    pub fn run_future<Fut>(&self, ruby: &Ruby, future: Fut) -> Result<Fut::Output, Error>
     where
         Fut: Future + Send + 'static,
-        Fut::Output: IntoValue + Send,
+        Fut::Output: Send,
     {
         let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!("new"), ())?;
         let callback = AsyncCallback::from_queue(queue);
@@ -98,7 +105,7 @@ impl Bridge {
         RUNTIME.spawn(async move {
             let result = future.await;
             let function = move |ruby: &Ruby| {
-                let value = result.into_value_with(ruby);
+                let value = DynamicResult(AtomicTake::new(Box::new(result)));
                 if let Err(error) = callback.complete(ruby, value) {
                     error!("failed to complete Ruby callback: {error:#}");
                 }
@@ -109,7 +116,16 @@ impl Bridge {
             }
         });
 
-        queue.funcall(id!("pop"), ())
+        let result: &DynamicResult = queue.funcall(id!("pop"), ())?;
+        let result = result.0.take().ok_or_else(|| {
+            Error::new(ruby.exception_runtime_error(), "failed to extract result")
+        })?;
+
+        let result: Box<Fut::Output> = result
+            .downcast()
+            .map_err(|_| Error::new(ruby.exception_runtime_error(), "failed to extract result"))?;
+
+        Ok(*result)
     }
 }
 
@@ -173,9 +189,9 @@ pub enum BridgeError {
 
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class("Bridge", ruby.class_object())?;
-
-    class.define_singleton_method("new", function!(Bridge::new, 1))?;
+    let result_class = module.define_class("DynamicResult", ruby.class_object())?;
+    let bridge_class = module.define_class("Bridge", ruby.class_object())?;
+    bridge_class.define_singleton_method("new", function!(Bridge::new, 1))?;
 
     Ok(())
 }

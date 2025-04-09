@@ -123,7 +123,7 @@ module Prosody
       }
 
     # Returns a Ruby hash with only non-nil values, matching the schema for Rust deserialization.
-    def to_native_hash
+    def to_hash
       @config.dup.compact
     end
   end

@@ -10,8 +10,8 @@ impl FallibleHandler for RubyHandler {
 
     async fn on_message(
         &self,
-        context: MessageContext,
-        message: ConsumerMessage,
+        _context: MessageContext,
+        _message: ConsumerMessage,
     ) -> Result<(), Self::Error> {
         todo!()
     }

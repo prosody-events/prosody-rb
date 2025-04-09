@@ -18,6 +18,7 @@ tracing = "0.1"
 serde_magnus = "0.9"
 parking_lot = "0.12"
 either = "1.15"
+atomic-take = "1.1"
 
 [profile.release]
 opt-level = 1

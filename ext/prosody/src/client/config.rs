@@ -1,21 +1,14 @@
-use crate::ROOT_MOD;
 use either::Either;
-use magnus::{Class, Error, Module, RHash, Ruby, TryConvert, Value, function};
+use magnus::{Error, TryConvert, Value};
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::failure::retry::RetryConfigurationBuilder;
 use prosody::consumer::failure::topic::FailureTopicConfigurationBuilder;
+use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
 use serde::Deserialize;
 use serde_magnus::deserialize;
 use std::time::Duration;
-use thiserror::Error;
 
-#[magnus::wrap(
-    class = "Prosody::NativeConfiguration",
-    free_immediately,
-    frozen_shareable,
-    size
-)]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct NativeConfiguration {
     bootstrap_servers: Option<Vec<String>>,
@@ -39,22 +32,6 @@ pub struct NativeConfiguration {
     max_retry_delay: Option<f32>,
     failure_topic: Option<String>,
     probe_port: Option<Either<bool, u16>>,
-}
-
-impl NativeConfiguration {
-    fn initialize(ruby: &Ruby, hash: RHash) -> Result<Self, Error> {
-        deserialize(hash)
-    }
-}
-
-pub fn init(ruby: &Ruby) -> Result<(), Error> {
-    let module = ruby.get_inner(&ROOT_MOD);
-
-    let config_class = module.define_class("NativeConfiguration", ruby.class_object())?;
-    config_class.define_alloc_func::<NativeConfiguration>();
-    config_class.define_method("initialize", function!(NativeConfiguration::initialize, 1))?;
-
-    Ok(())
 }
 
 impl TryConvert for NativeConfiguration {
@@ -195,5 +172,19 @@ impl<'a> From<&'a NativeConfiguration> for FailureTopicConfigurationBuilder {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum NativeConfigurationError {}
+impl<'a> TryFrom<&'a NativeConfiguration> for Mode {
+    type Error = String;
+
+    fn try_from(value: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let Some(mode_str) = value.mode.as_deref() else {
+            return Ok(Mode::default());
+        };
+
+        match mode_str {
+            "pipeline" => Ok(Mode::Pipeline),
+            "low_latency" => Ok(Mode::LowLatency),
+            "best_effort" => Ok(Mode::BestEffort),
+            string => Err(format!("unrecognized mode: {string}")),
+        }
+    }
+}

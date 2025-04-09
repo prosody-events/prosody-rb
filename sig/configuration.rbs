@@ -168,6 +168,6 @@ module Prosody
 
     # Hash conversion
     # @return [Hash] Configuration as a native hash
-    def to_native_hash: () -> Hash[Symbol, untyped]
+    def to_hash: () -> Hash[Symbol, untyped]
   end
 end
