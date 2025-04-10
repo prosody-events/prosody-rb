@@ -2,16 +2,33 @@ PATH
   remote: .
   specs:
     prosody (0.1.0)
+      async (~> 2.23)
       rb_sys (~> 0.9.91)
 
 GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.2)
+    async (2.23.1)
+      console (~> 1.29)
+      fiber-annotation
+      io-event (~> 1.9)
+      metrics (~> 0.12)
+      traces (~> 0.15)
+    console (1.30.2)
+      fiber-annotation
+      fiber-local (~> 1.1)
+      json
     diff-lcs (1.6.0)
+    fiber-annotation (0.2.0)
+    fiber-local (1.1.0)
+      fiber-storage
+    fiber-storage (1.0.0)
+    io-event (1.10.0)
     json (2.10.1)
     language_server-protocol (3.17.0.4)
     lint_roller (1.1.0)
+    metrics (0.12.2)
     parallel (1.26.3)
     parser (3.3.7.1)
       ast (~> 2.4.1)
@@ -67,6 +84,7 @@ GEM
     standard-performance (1.6.0)
       lint_roller (~> 1.1)
       rubocop-performance (~> 1.23.0)
+    traces (0.15.2)
     unicode-display_width (2.6.0)
 
 PLATFORMS
@@ -74,6 +92,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  async (~> 2.23)
   prosody!
   rake (~> 13.0)
   rake-compiler

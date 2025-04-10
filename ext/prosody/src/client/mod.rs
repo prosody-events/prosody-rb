@@ -60,13 +60,19 @@ impl NativeClient {
             })?
             .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
     }
+
+    fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
     let class = module.define_class(id!("NativeClient"), ruby.class_object())?;
+
     class.define_singleton_method("new", function!(NativeClient::new, 1))?;
     class.define_method(id!("send_message"), method!(NativeClient::send_message, 3))?;
+    class.define_method(id!("subscribe"), method!(NativeClient::subscribe, 1))?;
 
     Ok(())
 }
