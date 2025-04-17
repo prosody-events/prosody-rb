@@ -1,21 +1,16 @@
 use crate::id;
-use magnus::value::{BoxValue, ReprValue};
+use crate::util::ThreadSafeValue;
+use magnus::value::ReprValue;
 use magnus::{Error, IntoValue, Ruby, Value};
 
 pub struct AsyncCallback {
-    queue: BoxValue<Value>,
+    queue: ThreadSafeValue,
 }
-
-// SAFETY: The underlying queue can only be pushed to from a Ruby thread.
-unsafe impl Send for AsyncCallback {}
-
-// SAFETY: The underlying queue can only be pushed to from a Ruby thread.
-unsafe impl Sync for AsyncCallback {}
 
 impl AsyncCallback {
     pub fn from_queue(queue: Value) -> Self {
         Self {
-            queue: BoxValue::new(queue),
+            queue: ThreadSafeValue::new(queue),
         }
     }
 
@@ -24,6 +19,7 @@ impl AsyncCallback {
         V: IntoValue,
     {
         self.queue
+            .get(ruby)
             .funcall(id!("push"), (value.into_value_with(ruby),))
             .map(|_: Value| ())
     }

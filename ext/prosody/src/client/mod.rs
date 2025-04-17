@@ -3,7 +3,7 @@ use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
 use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
-use magnus::{Error, IntoValue, Module, Object, Ruby, Value, function, method};
+use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
 use serde_magnus::deserialize;
@@ -14,7 +14,12 @@ mod config;
 const BRIDGE_BUFFER_SIZE: usize = 64;
 
 #[derive(Debug)]
-#[magnus::wrap(class = "Prosody::NativeClient", free_immediately)]
+#[magnus::wrap(
+    class = "Prosody::NativeClient",
+    free_immediately,
+    frozen_shareable,
+    size
+)]
 pub struct NativeClient {
     client: Arc<HighLevelClient<RubyHandler>>,
     bridge: Bridge,
@@ -55,13 +60,37 @@ impl NativeClient {
         let value = deserialize(payload)?;
 
         this.bridge
-            .run_future(ruby, async move {
+            .wait_for(ruby, async move {
                 client.send(topic.as_str().into(), &key, &value).await
             })?
             .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
     }
 
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
+        // let bridge = this.bridge.clone();
+        // let function = move |ruby: &Ruby| {
+        //     ruby.module_kernel()
+        //         .funcall::<_, _, Value>(id!("puts"), ("sleeping",))
+        //         .unwrap();
+        //
+        //     ruby.module_kernel()
+        //         .funcall::<_, _, Value>(id!("sleep"), (2.0_f64,))
+        //         .unwrap();
+        //
+        //     ruby.module_kernel()
+        //         .funcall::<_, _, Value>(id!("puts"), ("done sleeping",))
+        //         .unwrap();
+        // };
+        //
+        // let bridge = this.bridge.clone();
+        // let future = async move {
+        //     let task = bridge.run_async(function).await?;
+        //     task.await?;
+        //     Result::<(), BridgeError>::Ok(())
+        // };
+        //
+        // this.bridge.wait_for(ruby, future)?.unwrap();
+
         Ok(())
     }
 }

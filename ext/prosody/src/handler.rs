@@ -1,6 +1,16 @@
+use crate::id;
+use magnus::value::Lazy;
+use magnus::{Module, RClass};
 use prosody::consumer::failure::{ClassifyError, ErrorCategory, FallibleHandler};
 use prosody::consumer::message::{ConsumerMessage, MessageContext};
 use thiserror::Error;
+
+#[allow(clippy::expect_used)]
+static TASK_PROCESSOR: Lazy<RClass> = Lazy::new(|ruby| {
+    ruby.class_object()
+        .const_get(id!("Prosody::AsyncTaskProcessor"))
+        .expect("Failed to load Prosody::AsyncTaskProcessor class")
+});
 
 #[derive(Clone, Debug)]
 pub struct RubyHandler {}

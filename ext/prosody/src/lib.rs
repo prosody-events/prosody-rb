@@ -12,6 +12,8 @@ mod bridge;
 mod client;
 mod gvl;
 mod handler;
+mod result;
+mod scheduler;
 mod util;
 
 #[allow(clippy::expect_used)]

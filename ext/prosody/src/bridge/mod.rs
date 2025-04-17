@@ -3,16 +3,14 @@ use crate::gvl::{GvlError, without_gvl};
 use crate::{ROOT_MOD, RUNTIME, id};
 use atomic_take::AtomicTake;
 use educe::Educe;
-use futures::TryFutureExt;
 use futures::executor::block_on;
 use magnus::value::{Lazy, ReprValue};
 use magnus::{Error, Module, Object, RClass, Ruby, Value, function};
-use parking_lot::Mutex;
 use std::any::Any;
 use thiserror::Error;
+use tokio::select;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::sync::oneshot;
-use tokio::{select, try_join};
 use tracing::{debug, error, warn};
 
 mod callback;
@@ -69,7 +67,7 @@ impl Bridge {
         Self { tx }
     }
 
-    pub async fn ruby_exec<F, T>(&self, function: F) -> Result<T, BridgeError>
+    pub async fn run_sync<F, T>(&self, function: F) -> Result<T, BridgeError>
     where
         F: FnOnce(&Ruby) -> T + Send + 'static,
         T: Send + 'static,
@@ -83,17 +81,15 @@ impl Bridge {
             }
         };
 
-        let ((), result) = try_join!(
-            self.tx
-                .send(Box::new(function))
-                .map_err(|_| BridgeError::Shutdown),
-            result_rx.map_err(|_| BridgeError::Shutdown)
-        )?;
+        self.tx
+            .send(Box::new(function))
+            .await
+            .map_err(|_| BridgeError::Shutdown)?;
 
-        Ok(result)
+        result_rx.await.map_err(|_| BridgeError::Shutdown)
     }
 
-    pub fn run_future<Fut>(&self, ruby: &Ruby, future: Fut) -> Result<Fut::Output, Error>
+    pub fn wait_for<Fut>(&self, ruby: &Ruby, future: Fut) -> Result<Fut::Output, Error>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send,
@@ -116,16 +112,14 @@ impl Bridge {
             }
         });
 
-        let result: &DynamicResult = queue.funcall(id!("pop"), ())?;
-        let result = result.0.take().ok_or_else(|| {
-            Error::new(ruby.exception_runtime_error(), "failed to extract result")
-        })?;
-
-        let result: Box<Fut::Output> = result
-            .downcast()
-            .map_err(|_| Error::new(ruby.exception_runtime_error(), "failed to extract result"))?;
-
-        Ok(*result)
+        queue
+            .funcall::<_, _, &DynamicResult>(id!("pop"), ())?
+            .0
+            .take()
+            .ok_or_else(|| Error::new(ruby.exception_runtime_error(), "result already taken"))?
+            .downcast::<Fut::Output>()
+            .map_err(|_| Error::new(ruby.exception_runtime_error(), "failed to downcast result"))
+            .map(|output| *output)
     }
 }
 
@@ -180,6 +174,12 @@ pub enum BridgeError {
     #[error("an error occurred while polling: {0:#}")]
     Gvl(#[from] GvlError),
 
+    #[error("failed to create async task: {0:#}")]
+    TaskCreate(String),
+
+    #[error("async task was dropped before completion")]
+    TaskDropped,
+
     #[error("command was cancelled by Ruby runtime")]
     Cancelled,
 
@@ -189,7 +189,8 @@ pub enum BridgeError {
 
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let result_class = module.define_class("DynamicResult", ruby.class_object())?;
+    module.define_class("DynamicResult", ruby.class_object())?;
+
     let bridge_class = module.define_class("Bridge", ruby.class_object())?;
     bridge_class.define_singleton_method("new", function!(Bridge::new, 1))?;
 
