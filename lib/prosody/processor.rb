@@ -16,8 +16,6 @@ require "logger"
 module Prosody
   # CancellationToken uses an internal queue to signal cancellation.
   class CancellationToken
-    @cancelled = false
-
     def initialize
       @queue = Queue.new
     end
@@ -27,14 +25,9 @@ module Prosody
       @queue.push(:cancel)
     end
 
-    def cancelled?
-      @cancelled
-    end
-
     # Block until a cancellation message is received.
     def wait
       @queue.pop
-      @cancelled = true
       true
     end
   end
@@ -82,8 +75,6 @@ module Prosody
       return unless @processing_thread&.alive?
       @logger.debug("Stopping async task processor")
       @command_queue.push(Commands::Shutdown.new)
-      @processing_thread.join
-      @logger.debug("Async task processor stopped")
     end
 
     # Submit a task for execution.

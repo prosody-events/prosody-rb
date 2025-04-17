@@ -1,8 +1,10 @@
+use crate::RUNTIME;
 use crate::bridge::{Bridge, BridgeError};
 use crate::result::result_channel;
 use crate::scheduler::handle::TaskHandle;
 use crate::scheduler::processor::RubyProcessor;
 use magnus::{Error, Ruby};
+use std::convert::identity;
 use thiserror::Error;
 use tracing::error;
 
@@ -17,6 +19,17 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
+    pub async fn new(bridge: Bridge) -> Result<Self, SchedulerError> {
+        let processor = bridge
+            .run_sync(|ruby| {
+                RubyProcessor::new(ruby)
+                    .map_err(|error| SchedulerError::Processor(error.to_string()))
+            })
+            .await??;
+
+        Ok(Self { bridge, processor })
+    }
+
     pub async fn schedule<F>(
         &self,
         task_id: String,
@@ -41,8 +54,33 @@ impl Scheduler {
     }
 }
 
+impl Drop for Scheduler {
+    fn drop(&mut self) {
+        let bridge = self.bridge.clone();
+        let processor = self.processor.clone();
+
+        RUNTIME.spawn(async move {
+            if let Err(error) = bridge
+                .run_sync(move |ruby| {
+                    processor
+                        .stop(ruby)
+                        .map_err(|error| SchedulerError::Shutdown(error.to_string()))
+                })
+                .await
+                .map_err(SchedulerError::from)
+                .and_then(identity)
+            {
+                error!("failed to shutdown processor: {error:#}");
+            }
+        });
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum SchedulerError {
+    #[error("failed to create task processor: {0}")]
+    Processor(String),
+
     #[error("failed to submit task: {0}")]
     Submit(String),
 
@@ -51,4 +89,7 @@ pub enum SchedulerError {
 
     #[error("failed to cancel task: {0}")]
     Cancel(String),
+
+    #[error("failed to shutdown processor: {0}")]
+    Shutdown(String),
 }

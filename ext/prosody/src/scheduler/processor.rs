@@ -52,4 +52,9 @@ impl RubyProcessor {
 
         Ok(token)
     }
+
+    pub fn stop(&self, ruby: &Ruby) -> Result<(), Error> {
+        let _: Value = self.0.get(ruby).funcall(id!("stop"), ())?;
+        Ok(())
+    }
 }

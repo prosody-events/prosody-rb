@@ -1,5 +1,5 @@
 use crate::bridge::Bridge;
-use crate::result::ResultReceiver;
+use crate::result::{ProcessingError, ResultReceiver};
 use crate::scheduler::SchedulerError;
 use crate::scheduler::cancellation::CancellationToken;
 use magnus::Ruby;
@@ -28,5 +28,9 @@ impl TaskHandle {
                     .map_err(|error| SchedulerError::Cancel(error.to_string()))
             })
             .await?
+    }
+
+    pub async fn result(self) -> Result<(), ProcessingError> {
+        self.result.receive().await
     }
 }
