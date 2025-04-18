@@ -3,16 +3,38 @@
 require "spec_helper"
 
 RSpec.describe Prosody::NativeClient do
-  let(:configuration) { Prosody::Configuration.new(bootstrap_servers: "localhost:9094", source_system: "test") }
-  subject(:client) { described_class.new(configuration) }
+  client = described_class.new(Prosody::Configuration.new(
+    bootstrap_servers: "localhost:9094",
+    source_system: "test-source",
+    group_id: "test-consumer",
+    subscribed_topics: "test-topic",
+    probe_port: :disabled
+  ))
 
   describe "production" do
-    # it "sends" do
-    #   client.send_message("test-topic", "test-ruby-key", {"hello" => "world"})
-    # end
+    it "sends" do
+      10.times do |i|
+        client.send_message("test-topic", "test-ruby-key-#{i}", {"hello" => "world"})
+      end
+    end
 
     it "subscribes" do
-      client.subscribe(1)
+      puts "subscribing"
+      client.subscribe(MyHandler.new)
+
+      puts "sleeping for 15 seconds"
+      sleep 15
+
+      puts "unsubscribing"
+      client.unsubscribe
     end
+  end
+end
+
+class MyHandler < Prosody::EventHandler
+  def on_message(context, message)
+    puts "got message: #{message.payload}! Sleeping for 1 seconds"
+    sleep 1
+    puts "done processing"
   end
 end

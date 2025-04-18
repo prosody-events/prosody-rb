@@ -19,7 +19,7 @@ impl From<MessageContext> for Context {
 
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!("Context"), ruby.class_object())?;
+    module.define_class(id!("Context"), ruby.class_object())?;
 
     Ok(())
 }

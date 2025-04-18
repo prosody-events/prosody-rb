@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "async"
+require 'async/rspec'
 require "prosody"
 
 RSpec.configure do |config|

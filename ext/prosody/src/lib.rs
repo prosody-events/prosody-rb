@@ -27,6 +27,8 @@ pub static ROOT_MOD: Lazy<RModule> = Lazy::new(|ruby| {
 
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
+    let _guard = RUNTIME.enter();
+
     #[allow(clippy::expect_used)] // todo: remove expect
     initialize_tracing::<Identity>(None).expect("Failed to initialize tracing system");
 

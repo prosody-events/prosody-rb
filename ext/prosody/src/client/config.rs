@@ -1,12 +1,12 @@
-use either::Either;
 use magnus::{Error, TryConvert, Value};
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::failure::retry::RetryConfigurationBuilder;
 use prosody::consumer::failure::topic::FailureTopicConfigurationBuilder;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
+use serde_untagged::UntaggedEnumVisitor;
 use std::time::Duration;
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -31,7 +31,34 @@ pub struct NativeConfiguration {
     max_retries: Option<u32>,
     max_retry_delay: Option<f32>,
     failure_topic: Option<String>,
-    probe_port: Option<Either<bool, u16>>,
+    probe_port: ProbePort,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum ProbePort {
+    #[default]
+    Unconfigured,
+    Disabled,
+    Configured(u16),
+}
+
+impl<'de> Deserialize<'de> for ProbePort {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        UntaggedEnumVisitor::new()
+            .u16(|port| Ok(Self::Configured(port)))
+            .bool(|enabled| {
+                if enabled {
+                    Ok(Self::Unconfigured)
+                } else {
+                    Ok(Self::Disabled)
+                }
+            })
+            .unit(|| Ok(Self::Unconfigured))
+            .deserialize(deserializer)
+    }
 }
 
 impl TryConvert for NativeConfiguration {
@@ -124,15 +151,13 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
             builder.mock(*mock);
         }
 
-        if let Some(probe_port) = &config.probe_port {
-            match probe_port {
-                Either::Left(true) => {}
-                Either::Left(false) => {
-                    builder.probe_port(None);
-                }
-                Either::Right(port) => {
-                    builder.probe_port(*port);
-                }
+        match &config.probe_port {
+            ProbePort::Unconfigured => {}
+            ProbePort::Disabled => {
+                builder.probe_port(None);
+            }
+            ProbePort::Configured(port) => {
+                builder.probe_port(*port);
             }
         }
 

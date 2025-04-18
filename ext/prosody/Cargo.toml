@@ -18,10 +18,10 @@ thiserror.workspace = true
 rb-sys.workspace = true
 tracing.workspace = true
 serde_magnus.workspace = true
-serde = { version = "1.0.219", features = ["derive"] }
-parking_lot.workspace = true
+serde = { workspace = true, features = ["derive"] }
 either = { workspace = true, features = ["serde"] }
 atomic-take.workspace = true
+serde-untagged.workspace = true
 
 [lints]
 workspace = true

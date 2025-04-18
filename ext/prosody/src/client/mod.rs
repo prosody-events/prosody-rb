@@ -2,7 +2,7 @@ use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
 use crate::scheduler::Scheduler;
-use crate::{ROOT_MOD, id};
+use crate::{ROOT_MOD, RUNTIME, id};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::high_level::HighLevelClient;
@@ -29,6 +29,7 @@ pub struct NativeClient {
 
 impl NativeClient {
     fn new(ruby: &Ruby, config: Value) -> Result<Self, Error> {
+        let _guard = RUNTIME.enter();
         let native_config: NativeConfiguration = config.funcall(id!("to_hash"), ())?;
         let config_ref = &native_config;
 
@@ -61,6 +62,7 @@ impl NativeClient {
         key: String,
         payload: Value,
     ) -> Result<(), Error> {
+        let _guard = RUNTIME.enter();
         let client = this.client.clone();
         let value = deserialize(payload)?;
 
@@ -72,12 +74,22 @@ impl NativeClient {
     }
 
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
+        let _guard = RUNTIME.enter();
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
         this.client
             .subscribe(wrapper)
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(())
+    }
+
+    fn unsubscribe(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        let _guard = RUNTIME.enter();
+        let client = this.client.clone();
+
+        this.bridge
+            .wait_for(ruby, async move { client.unsubscribe().await })?
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
     }
 }
 
@@ -88,6 +100,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_singleton_method("new", function!(NativeClient::new, 1))?;
     class.define_method(id!("send_message"), method!(NativeClient::send_message, 3))?;
     class.define_method(id!("subscribe"), method!(NativeClient::subscribe, 1))?;
+    class.define_method(id!("unsubscribe"), method!(NativeClient::unsubscribe, 0))?;
 
     Ok(())
 }

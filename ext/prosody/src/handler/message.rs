@@ -38,7 +38,7 @@ impl Message {
             .funcall(id!("at"), (epoch_micros, ruby.to_symbol("microsecond")))
     }
 
-    fn payload(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+    fn payload(_ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         serialize(this.inner.payload())
     }
 }
