@@ -1,36 +1,17 @@
-use crate::bridge::Bridge;
-use crate::scheduler::SchedulerError;
 use crate::scheduler::cancellation::CancellationToken;
-use crate::scheduler::result::{ProcessingError, ResultReceiver};
-use magnus::Ruby;
+use crate::scheduler::result::ResultReceiver;
 
 #[derive(Debug)]
 pub struct TaskHandle {
-    bridge: Bridge,
-    result: ResultReceiver,
-    token: CancellationToken,
+    pub result: ResultReceiver,
+    pub cancellation_token: CancellationToken,
 }
 
 impl TaskHandle {
-    pub fn new(bridge: Bridge, result: ResultReceiver, token: CancellationToken) -> TaskHandle {
+    pub fn new(result: ResultReceiver, cancellation_token: CancellationToken) -> TaskHandle {
         Self {
-            bridge,
             result,
-            token,
+            cancellation_token,
         }
-    }
-
-    pub async fn cancel(self) -> Result<(), SchedulerError> {
-        self.bridge
-            .run_sync(move |ruby: &Ruby| {
-                self.token
-                    .cancel(ruby)
-                    .map_err(|error| SchedulerError::Cancel(error.to_string()))
-            })
-            .await?
-    }
-
-    pub async fn result(self) -> Result<(), ProcessingError> {
-        self.result.receive().await
     }
 }

@@ -1,18 +1,32 @@
+use crate::bridge::Bridge;
 use crate::id;
+use crate::scheduler::SchedulerError;
 use crate::util::ThreadSafeValue;
 use magnus::value::ReprValue;
-use magnus::{Error, Ruby, Value};
+use magnus::{Ruby, Value};
 
 #[derive(Debug)]
-pub struct CancellationToken(ThreadSafeValue);
+pub struct CancellationToken {
+    token: ThreadSafeValue,
+}
 
 impl CancellationToken {
     pub fn new(token: Value) -> Self {
-        Self(ThreadSafeValue::new(token))
+        Self {
+            token: ThreadSafeValue::new(token),
+        }
     }
 
-    pub fn cancel(self, ruby: &Ruby) -> Result<(), Error> {
-        let _: Value = self.0.get(ruby).funcall(id!("cancel"), ())?;
-        Ok(())
+    pub async fn cancel(self, bridge: &Bridge) -> Result<(), SchedulerError> {
+        bridge
+            .run_sync(move |ruby: &Ruby| {
+                self.token
+                    .get(ruby)
+                    .funcall::<_, _, Value>(id!("cancel"), ())
+                    .map_err(|error| SchedulerError::Cancel(error.to_string()))?;
+
+                Ok(())
+            })
+            .await?
     }
 }

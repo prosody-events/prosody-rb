@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 #[derive(Clone, Educe)]
 #[educe(Debug)]
-pub struct RubyProcessor(Arc<ThreadSafeValue>);
+pub struct RubyProcessor {
+    processor: Arc<ThreadSafeValue>,
+}
 
 impl RubyProcessor {
     pub fn new(ruby: &Ruby) -> Result<Self, Error> {
@@ -20,7 +22,9 @@ impl RubyProcessor {
 
         let instance: Value = class.new_instance(())?; // todo: pass in logger
         let _: Value = instance.funcall(id!("start"), ())?;
-        Ok(Self(Arc::new(ThreadSafeValue::new(instance))))
+        Ok(Self {
+            processor: Arc::new(ThreadSafeValue::new(instance)),
+        })
     }
 
     pub fn submit<F>(
@@ -45,7 +49,7 @@ impl RubyProcessor {
         });
 
         // def submit(task_id, callback, &task_block)
-        let token = CancellationToken::new(self.0.get(ruby).funcall_with_block(
+        let token = CancellationToken::new(self.processor.get(ruby).funcall_with_block(
             id!("submit"),
             (task_id, callback),
             block,
@@ -55,7 +59,7 @@ impl RubyProcessor {
     }
 
     pub fn stop(&self, ruby: &Ruby) -> Result<(), Error> {
-        let _: Value = self.0.get(ruby).funcall(id!("stop"), ())?;
+        let _: Value = self.processor.get(ruby).funcall(id!("stop"), ())?;
         Ok(())
     }
 }

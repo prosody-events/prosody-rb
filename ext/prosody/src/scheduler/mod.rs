@@ -11,7 +11,7 @@ use tracing::error;
 mod cancellation;
 pub mod handle;
 mod processor;
-mod result;
+pub mod result;
 
 #[derive(Clone, Debug)]
 pub struct Scheduler {
@@ -47,7 +47,7 @@ impl Scheduler {
             })
             .await??;
 
-        Ok(TaskHandle::new(self.bridge.clone(), result_rx, token))
+        Ok(TaskHandle::new(result_rx, token))
     }
 }
 

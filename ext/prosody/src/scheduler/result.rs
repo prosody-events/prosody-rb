@@ -91,6 +91,9 @@ pub enum ProcessingError {
     #[error("permanent error: {0}")]
     Permanent(String),
 
+    #[error("result has already been taken")]
+    Taken,
+
     #[error("result channel has been closed")]
     Closed,
 }
@@ -98,7 +101,9 @@ pub enum ProcessingError {
 impl ClassifyError for ProcessingError {
     fn classify_error(&self) -> ErrorCategory {
         match self {
-            ProcessingError::Transient(_) | ProcessingError::Closed => ErrorCategory::Transient,
+            ProcessingError::Transient(_) | ProcessingError::Closed | ProcessingError::Taken => {
+                ErrorCategory::Transient
+            }
             ProcessingError::Permanent(_) => ErrorCategory::Permanent,
         }
     }

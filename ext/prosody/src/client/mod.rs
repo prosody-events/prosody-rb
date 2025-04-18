@@ -1,10 +1,8 @@
 use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
-use crate::scheduler::handle::TaskHandle;
-use crate::scheduler::{Scheduler, SchedulerError};
+use crate::scheduler::Scheduler;
 use crate::{ROOT_MOD, id};
-use futures::future::try_join_all;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::high_level::HighLevelClient;
@@ -74,42 +72,10 @@ impl NativeClient {
     }
 
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
-        let cloned_scheduler = this.scheduler.clone();
-        this.bridge
-            .wait_for(ruby, async move {
-                let mut task_futures = vec![];
-                for i in 0..10 {
-                    let task_id = format!("test-task-{i}");
-                    let before = format!("{task_id} is sleeping for 5 seconds");
-                    let after = format!("{task_id} finished sleeping");
-
-                    task_futures.push(cloned_scheduler.schedule(task_id, |ruby| {
-                        ruby.module_kernel()
-                            .funcall::<_, _, Value>(id!("puts"), (before,))
-                            .map(|_| ())?;
-
-                        let _: Value = ruby.eval("sleep 5")?;
-
-                        ruby.module_kernel()
-                            .funcall::<_, _, Value>(id!("puts"), (after,))
-                            .map(|_| ())?;
-
-                        Ok(())
-                    }));
-                }
-
-                let task_handles: Vec<TaskHandle> = try_join_all(task_futures).await?;
-                for handle in task_handles {
-                    if let Err(error) = handle.result().await {
-                        println!("error: {error:#}");
-                    }
-                }
-
-                Ok(())
-            })?
-            .map_err(|e: SchedulerError| {
-                Error::new(ruby.exception_runtime_error(), e.to_string())
-            })?;
+        let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
+        this.client
+            .subscribe(wrapper)
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(())
     }
