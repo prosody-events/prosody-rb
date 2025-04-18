@@ -1,7 +1,7 @@
-use crate::id;
 use crate::result::ResultSender;
 use crate::scheduler::cancellation::CancellationToken;
 use crate::util::ThreadSafeValue;
+use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::block::Proc;
 use magnus::value::ReprValue;
@@ -15,8 +15,9 @@ pub struct RubyProcessor(Arc<ThreadSafeValue>);
 impl RubyProcessor {
     pub fn new(ruby: &Ruby) -> Result<Self, Error> {
         let class: RClass = ruby
-            .class_object()
-            .const_get(id!("Prosody::AsyncTaskProcessor"))?;
+            .get_inner(&ROOT_MOD)
+            .const_get(id!("AsyncTaskProcessor"))?;
+
         let instance: Value = class.new_instance(())?; // todo: pass in logger
         let _: Value = instance.funcall(id!("start"), ())?;
         Ok(Self(Arc::new(ThreadSafeValue::new(instance))))

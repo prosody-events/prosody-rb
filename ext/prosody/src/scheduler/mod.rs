@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::error;
 
 mod cancellation;
-mod handle;
+pub mod handle;
 mod processor;
 
 #[derive(Clone, Debug)]
@@ -19,15 +19,11 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    pub async fn new(bridge: Bridge) -> Result<Self, SchedulerError> {
-        let processor = bridge
-            .run_sync(|ruby| {
-                RubyProcessor::new(ruby)
-                    .map_err(|error| SchedulerError::Processor(error.to_string()))
-            })
-            .await??;
-
-        Ok(Self { bridge, processor })
+    pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, Error> {
+        Ok(Self {
+            bridge,
+            processor: RubyProcessor::new(ruby)?,
+        })
     }
 
     pub async fn schedule<F>(

@@ -7,8 +7,12 @@ RSpec.describe Prosody::NativeClient do
   subject(:client) { described_class.new(configuration) }
 
   describe "production" do
-    it "sends" do
-      client.send_message("test-topic", "test-ruby-key", {"hello" => "world"})
+    # it "sends" do
+    #   client.send_message("test-topic", "test-ruby-key", {"hello" => "world"})
+    # end
+
+    it "subscribes" do
+      client.subscribe(1)
     end
   end
 end

@@ -3,7 +3,7 @@ use atomic_take::AtomicTake;
 use educe::Educe;
 use magnus::block::Proc;
 use magnus::value::ReprValue;
-use magnus::{Error, Ruby, TryConvert, Value};
+use magnus::{Error, Ruby, TryConvert, Value, kwargs};
 use prosody::consumer::failure::{ClassifyError, ErrorCategory};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -42,20 +42,10 @@ impl ResultSender {
             return Ok(());
         }
 
-        if !result
-            .funcall(id!("is_a?"), (id!("Exception"),))
-            .unwrap_or(false)
-        {
-            return Err(Error::new(
-                ruby.exception_runtime_error(),
-                "failed result is not an Exception",
-            ));
-        }
-
         let is_permanent = result.funcall(id!("permanent?"), ()).unwrap_or(false);
 
         let error_string: String = result
-            .funcall(id!("full_message"), ())
+            .funcall(id!("full_message"), (kwargs!("highlight" => false),))
             .or_else(|_| result.funcall(id!("inspect"), ()))
             .unwrap_or_else(|_| result.to_string());
 
