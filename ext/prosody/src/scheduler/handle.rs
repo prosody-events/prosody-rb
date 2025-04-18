@@ -1,7 +1,7 @@
 use crate::bridge::Bridge;
-use crate::result::{ProcessingError, ResultReceiver};
 use crate::scheduler::SchedulerError;
 use crate::scheduler::cancellation::CancellationToken;
+use crate::scheduler::result::{ProcessingError, ResultReceiver};
 use magnus::Ruby;
 
 #[derive(Debug)]

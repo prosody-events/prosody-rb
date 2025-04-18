@@ -7,6 +7,7 @@ use magnus::{Error, Ruby, TryConvert, Value, kwargs};
 use prosody::consumer::failure::{ClassifyError, ErrorCategory};
 use thiserror::Error;
 use tokio::sync::oneshot;
+use tracing::debug;
 
 pub fn result_channel() -> (ResultSender, ResultReceiver) {
     let (result_tx, result_rx) = oneshot::channel();
@@ -38,7 +39,10 @@ impl ResultSender {
         };
 
         if is_success {
-            result_tx.send(Ok(())).map_err(|_| closed_error(ruby))?;
+            if result_tx.send(Ok(())).is_err() {
+                debug!("discarding result; receiver went away");
+            }
+
             return Ok(());
         }
 
@@ -55,7 +59,10 @@ impl ResultSender {
             ProcessingError::Transient(error_string)
         };
 
-        result_tx.send(Err(error)).map_err(|_| closed_error(ruby))?;
+        if result_tx.send(Err(error)).is_err() {
+            debug!("discarding result; receiver went away");
+        }
+
         Ok(())
     }
 
@@ -95,11 +102,4 @@ impl ClassifyError for ProcessingError {
             ProcessingError::Permanent(_) => ErrorCategory::Permanent,
         }
     }
-}
-
-fn closed_error(ruby: &Ruby) -> Error {
-    Error::new(
-        ruby.exception_runtime_error(),
-        "result channel has been closed",
-    )
 }

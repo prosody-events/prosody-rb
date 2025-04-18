@@ -12,7 +12,6 @@ mod bridge;
 mod client;
 mod gvl;
 mod handler;
-mod result;
 mod scheduler;
 mod util;
 
@@ -32,6 +31,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     initialize_tracing::<Identity>(None).expect("Failed to initialize tracing system");
 
     bridge::init(ruby)?;
+    handler::init(ruby)?;
     client::init(ruby)?;
 
     Ok(())

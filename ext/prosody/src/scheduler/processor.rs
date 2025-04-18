@@ -1,5 +1,5 @@
-use crate::result::ResultSender;
 use crate::scheduler::cancellation::CancellationToken;
+use crate::scheduler::result::ResultSender;
 use crate::util::ThreadSafeValue;
 use crate::{ROOT_MOD, id};
 use educe::Educe;

@@ -1,8 +1,8 @@
 use crate::RUNTIME;
 use crate::bridge::{Bridge, BridgeError};
-use crate::result::result_channel;
 use crate::scheduler::handle::TaskHandle;
 use crate::scheduler::processor::RubyProcessor;
+use crate::scheduler::result::result_channel;
 use magnus::{Error, Ruby};
 use std::convert::identity;
 use thiserror::Error;
@@ -11,6 +11,7 @@ use tracing::error;
 mod cancellation;
 pub mod handle;
 mod processor;
+mod result;
 
 #[derive(Clone, Debug)]
 pub struct Scheduler {

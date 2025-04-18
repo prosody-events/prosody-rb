@@ -117,7 +117,7 @@ module Prosody
       callback = command.callback
       token = command.token
 
-      @logger.info("Executing task #{task_id}")
+      @logger.debug("Executing task #{task_id}")
 
       # Store a reference to the task so we can stop it when cancellation is requested
       worker_task = nil
