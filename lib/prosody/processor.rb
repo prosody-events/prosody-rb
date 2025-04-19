@@ -110,7 +110,6 @@ module Prosody
       @logger.error(e.backtrace.join("\n"))
     end
 
-    # Run the task block along with a cancellation watcher.
     def handle_execute(command, barrier)
       task_id = command.task_id
       task_block = command.block
@@ -119,45 +118,48 @@ module Prosody
 
       @logger.debug("Executing task #{task_id}")
 
-      # Store a reference to the task so we can stop it when cancellation is requested
-      worker_task = nil
-
       barrier.async do
-        # Spawn a cancellation watcher that polls the token.
-        cancel_task = Async do |t|
-          t.annotate("Cancellation watcher for task #{task_id}")
-          token.wait # Blocks until cancellation is signaled.
-          @logger.debug("Cancellation received for task #{task_id}")
+        # Track cancellation state
+        cancelled = false
 
-          # When cancellation is requested, stop the worker task
-          if worker_task&.running?
-            worker_task.stop
+        # Create the cancellation watcher without waiting
+        Async do |task|
+          task.annotate("Cancellation watcher for task #{task_id}")
 
-            # Properly handle task cleanup after stopping
-            begin
-              worker_task.wait
-            rescue => e
-              # This is expected when a task is stopped
-              callback.call(false, e)
-            end
+          begin
+            # Wait for cancellation signal
+            token.wait
+            cancelled = true
+            @logger.debug("Cancellation received for task #{task_id}")
+            @logger.debug("Stopping task #{task_id}")
+
+            # Call the callback with cancellation status
+            # This ensures the callback is called even if the task is cancelled
+            callback.call(false, RuntimeError.new("Task cancelled"))
+          rescue => e
+            @logger.debug("Cancellation watcher error: #{e.message}")
           end
         end
 
-        # Spawn the worker task that runs the user-supplied block.
-        worker_task = Async do |t|
-          t.annotate("Worker for task #{task_id}")
+        # Create the worker task
+        Async do |task|
+          task.annotate("Worker for task #{task_id}")
 
           begin
-            # Execute the actual work
-            task_result = task_block.call
-            @logger.debug("Task #{task_id} completed successfully")
-            callback.call(true, task_result)
+            # Execute the task
+            result = task_block.call
+
+            # Only call the callback if not cancelled
+            unless cancelled
+              @logger.debug("Task #{task_id} completed successfully")
+              callback.call(true, result)
+            end
           rescue => e
-            @logger.error("Error executing task #{task_id}: #{e.message}")
-            callback.call(false, e)
-          ensure
-            cancel_task.stop if cancel_task&.running?
-            cancel_task&.wait
+            # Only call the callback if not cancelled
+            unless cancelled
+              @logger.error("Error executing task #{task_id}: #{e.message}")
+              callback.call(false, e)
+            end
           end
         end
       end
