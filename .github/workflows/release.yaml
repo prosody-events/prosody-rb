@@ -38,7 +38,7 @@ jobs:
           - rubyPlatform: x86_64-darwin
             os: macos-latest
             cross: false
-          - rubyPlatform: x64-mingw-ucrt
+          - rubyPlatform: x86_64-pc-windows-gnu
             os: windows-latest
             cross: false
 
@@ -81,8 +81,8 @@ jobs:
         run: |
           bundle install --jobs 4 --retry 3
           bundle exec rake compile
-          gem build *.gemspec
-          echo "gem-path=$(ls *.gem)" >> $GITHUB_OUTPUT
+          bundle exec rake build           # ← packages compiled .bundle into pkg/
+          echo "gem-path=$(ls pkg/*.gem)" >> $GITHUB_OUTPUT
 
       # ── Upload artifacts ─────────────────────────────────────
       - name: Upload cross-compiled gem
