@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 magnus = { workspace = true, default-features = false }
 educe.workspace = true
-prosody.workspace = true
+prosody = { workspace = true, default-features = false }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 futures.workspace = true
 thiserror.workspace = true

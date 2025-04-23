@@ -6,6 +6,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_TEST_DEBUG: 0
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
 
 jobs:
   build-platform-gems:
@@ -33,14 +34,14 @@ jobs:
 
           # ── Native (macOS / Windows) ───────────────────────────
           - rubyPlatform: arm64-darwin
-            os: macos-latest
-            cross: false
+            os: ubuntu-latest
+            cross: true
           - rubyPlatform: x86_64-darwin
-            os: macos-latest
-            cross: false
+            os: ubuntu-latest
+            cross: true
           - rubyPlatform: x64-mingw-ucrt
-            os: windows-latest
-            cross: false
+            os: ubuntu-latest
+            cross: true
 
     steps:
       - name: Checkout repository
