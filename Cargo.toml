@@ -21,7 +21,7 @@ serde = "1.0"
 serde-untagged = "0.1"
 
 [profile.release]
-opt-level = 1
+opt-level = 1 # todo: remove
 #codegen-units = 1
 #lto = "fat"
 
