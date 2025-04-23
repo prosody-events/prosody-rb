@@ -9,7 +9,7 @@ resolver = "2"
 [workspace.dependencies]
 magnus = { version = "0.7", default-features = false }
 educe = "0.6"
-prosody = { git = "https://github.com/cincpro/prosody.git", rev = "79da6bf9b42ce00577fc5c4f800bb0c80d18bfae" } # replace once we have a package manager
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "5f69ceffef9eb546002369ac25c2d9e2ad3d1620" } # replace once we have a package manager
 tokio = "1.44"
 futures = "0.3"
 thiserror = "2.0"

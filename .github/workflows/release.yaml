@@ -22,7 +22,6 @@ jobs:
           - x86_64-linux
           - x86_64-linux-musl
           - arm-linux
-          - arm-linux-musl
           - arm64-darwin
           - x86_64-darwin
           - x64-mingw-ucrt
@@ -51,7 +50,6 @@ jobs:
         with:
           platform: ${{ matrix.rubyPlatform }}
           ruby-versions: "3.2,3.3,3.4"
-          tag: "0.9.111"
 
       - name: Upload gem
         uses: actions/upload-artifact@v4

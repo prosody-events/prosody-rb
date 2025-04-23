@@ -1145,9 +1145,9 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "lru"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+checksum = "9f8cc7106155f10bdf99a6f379688f543ad6596a415375b36a59a054ceda1198"
 dependencies = [
  "hashbrown 0.15.2",
 ]
@@ -1523,7 +1523,7 @@ dependencies = [
  "educe",
  "futures",
  "magnus",
- "prosody 0.9.0",
+ "prosody 0.9.1",
  "rb-sys",
  "serde",
  "serde-untagged",
@@ -1535,8 +1535,8 @@ dependencies = [
 
 [[package]]
 name = "prosody"
-version = "0.9.0"
-source = "git+https://github.com/cincpro/prosody.git?rev=79da6bf9b42ce00577fc5c4f800bb0c80d18bfae#79da6bf9b42ce00577fc5c4f800bb0c80d18bfae"
+version = "0.9.1"
+source = "git+https://github.com/cincpro/prosody.git?rev=5f69ceffef9eb546002369ac25c2d9e2ad3d1620#5f69ceffef9eb546002369ac25c2d9e2ad3d1620"
 dependencies = [
  "ahash",
  "aho-corasick",
