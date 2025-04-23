@@ -1,9 +1,6 @@
 name: Build Gems
 on:
   push:
-#    branches:
-#      - main
-#      - "releases/*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,28 +9,49 @@ env:
 
 jobs:
   build-platform-gems:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        rubyPlatform:
-          - aarch64-linux
-          - aarch64-linux-musl
-          - x86_64-linux
-          - x86_64-linux-musl
-          - arm-linux
-          - arm64-darwin
-          - x86_64-darwin
-          - x64-mingw-ucrt
+        include:
+          # ── Linux (cross‐compile) ───────────────────────────────
+          - rubyPlatform: aarch64-linux
+            os: ubuntu-latest
+            cross: true
+          - rubyPlatform: aarch64-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - rubyPlatform: x86_64-linux
+            os: ubuntu-latest
+            cross: true
+          - rubyPlatform: x86_64-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - rubyPlatform: arm-linux
+            os: ubuntu-latest
+            cross: true
+
+          # ── Native (macOS / Windows) ───────────────────────────
+          - rubyPlatform: arm64-darwin
+            os: macos-latest
+            cross: false
+          - rubyPlatform: x86_64-darwin
+            os: macos-latest
+            cross: false
+          - rubyPlatform: x64-mingw-ucrt
+            os: windows-latest
+            cross: false
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: de-vri-es/setup-git-credentials@v2
+      - name: Setup git credentials
+        uses: de-vri-es/setup-git-credentials@v2
         with:
           credentials: https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com/
 
-      - name: Setup Ruby and Rust
+      - name: Setup Ruby & Rust
         uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
         with:
           ruby-version: "3.4"
@@ -44,32 +62,56 @@ jobs:
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
-      - name: Cross compile gem
+      # ── Linux/Cross build ────────────────────────────────────
+      - name: Cross-compile gem
+        if: ${{ matrix.cross }}
         uses: cincpro/oxidize-rb-actions/cross-gem@v1
         id: cross-gem
         with:
           platform: ${{ matrix.rubyPlatform }}
           ruby-versions: "3.2,3.3,3.4"
-          pre-script: ${{ contains(matrix.rubyPlatform, 'darwin') &&
-            'apt-get update && apt-get install -y librdkafka-dev pkg-config cmake' || '' }}
+          pre-script: |
+            apt-get update && apt-get install -y librdkafka-dev pkg-config cmake
 
-      - name: Upload gem
+      # ── macOS / Windows native build ─────────────────────────
+      - name: Build native gem
+        if: ${{ ! matrix.cross }}
+        id: build-gem
+        shell: bash
+        run: |
+          bundle install --jobs 4 --retry 3
+          bundle exec rake compile
+          gem build *.gemspec
+          echo "gem-path=$(ls *.gem)" >> $GITHUB_OUTPUT
+
+      # ── Upload artifacts ─────────────────────────────────────
+      - name: Upload cross-compiled gem
+        if: ${{ matrix.cross }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.rubyPlatform }}-gem
           path: ${{ steps.cross-gem.outputs.gem-path }}
 
+      - name: Upload native gem
+        if: ${{ ! matrix.cross }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.rubyPlatform }}-gem
+          path: ${{ steps.build-gem.outputs.gem-path }}
+
   build-source-gem:
     runs-on: ubuntu-latest
+    needs: build-platform-gems
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: de-vri-es/setup-git-credentials@v2
+      - name: Setup git credentials
+        uses: de-vri-es/setup-git-credentials@v2
         with:
           credentials: https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com/
 
-      - name: Setup Ruby and Rust
+      - name: Setup Ruby & Rust
         uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
         with:
           ruby-version: "3.4"
@@ -80,13 +122,13 @@ jobs:
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
-      - name: Install bundle
-        run: bundle install
+      - name: Install dependencies
+        run: bundle install --jobs 4 --retry 3
 
-      - name: Build
+      - name: Build source gem
         run: bundle exec rake build
 
-      - name: Upload gem
+      - name: Upload source gem
         uses: actions/upload-artifact@v4
         with:
           name: source-gem
