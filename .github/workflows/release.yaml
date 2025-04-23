@@ -81,7 +81,10 @@ jobs:
         run: |
           bundle install --jobs 4 --retry 3
           bundle exec rake compile
-          bundle exec rake build
+
+          PLATFORM=$(ruby -e 'require "rubygems"; print Gem::Platform.local')
+          gem build prosody.gemspec --platform "$PLATFORM" --output pkg/prosody-${PLATFORM}.gem
+
           echo "gem-path=$(ls pkg/*.gem)" >> $GITHUB_OUTPUT
 
       # ── Upload artifacts ─────────────────────────────────────
