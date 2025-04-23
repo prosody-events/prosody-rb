@@ -38,7 +38,7 @@ jobs:
           - rubyPlatform: x86_64-darwin
             os: macos-latest
             cross: false
-          - rubyPlatform: x86_64-pc-windows-gnu
+          - rubyPlatform: x64-mingw-ucrt
             os: windows-latest
             cross: false
 
@@ -82,7 +82,8 @@ jobs:
           bundle install --jobs 4 --retry 3
           bundle exec rake compile
 
-          PLATFORM=$(ruby -e 'require "rubygems"; print Gem::Platform.local')
+          PLATFORM="${{ matrix.rubyPlatform }}"
+          mkdir -p pkg
           gem build prosody.gemspec --platform "$PLATFORM" --output pkg/prosody-${PLATFORM}.gem
 
           echo "gem-path=$(ls pkg/*.gem)" >> $GITHUB_OUTPUT
