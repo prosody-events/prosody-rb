@@ -3,7 +3,7 @@ PATH
   specs:
     prosody (0.1.0)
       async (~> 2.23)
-      rb_sys (~> 0.9.111)
+      rb_sys (~> 0.9.91)
 
 GEM
   remote: https://rubygems.org/
