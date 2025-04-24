@@ -36,7 +36,7 @@ Gem::Specification.new do |spec|
 
   # Uncomment to register a new dependency of your gem
   # spec.add_dependency "example-gem", "~> 1.0"
-  spec.add_dependency "rb_sys", "~> 0.9.91"
+  spec.add_dependency "rb_sys", "~> 0.9.111"
   spec.add_dependency "async", "~> 2.23"
   spec.add_development_dependency "async-rspec", "~> 1.17.0"
 
