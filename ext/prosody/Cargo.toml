@@ -22,5 +22,8 @@ serde = { workspace = true, features = ["derive"] }
 atomic-take.workspace = true
 serde-untagged.workspace = true
 
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+prosody = { workspace = true, default-features = false, features = ["cmake-build"] }
+
 [lints]
 workspace = true
