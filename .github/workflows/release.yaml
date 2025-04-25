@@ -204,17 +204,16 @@ jobs:
             docker.io/bitnami/kafka:3.7
       - name: Run tests
         run: |
-          run: |
           docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3 \
-            bash -c "cd /tmp && \
-                     cp -r /repo/spec /tmp/ && \
-                     gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
-                     rspec /tmp/spec"
+            ruby:3.3-alpine \
+            sh -c "cd /tmp && \
+                   cp -r /repo/spec /tmp/ && \
+                   gem install /gems/*.gem && \
+                   gem install rspec async-rspec && \
+                   rspec /tmp/spec"
 
   test-linux-aarch64:
     name: Test aarch64-linux
@@ -232,7 +231,8 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - name: Enable QEMU static builds
+        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset -p yes
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -249,11 +249,11 @@ jobs:
             docker.io/bitnami/kafka:3.7
       - name: Run tests
         run: |
-          docker run --rm --network kafka-test-network \
+          docker run --rm --platform linux/arm64 --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3 \
+            arm64v8/ruby:3.3 \
             bash -c "cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      gem install /gems/*.gem && \
@@ -276,7 +276,8 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - name: Enable QEMU static builds
+        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset -p yes
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -293,16 +294,16 @@ jobs:
             docker.io/bitnami/kafka:3.7
       - name: Run tests
         run: |
-          docker run --rm --network kafka-test-network \
+          docker run --rm --platform linux/arm64 --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3 \
-            bash -c "cd /tmp && \
-                     cp -r /repo/spec /tmp/ && \
-                     gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
-                     rspec /tmp/spec"
+            arm64v8/ruby:3.3-alpine \
+            sh -c "cd /tmp && \
+                   cp -r /repo/spec /tmp/ && \
+                   gem install /gems/*.gem && \
+                   gem install rspec async-rspec && \
+                   rspec /tmp/spec"
 
   test-linux-arm:
     name: Test arm-linux
@@ -320,7 +321,8 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm
-      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - name: Enable QEMU static builds
+        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset -p yes
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -337,11 +339,11 @@ jobs:
             docker.io/bitnami/kafka:3.7
       - name: Run tests
         run: |
-          docker run --rm --network kafka-test-network \
+          docker run --rm --platform linux/arm/v7 --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3 \
+            arm32v7/ruby:3.3 \
             bash -c "cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      gem install /gems/*.gem && \
