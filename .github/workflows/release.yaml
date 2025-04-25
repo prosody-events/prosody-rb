@@ -80,7 +80,7 @@ jobs:
           cargo-vendor: true
           cache-version: v1-${{ matrix.target.platform }}
         env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
       - name: Cross-compile gem
         uses: cincpro/oxidize-rb-actions/cross-gem@v1
@@ -118,7 +118,7 @@ jobs:
           cache-version: v1-source
           token: ${{ secrets.GH_ALL_REPOS_RO }}
         env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
       - name: Install dependencies
         run: bundle install --jobs 4 --retry 3
@@ -167,10 +167,12 @@ jobs:
         run: |
           docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
-            -v $(pwd):/app -w /app \
+            -v $(pwd)/spec:/spec \
+            -v $(pwd)/Gemfile:/Gemfile \
+            -v $(pwd)/Gemfile.lock:/Gemfile.lock \
             -v $(pwd)/gems:/gems \
             ruby:3.3 \
-            bash -c "gem install /gems/*.gem && bundle install && bundle exec rspec"
+            bash -c "gem install /gems/*.gem && bundle install && bundle exec rspec /spec"
 
 #  test-linux-musl-x86_64:
 #    name: Test x86_64-linux-musl
