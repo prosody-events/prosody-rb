@@ -40,26 +40,26 @@ jobs:
           # Linux - glibc
           - id: linux-x86_64
             platform: x86_64-linux
-    #          - id: linux-aarch64
-    #            platform: aarch64-linux
-    #          - id: linux-arm
-    #            platform: arm-linux
-    #
-    #          # Linux - musl
-    #          - id: linux-musl-x86_64
-    #            platform: x86_64-linux-musl
-    #          - id: linux-musl-aarch64
-    #            platform: aarch64-linux-musl
-    #
-    #          # macOS
-    #          - id: macos-x86_64
-    #            platform: x86_64-darwin
-    #          - id: macos-arm64
-    #            platform: arm64-darwin
-    #
-    #          # Windows
-    #          - id: windows-x64
-    #            platform: x64-mingw-ucrt
+          - id: linux-aarch64
+            platform: aarch64-linux
+          - id: linux-arm
+            platform: arm-linux
+
+          # Linux - musl
+          - id: linux-musl-x86_64
+            platform: x86_64-linux-musl
+          - id: linux-musl-aarch64
+            platform: aarch64-linux-musl
+
+          # macOS
+          - id: macos-x86_64
+            platform: x86_64-darwin
+          - id: macos-arm64
+            platform: arm64-darwin
+
+          # Windows
+          - id: windows-x64
+            platform: x64-mingw-ucrt
 
     name: Build ${{ matrix.target.id }}
     steps:
@@ -176,160 +176,177 @@ jobs:
                      gem install rspec async-rspec && \
                      rspec /tmp/spec"
 
-#  test-linux-musl-x86_64:
-#    name: Test x86_64-linux-musl
-#    needs:
-#      - build-cross-compiled-gems
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - name: Download gem artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: linux-musl-x86_64-gem
-#          path: ./gems
-#      - name: Create Docker network
-#        run: docker network create kafka-test-network
-#      - name: Start Kafka container
-#        run: |
-#          docker run -d --name kafka --network kafka-test-network \
-#            -e KAFKA_CFG_NODE_ID=0 \
-#            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-#            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-#            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-#            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-#            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-#            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-#            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-#            docker.io/bitnami/kafka:3.7
-#      - name: Run tests
-#        run: |
-#          docker run --rm --network kafka-test-network \
-#            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
-#            -v $(pwd):/app -w /app \
-#            -v $(pwd)/gems:/gems \
-#            ruby:3.3-alpine \
-#            sh -c "apk add --no-cache build-base git && gem install /gems/*.gem && bundle install && bundle exec rspec"
-#
-#  test-linux-aarch64:
-#    name: Test aarch64-linux
-#    needs:
-#      - build-cross-compiled-gems
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - name: Download gem artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: linux-aarch64-gem
-#          path: ./gems
-#      - name: Set up QEMU
-#        uses: docker/setup-qemu-action@v3
-#        with:
-#          platforms: arm64
-#      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-#      - name: Create Docker network
-#        run: docker network create kafka-test-network
-#      - name: Start Kafka container
-#        run: |
-#          docker run -d --name kafka --network kafka-test-network \
-#            -e KAFKA_CFG_NODE_ID=0 \
-#            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-#            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-#            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-#            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-#            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-#            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-#            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-#            docker.io/bitnami/kafka:3.7
-#      - name: Run tests
-#        run: |
-#          docker run --rm --platform linux/arm64 --network kafka-test-network \
-#            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
-#            -v $(pwd):/app -w /app \
-#            -v $(pwd)/gems:/gems \
-#            ruby:3.3 \
-#            bash -c "gem install /gems/*.gem && bundle install && bundle exec rspec"
-#
-#  test-linux-musl-aarch64:
-#    name: Test aarch64-linux-musl
-#    needs:
-#      - build-cross-compiled-gems
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - name: Download gem artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: linux-musl-aarch64-gem
-#          path: ./gems
-#      - name: Set up QEMU
-#        uses: docker/setup-qemu-action@v3
-#        with:
-#          platforms: arm64
-#      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-#      - name: Create Docker network
-#        run: docker network create kafka-test-network
-#      - name: Start Kafka container
-#        run: |
-#          docker run -d --name kafka --network kafka-test-network \
-#            -e KAFKA_CFG_NODE_ID=0 \
-#            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-#            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-#            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-#            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-#            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-#            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-#            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-#            docker.io/bitnami/kafka:3.7
-#      - name: Run tests
-#        run: |
-#          docker run --rm --platform linux/arm64 --network kafka-test-network \
-#            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
-#            -v $(pwd):/app -w /app \
-#            -v $(pwd)/gems:/gems \
-#            ruby:3.3-alpine \
-#            sh -c "apk add --no-cache build-base git && gem install /gems/*.gem && bundle install && bundle exec rspec"
-#
-#  test-linux-arm:
-#    name: Test arm-linux
-#    needs:
-#      - build-cross-compiled-gems
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - name: Download gem artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: linux-arm-gem
-#          path: ./gems
-#      - name: Set up QEMU
-#        uses: docker/setup-qemu-action@v3
-#        with:
-#          platforms: arm
-#      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-#      - name: Create Docker network
-#        run: docker network create kafka-test-network
-#      - name: Start Kafka container
-#        run: |
-#          docker run -d --name kafka --network kafka-test-network \
-#            -e KAFKA_CFG_NODE_ID=0 \
-#            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-#            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-#            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-#            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-#            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-#            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-#            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-#            docker.io/bitnami/kafka:3.7
-#      - name: Run tests
-#        run: |
-#          docker run --rm --platform linux/arm/v7 --network kafka-test-network \
-#            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
-#            -v $(pwd):/app -w /app \
-#            -v $(pwd)/gems:/gems \
-#            ruby:3.3-bullseye \
-#            bash -c "gem install /gems/*.gem && bundle install && bundle exec rspec"
+  test-linux-musl-x86_64:
+    name: Test x86_64-linux-musl
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-musl-x86_64-gem
+          path: ./gems
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          run: |
+          docker run --rm --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            ruby:3.3 \
+            bash -c "cd /tmp && \
+                     cp -r /repo/spec /tmp/ && \
+                     gem install /gems/*.gem && \
+                     gem install rspec async-rspec && \
+                     rspec /tmp/spec"
+
+  test-linux-aarch64:
+    name: Test aarch64-linux
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-aarch64-gem
+          path: ./gems
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            ruby:3.3 \
+            bash -c "cd /tmp && \
+                     cp -r /repo/spec /tmp/ && \
+                     gem install /gems/*.gem && \
+                     gem install rspec async-rspec && \
+                     rspec /tmp/spec"
+
+  test-linux-musl-aarch64:
+    name: Test aarch64-linux-musl
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-musl-aarch64-gem
+          path: ./gems
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            ruby:3.3 \
+            bash -c "cd /tmp && \
+                     cp -r /repo/spec /tmp/ && \
+                     gem install /gems/*.gem && \
+                     gem install rspec async-rspec && \
+                     rspec /tmp/spec"
+
+  test-linux-arm:
+    name: Test arm-linux
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-arm-gem
+          path: ./gems
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+      - run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            ruby:3.3 \
+            bash -c "cd /tmp && \
+                     cp -r /repo/spec /tmp/ && \
+                     gem install /gems/*.gem && \
+                     gem install rspec async-rspec && \
+                     rspec /tmp/spec"
 
 #  release:
 #    name: Release
