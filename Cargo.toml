@@ -21,8 +21,9 @@ serde = "1.0"
 serde-untagged = "0.1"
 
 [profile.release]
-codegen-units = 1
-lto = "fat"
+opt-level = 1 # todo: build faster
+# codegen-units = 1
+# lto = "fat"
 
 [workspace.lints.rust]
 missing_docs = "warn"

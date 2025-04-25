@@ -9,9 +9,9 @@ require_relative "prosody/processor"
 # Tries to require the extension for the given Ruby version first
 begin
   ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
-  require_relative "#{ruby_version}/prosody"
+  require_relative "prosody/#{ruby_version}/prosody"
 rescue LoadError
-  require "prosody"
+  require_relative "prosody/prosody"
 end
 
 module Prosody
