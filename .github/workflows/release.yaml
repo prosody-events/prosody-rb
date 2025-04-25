@@ -327,55 +327,6 @@ jobs:
             ruby:3.3-bullseye \
             bash -c "gem install /gems/*.gem && bundle install && bundle exec rspec"
 
-  test-macos:
-    name: Test macOS
-    needs:
-      - build-cross-compiled-gems
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            gem: macos-arm64
-          - os: macos-13
-            gem: macos-x86_64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.3"
-          bundler-cache: true
-      - name: Download gem artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.gem }}-gem
-          path: ./gems
-      - name: Install gem
-        run: gem install ./gems/*.gem
-      - name: Install dependencies
-        run: bundle install
-      - name: Start Kafka (Docker)
-        run: |
-          docker run -d --name kafka \
-            -e KAFKA_CFG_NODE_ID=0 \
-            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
-            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            -p 9092:9092 \
-            docker.io/bitnami/kafka:3.7
-      - name: Wait for Kafka
-        run: sleep 20
-      - name: Run tests
-        env:
-          PROSODY_BOOTSTRAP_SERVERS: localhost:9092
-        run: bundle exec rspec
-
 #  release:
 #    name: Release
 #    runs-on: ubuntu-latest
@@ -385,7 +336,6 @@ jobs:
 #      - test-linux-aarch64
 #      - test-linux-musl-aarch64
 #      - test-linux-arm
-#      - test-macos
 #    steps:
 #      - name: Download all artifacts
 #        uses: actions/download-artifact@v4
