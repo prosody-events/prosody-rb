@@ -4,7 +4,6 @@ require "spec_helper"
 
 RSpec.describe Prosody::NativeClient do
   client = described_class.new(Prosody::Configuration.new(
-    bootstrap_servers: "localhost:9094",
     source_system: "test-source",
     group_id: "test-consumer",
     subscribed_topics: "test-topic",
