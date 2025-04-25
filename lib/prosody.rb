@@ -7,8 +7,14 @@ require_relative "prosody/handler"
 require_relative "prosody/processor"
 require_relative "prosody/prosody"
 
+# Tries to require the extension for the given Ruby version first
+begin
+  RUBY_VERSION =~ /(\d+\.\d+)/
+  require "prosody/#{Regexp.last_match(1)}/prosody"
+rescue LoadError
+  require "prosody/prosody"
+end
+
 module Prosody
   class Error < StandardError; end
-
-  # Your code goes here...
 end
