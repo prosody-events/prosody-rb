@@ -172,6 +172,8 @@ jobs:
             ruby:3.3 \
             bash -c "cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
+                     apt-get update && \
+                     apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec && \
                      rspec /tmp/spec"
@@ -211,6 +213,7 @@ jobs:
             ruby:3.3-alpine \
             sh -c "cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
+                   apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
                    gem install rspec async-rspec && \
                    rspec /tmp/spec"
@@ -256,6 +259,8 @@ jobs:
             arm64v8/ruby:3.3 \
             bash -c "cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
+                     apt-get update && \
+                     apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec && \
                      rspec /tmp/spec"
@@ -301,6 +306,7 @@ jobs:
             arm64v8/ruby:3.3-alpine \
             sh -c "cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
+                   apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
                    gem install rspec async-rspec && \
                    rspec /tmp/spec"
@@ -346,6 +352,8 @@ jobs:
             arm32v7/ruby:3.3 \
             bash -c "cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
+                     apt-get update && \
+                     apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec && \
                      rspec /tmp/spec"
