@@ -14,6 +14,7 @@ RSpec.describe Prosody::NativeClient do
         client.send_message("test-topic", "test-ruby-key-#{i}", {"hello" => "world"})
       end
     end
+  end
 end
 
 class MyHandler < Prosody::EventHandler
