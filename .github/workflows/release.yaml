@@ -40,26 +40,26 @@ jobs:
           # Linux - glibc
           - id: linux-x86_64
             platform: x86_64-linux
-          - id: linux-aarch64
-            platform: aarch64-linux
-          - id: linux-arm
-            platform: arm-linux
-
-          # Linux - musl
-          - id: linux-musl-x86_64
-            platform: x86_64-linux-musl
-          - id: linux-musl-aarch64
-            platform: aarch64-linux-musl
-
-          # macOS
-          - id: macos-x86_64
-            platform: x86_64-darwin
-          - id: macos-arm64
-            platform: arm64-darwin
-
-          # Windows
-          - id: windows-x64
-            platform: x64-mingw-ucrt
+    #          - id: linux-aarch64
+    #            platform: aarch64-linux
+    #          - id: linux-arm
+    #            platform: arm-linux
+    #
+    #          # Linux - musl
+    #          - id: linux-musl-x86_64
+    #            platform: x86_64-linux-musl
+    #          - id: linux-musl-aarch64
+    #            platform: aarch64-linux-musl
+    #
+    #          # macOS
+    #          - id: macos-x86_64
+    #            platform: x86_64-darwin
+    #          - id: macos-arm64
+    #            platform: arm64-darwin
+    #
+    #          # Windows
+    #          - id: windows-x64
+    #            platform: x64-mingw-ucrt
 
     name: Build ${{ matrix.target.id }}
     steps:
