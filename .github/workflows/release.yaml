@@ -85,6 +85,8 @@ jobs:
       - name: Cross-compile gem
         uses: cincpro/oxidize-rb-actions/cross-gem@v1
         id: cross-gem
+        env:
+          RUSTFLAGS: ${{ matrix.target.platform == 'arm-linux' && '-C link-arg=-latomic' || '' }}
         with:
           platform: ${{ matrix.target.platform }}
           ruby-versions: "3.2,3.3,3.4"
@@ -354,7 +356,7 @@ jobs:
             bash -c "set -e && cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
-                     apt-get install -y build-essential libatomic1 && \
+                     apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec && \
                      rspec /tmp/spec"
