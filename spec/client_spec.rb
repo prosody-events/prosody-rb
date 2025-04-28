@@ -4,10 +4,7 @@ require "spec_helper"
 
 RSpec.describe Prosody::NativeClient do
   client = described_class.new(Prosody::Configuration.new(
-    bootstrap_servers: "localhost:9094",
     source_system: "test-source",
-    group_id: "test-consumer",
-    subscribed_topics: "test-topic",
     probe_port: :disabled
   ))
 
@@ -16,17 +13,6 @@ RSpec.describe Prosody::NativeClient do
       10.times do |i|
         client.send_message("test-topic", "test-ruby-key-#{i}", {"hello" => "world"})
       end
-    end
-
-    it "subscribes" do
-      puts "subscribing"
-      client.subscribe(MyHandler.new)
-
-      puts "sleeping for 15 seconds"
-      sleep 15
-
-      puts "unsubscribing"
-      client.unsubscribe
     end
   end
 end

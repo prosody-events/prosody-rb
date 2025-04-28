@@ -9,7 +9,7 @@ gem "rake", "~> 13.0"
 
 gem "rake-compiler"
 
-gem "rspec", "~> 3.0"
+gem "rspec", "~> 3.12"
 
 gem "standard", "~> 1.3"
 

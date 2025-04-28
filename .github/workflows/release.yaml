@@ -1,0 +1,352 @@
+name: Build and Release Gems
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: google-github-actions/release-please-action@v3
+        id: release
+        with:
+          release-type: ruby
+          package-name: prosody
+          token: ${{ secrets.TEMP_GH_ALL_REPOS_RW }}
+
+  build-cross-compiled-gems:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          # Linux - glibc
+          - id: linux-x86_64
+            platform: x86_64-linux
+          - id: linux-aarch64
+            platform: aarch64-linux
+
+          # Linux - musl
+          - id: linux-musl-x86_64
+            platform: x86_64-linux-musl
+          - id: linux-musl-aarch64
+            platform: aarch64-linux-musl
+
+          # macOS
+          - id: macos-x86_64
+            platform: x86_64-darwin
+          - id: macos-arm64
+            platform: arm64-darwin
+
+          # Windows
+          - id: windows-x64
+            platform: x64-mingw-ucrt
+
+    name: Build ${{ matrix.target.id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup git credentials
+        uses: de-vri-es/setup-git-credentials@v2
+        with:
+          credentials: https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com/
+
+      - name: Setup Ruby & Rust
+        uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+          cargo-cache: true
+          cargo-vendor: true
+          cache-version: v1-${{ matrix.target.platform }}
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+      - name: Cross-compile gem
+        uses: cincpro/oxidize-rb-actions/cross-gem@v1
+        id: cross-gem
+        env:
+          RUSTFLAGS: ${{ matrix.target.platform == 'arm-linux' && '-C link-arg=-latomic' || '' }}
+        with:
+          platform: ${{ matrix.target.platform }}
+          ruby-versions: "3.2,3.3,3.4"
+
+      - name: Upload cross-compiled gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target.id }}-gem
+          path: ${{ steps.cross-gem.outputs.gem-path }}
+
+  build-source-gem:
+    #    needs: release-please
+    #    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    name: Build source gem
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup git credentials
+        uses: de-vri-es/setup-git-credentials@v2
+        with:
+          credentials: https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com/
+
+      - name: Setup Ruby & Rust
+        uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+          cargo-cache: true
+          cache-version: v1-source
+          token: ${{ secrets.GH_ALL_REPOS_RO }}
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+      - name: Install dependencies
+        run: bundle install --jobs 4 --retry 3
+
+      - name: Build source gem
+        run: bundle exec rake build
+
+      - name: Upload source gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-gem
+          path: pkg/*.gem
+
+  test-linux-x86_64:
+    name: Test x86_64-linux
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-x86_64-gem
+          path: ./gems
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            ruby:3.3 \
+            bash -c "cd /tmp && \
+                     cp -r /repo/spec /tmp/ && \
+                     apt-get update && \
+                     apt-get install -y build-essential && \
+                     gem install /gems/*.gem && \
+                     gem install rspec async-rspec && \
+                     rspec /tmp/spec"
+
+  test-linux-musl-x86_64:
+    name: Test x86_64-linux-musl
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-musl-x86_64-gem
+          path: ./gems
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            ruby:3.3-alpine \
+            sh -c "cd /tmp && \
+                   cp -r /repo/spec /tmp/ && \
+                   apk add --no-cache build-base && \
+                   gem install /gems/*.gem && \
+                   gem install rspec async-rspec && \
+                   rspec /tmp/spec"
+
+  test-linux-aarch64:
+    name: Test aarch64-linux
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-aarch64-gem
+          path: ./gems
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      # Use tonistiigi/binfmt instead of multiarch/qemu-user-static:register
+      - name: Set up binfmt_misc
+        run: docker run --rm --privileged tonistiigi/binfmt --install all
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --platform linux/arm64 --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            arm64v8/ruby:3.3 \
+            bash -c "set -e && cd /tmp && \
+                     cp -r /repo/spec /tmp/ && \
+                     apt-get update && \
+                     apt-get install -y build-essential && \
+                     gem install /gems/*.gem && \
+                     gem install rspec async-rspec && \
+                     rspec /tmp/spec"
+
+  test-linux-musl-aarch64:
+    name: Test aarch64-linux-musl
+    needs:
+      - build-cross-compiled-gems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download gem artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-musl-aarch64-gem
+          path: ./gems
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Set up binfmt_misc
+        run: docker run --rm --privileged tonistiigi/binfmt --install all
+      - name: Create Docker network
+        run: docker network create kafka-test-network
+      - name: Start Kafka container
+        run: |
+          docker run -d --name kafka --network kafka-test-network \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            docker.io/bitnami/kafka:3.7
+      - name: Run tests
+        run: |
+          docker run --rm --platform linux/arm64 --network kafka-test-network \
+            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -v $(pwd):/repo \
+            -v $(pwd)/gems:/gems \
+            arm64v8/ruby:3.3-alpine \
+            sh -c "set -e && cd /tmp && \
+                   cp -r /repo/spec /tmp/ && \
+                   apk add --no-cache build-base && \
+                   gem install /gems/*.gem && \
+                   gem install rspec async-rspec && \
+                   rspec /tmp/spec"
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-source-gem
+      - test-linux-x86_64
+      - test-linux-musl-x86_64
+      - test-linux-aarch64
+      - test-linux-musl-aarch64
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./gems
+
+      - name: Publish to Gemfury
+        env:
+          GEMFURY_PUSH_TOKEN: ${{ secrets.FURY_TOKEN }}
+          GEMFURY_ACCOUNT: realgeeks
+        run: |
+          # Find and publish all gem files
+          echo "Publishing gems to Gemfury..."
+          find ./gems -name "*.gem" -type f | while read gem_file; do
+            echo "Publishing ${gem_file}..."
+
+            # Using curl as documented in Gemfury docs
+            RESPONSE=$(curl -s -F package=@"${gem_file}" "https://${GEMFURY_PUSH_TOKEN}@push.fury.io/${GEMFURY_ACCOUNT}/")
+
+            # Check for errors in the response
+            if [[ $RESPONSE == *"error"* ]]; then
+              echo "Error uploading ${gem_file}: ${RESPONSE}"
+              exit 1
+            else
+              echo "Successfully published ${gem_file}"
+            fi
+          done
+
+          echo "All gems published successfully!"
