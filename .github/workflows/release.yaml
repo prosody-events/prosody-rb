@@ -234,8 +234,9 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-      - name: Enable QEMU static builds
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset -p yes
+      # Use tonistiigi/binfmt instead of multiarch/qemu-user-static:register
+      - name: Set up binfmt_misc
+        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -257,7 +258,7 @@ jobs:
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             arm64v8/ruby:3.3 \
-            bash -c "cd /tmp && \
+            bash -c "set -e && cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
                      apt-get install -y build-essential && \
@@ -281,8 +282,8 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-      - name: Enable QEMU static builds
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset -p yes
+      - name: Set up binfmt_misc
+        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -304,7 +305,7 @@ jobs:
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             arm64v8/ruby:3.3-alpine \
-            sh -c "cd /tmp && \
+            sh -c "set -e && cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
@@ -327,8 +328,8 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm
-      - name: Enable QEMU static builds
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset -p yes
+      - name: Set up binfmt_misc
+        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -350,10 +351,10 @@ jobs:
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             arm32v7/ruby:3.3 \
-            bash -c "cd /tmp && \
+            bash -c "set -e && cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
-                     apt-get install -y build-essential && \
+                     apt-get install -y build-essential libatomic1 && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec && \
                      rspec /tmp/spec"
