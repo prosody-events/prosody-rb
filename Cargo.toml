@@ -9,7 +9,7 @@ resolver = "2"
 [workspace.dependencies]
 magnus = { version = "0.7", default-features = false }
 educe = "0.6"
-prosody = { git = "https://github.com/cincpro/prosody.git", rev = "79da6bf9b42ce00577fc5c4f800bb0c80d18bfae" } # replace once we have a package manager
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "4bd2f3ef500bc8a4cb16102b3d24a5553ea299ec", default-features = false } # replace once we have a package manager
 tokio = "1.44"
 futures = "0.3"
 thiserror = "2.0"
@@ -21,9 +21,9 @@ serde = "1.0"
 serde-untagged = "0.1"
 
 [profile.release]
-opt-level = 1
-#codegen-units = 1
-#lto = "fat"
+opt-level = 1 # todo: build faster
+# codegen-units = 1
+# lto = "fat"
 
 [workspace.lints.rust]
 missing_docs = "warn"
