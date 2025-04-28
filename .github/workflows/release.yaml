@@ -42,8 +42,6 @@ jobs:
             platform: x86_64-linux
           - id: linux-aarch64
             platform: aarch64-linux
-          - id: linux-arm
-            platform: arm-linux
 
           # Linux - musl
           - id: linux-musl-x86_64
@@ -314,91 +312,41 @@ jobs:
                    gem install rspec async-rspec && \
                    rspec /tmp/spec"
 
-  test-linux-arm:
-    name: Test arm-linux
-    needs:
-      - build-cross-compiled-gems
+  release:
+    name: Release
     runs-on: ubuntu-latest
+    needs:
+      - build-source-gem
+      - test-linux-x86_64
+      - test-linux-musl-x86_64
+      - test-linux-aarch64
+      - test-linux-musl-aarch64
     steps:
-      - uses: actions/checkout@v4
-      - name: Download gem artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-arm-gem
           path: ./gems
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm
-      - name: Set up binfmt_misc
-        run: docker run --rm --privileged tonistiigi/binfmt --install all
-      - name: Create Docker network
-        run: docker network create kafka-test-network
-      - name: Start Kafka container
-        run: |
-          docker run -d --name kafka --network kafka-test-network \
-            -e KAFKA_CFG_NODE_ID=0 \
-            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnami/kafka:3.7
-      - name: Run tests
-        run: |
-          docker run --rm --platform linux/arm/v7 --network kafka-test-network \
-            -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
-            -v $(pwd):/repo \
-            -v $(pwd)/gems:/gems \
-            arm32v7/ruby:3.3 \
-            bash -c "set -e && cd /tmp && \
-                     cp -r /repo/spec /tmp/ && \
-                     apt-get update && \
-                     apt-get install -y build-essential && \
-                     gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
-                     rspec /tmp/spec"
 
-#  release:
-#    name: Release
-#    runs-on: ubuntu-latest
-#    needs:
-#      - test-linux-x86_64
-#      - test-linux-musl-x86_64
-#      - test-linux-aarch64
-#      - test-linux-musl-aarch64
-#      - test-linux-arm
-#    steps:
-#      - name: Download all artifacts
-#        uses: actions/download-artifact@v4
-#        with:
-#          path: ./gems
-#
-#      - name: Publish to Gemfury
-#        env:
-#          GEMFURY_PUSH_TOKEN: ${{ secrets.GEMFURY_PUSH_TOKEN }}
-#          GEMFURY_ACCOUNT: realgeeks
-#        run: |
-#          # Install gemfury CLI for better error handling (optional)
-#          gem install gemfury
-#
-#          # Find and publish all gem files
-#          echo "Publishing gems to Gemfury..."
-#          find ./gems -name "*.gem" -type f | while read gem_file; do
-#            echo "Publishing ${gem_file}..."
-#
-#            # Using curl as documented in Gemfury docs
-#            RESPONSE=$(curl -s -F package=@"${gem_file}" "https://${GEMFURY_PUSH_TOKEN}@push.fury.io/${GEMFURY_ACCOUNT}/")
-#
-#            # Check for errors in the response
-#            if [[ $RESPONSE == *"error"* ]]; then
-#              echo "Error uploading ${gem_file}: ${RESPONSE}"
-#              exit 1
-#            else
-#              echo "Successfully published ${gem_file}"
-#            fi
-#          done
-#
-#          echo "All gems published successfully!"
+      - name: Publish to Gemfury
+        env:
+          GEMFURY_PUSH_TOKEN: ${{ secrets.FURY_TOKEN }}
+          GEMFURY_ACCOUNT: realgeeks
+        run: |
+          # Find and publish all gem files
+          echo "Publishing gems to Gemfury..."
+          find ./gems -name "*.gem" -type f | while read gem_file; do
+            echo "Publishing ${gem_file}..."
+
+            # Using curl as documented in Gemfury docs
+            RESPONSE=$(curl -s -F package=@"${gem_file}" "https://${GEMFURY_PUSH_TOKEN}@push.fury.io/${GEMFURY_ACCOUNT}/")
+
+            # Check for errors in the response
+            if [[ $RESPONSE == *"error"* ]]; then
+              echo "Error uploading ${gem_file}: ${RESPONSE}"
+              exit 1
+            else
+              echo "Successfully published ${gem_file}"
+            fi
+          done
+
+          echo "All gems published successfully!"
