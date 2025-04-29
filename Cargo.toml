@@ -8,13 +8,12 @@ resolver = "2"
 
 [workspace.dependencies]
 atomic-take = "1.1"
+bumpalo = "3.17"
 educe = "0.6"
 futures = "0.3"
 magnus = { version = "0.7", default-features = false }
 opentelemetry = "0.28"
-#prosody = { git = "https://github.com/cincpro/prosody.git", rev = "4bd2f3ef500bc8a4cb16102b3d24a5553ea299ec", default-features = false } # replace once we have a package manager
-bumpalo = "3.17"
-prosody = { path = "../prosody", default-features = false }
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "6d9b3e79cb19266584f9456dae6b0ae1af7afc51", default-features = false } # replace once we have a package manager
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
