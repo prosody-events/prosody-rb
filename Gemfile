@@ -6,7 +6,6 @@ source "https://rubygems.org"
 gemspec
 
 gem "async", "~> 2.23"
-gem "async-rspec", "~> 1.17"
 gem "opentelemetry-api", "~> 1.5"
 gem "rake", "~> 13.0"
 gem "rake-compiler"

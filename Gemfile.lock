@@ -35,6 +35,17 @@ GEM
     lint_roller (1.1.0)
     metrics (0.12.2)
     opentelemetry-api (1.5.0)
+    opentelemetry-common (0.22.0)
+      opentelemetry-api (~> 1.0)
+    opentelemetry-registry (0.4.0)
+      opentelemetry-api (~> 1.1)
+    opentelemetry-sdk (1.8.0)
+      opentelemetry-api (~> 1.1)
+      opentelemetry-common (~> 0.20)
+      opentelemetry-registry (~> 0.2)
+      opentelemetry-semantic_conventions
+    opentelemetry-semantic_conventions (1.11.0)
+      opentelemetry-api (~> 1.0)
     parallel (1.26.3)
     parser (3.3.7.1)
       ast (~> 2.4.1)
@@ -103,8 +114,9 @@ PLATFORMS
 
 DEPENDENCIES
   async (~> 2.23)
-  async-rspec (~> 1.17)
+  async-rspec (~> 1.17.0)
   opentelemetry-api (~> 1.5)
+  opentelemetry-sdk (~> 1.8)
   prosody!
   rake (~> 13.0)
   rake-compiler

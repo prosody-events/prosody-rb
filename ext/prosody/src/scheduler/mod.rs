@@ -62,7 +62,7 @@ impl Scheduler {
 
         let token = self
             .bridge
-            .run_sync(move |ruby: &Ruby| {
+            .run(move |ruby: &Ruby| {
                 cloned_instance
                     .submit(ruby, &task_id, carrier, result_tx, function)
                     .map_err(|error| SchedulerError::Submit(error.to_string()))
@@ -80,7 +80,7 @@ impl Drop for Scheduler {
 
         RUNTIME.spawn(async move {
             if let Err(error) = bridge
-                .run_sync(move |ruby| {
+                .run(move |ruby| {
                     processor
                         .stop(ruby)
                         .map_err(|error| SchedulerError::Shutdown(error.to_string()))

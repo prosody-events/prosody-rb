@@ -22,12 +22,10 @@ use tracing::{Event, Level, Metadata, Subscriber};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 
-const BUMP_CAP: usize = 256;
-const META_CAP: usize = 128;
 const CONCURRENT_LOG_REQUESTS: Option<usize> = Some(16);
 
 thread_local! {
-    static LOG_BUMP: RefCell<Bump> = RefCell::new(Bump::with_capacity(BUMP_CAP));
+    static LOG_BUMP: RefCell<Bump> = RefCell::new(Bump::with_capacity(1024));
 }
 
 #[derive(Clone, Educe)]
@@ -40,6 +38,7 @@ pub struct Logger {
 impl Logger {
     pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, magnus::Error> {
         let (tx, rx) = unbounded_channel::<(Level, String)>();
+
         let logger_class: RClass = ruby.module_kernel().const_get(id!("Logger"))?;
         let stdout: Value = ruby.module_kernel().const_get(id!("STDOUT"))?;
         let logger = logger_class.new_instance((stdout,))?;
@@ -47,38 +46,33 @@ impl Logger {
 
         spawn(async move {
             UnboundedReceiverStream::new(rx)
-                .for_each_concurrent(CONCURRENT_LOG_REQUESTS, |(level, message)| {
-                    let bridge = bridge.clone();
-                    let logger = logger.clone();
-
-                    async move {
-                        let result = bridge
-                            .run_sync(move |ruby| {
-                                let method = match level {
-                                    Level::ERROR => id!("error"),
-                                    Level::WARN => id!("warn"),
-                                    Level::INFO => id!("info"),
-                                    Level::DEBUG => id!("debug"),
-                                    Level::TRACE => id!("debug"),
-                                };
-
-                                if let Err(error) =
-                                    logger.get(ruby).funcall::<_, _, Value>(method, (message,))
-                                {
-                                    eprintln!("failed to call logger: {error:#}");
-                                }
-                            })
-                            .await;
-
-                        if let Err(error) = result {
-                            eprintln!("failed to send log message to Ruby bridge: {error:#}");
-                        }
-                    }
+                .for_each_concurrent(CONCURRENT_LOG_REQUESTS, move |evt| {
+                    log_event(bridge.clone(), logger.clone(), evt)
                 })
                 .await;
         });
 
         Ok(Self { tx })
+    }
+}
+
+async fn log_event(bridge: Bridge, logger: Arc<ThreadSafeValue>, (level, msg): (Level, String)) {
+    if let Err(error) = bridge
+        .run(move |ruby| {
+            let method = match level {
+                Level::ERROR => id!("error"),
+                Level::WARN => id!("warn"),
+                Level::INFO => id!("info"),
+                Level::DEBUG | Level::TRACE => id!("debug"),
+            };
+
+            if let Err(error) = logger.get(ruby).funcall::<_, _, Value>(method, (msg,)) {
+                eprintln!("failed to log to Ruby: {error:#}");
+            }
+        })
+        .await
+    {
+        eprintln!("failed to log to Ruby: {error:#}");
     }
 }
 
@@ -95,7 +89,7 @@ impl<S: Subscriber> Layer<S> for Logger {
                 .tx
                 .send((*event.metadata().level(), visitor.to_string()))
             {
-                eprintln!("failed to send log message: {error:#}");
+                eprintln!("failed to send log message: {error:#}; message: {visitor}");
             }
         });
     }
@@ -130,7 +124,6 @@ impl<'a> Visitor<'a> {
         visitor
     }
 
-    /// Append "key=value" or ", key=value" in one bump-allocated fragment.
     fn push_kv(&mut self, key: &str, value: &str) {
         if self.metadata.is_empty() {
             self.metadata.push_str(key);
@@ -177,8 +170,7 @@ impl Visit for Visitor<'_> {
     }
 
     fn record_str(&mut self, f: &Field, v: &str) {
-        let s = self.bump.alloc_str(v);
-        self.push_kv(f.name(), s);
+        self.push_kv(f.name(), v);
     }
 
     fn record_error(&mut self, f: &Field, err: &(dyn Error + 'static)) {
@@ -187,12 +179,11 @@ impl Visit for Visitor<'_> {
     }
 
     fn record_debug(&mut self, f: &Field, dbg: &dyn Debug) {
+        let m = bumpalo::format!(in self.bump, "{:?}", dbg);
         if f.name() == "message" {
-            let m = bumpalo::format!(in self.bump, "{:?}", dbg);
             self.maybe_message = Some(m);
         } else {
-            let s = bumpalo::format!(in self.bump, "{:?}", dbg);
-            self.push_kv(f.name(), &s);
+            self.push_kv(f.name(), &m);
         }
     }
 }

@@ -45,10 +45,8 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         .set(bridge.clone())
         .map_err(|_| Error::new(ruby.exception_runtime_error(), "Bridge already initialized"))?;
 
-    let logger = Logger::new(ruby, bridge)?;
-
-    #[allow(clippy::expect_used)] // todo: remove expect
-    initialize_tracing(Some(logger)).expect("Failed to initialize tracing system");
+    initialize_tracing(Some(Logger::new(ruby, bridge)?))
+        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
     Ok(())
 }
