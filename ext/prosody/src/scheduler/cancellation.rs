@@ -19,7 +19,7 @@ impl CancellationToken {
 
     pub async fn cancel(self, bridge: &Bridge) -> Result<(), SchedulerError> {
         bridge
-            .run_sync(move |ruby: &Ruby| {
+            .run(move |ruby: &Ruby| {
                 self.token
                     .get(ruby)
                     .funcall::<_, _, Value>(id!("cancel"), ())

@@ -7,18 +7,23 @@ members = ["./ext/prosody"]
 resolver = "2"
 
 [workspace.dependencies]
-magnus = { version = "0.7", default-features = false }
-educe = "0.6"
-prosody = { git = "https://github.com/cincpro/prosody.git", rev = "4bd2f3ef500bc8a4cb16102b3d24a5553ea299ec", default-features = false } # replace once we have a package manager
-tokio = "1.44"
-futures = "0.3"
-thiserror = "2.0"
-rb-sys = "0.9"
-tracing = "0.1"
-serde_magnus = "0.9"
 atomic-take = "1.1"
+bumpalo = "3.17"
+educe = "0.6"
+futures = "0.3"
+magnus = { version = "0.7", default-features = false }
+opentelemetry = "0.28"
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "6d9b3e79cb19266584f9456dae6b0ae1af7afc51", default-features = false } # replace once we have a package manager
+rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
+serde_magnus = "0.9"
+thiserror = "2.0"
+tokio = "1.44"
+tokio-stream = "0.1"
+tracing = "0.1"
+tracing-opentelemetry = "0.29"
+tracing-subscriber = "0.3"
 
 [profile.release]
 opt-level = 1 # todo: build faster

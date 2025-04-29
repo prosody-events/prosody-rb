@@ -4,19 +4,34 @@ use crate::scheduler::handle::TaskHandle;
 use crate::scheduler::processor::RubyProcessor;
 use crate::scheduler::result::result_channel;
 use magnus::{Error, Ruby};
+use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
+use prosody::propagator::new_propagator;
+use std::collections::HashMap;
 use std::convert::identity;
 use thiserror::Error;
-use tracing::error;
+use tracing::{Span, error, instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod cancellation;
 pub mod handle;
 mod processor;
 pub mod result;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Scheduler {
     bridge: Bridge,
     processor: RubyProcessor,
+    propagator: TextMapCompositePropagator,
+}
+
+impl Clone for Scheduler {
+    fn clone(&self) -> Self {
+        Self {
+            bridge: self.bridge.clone(),
+            processor: self.processor.clone(),
+            propagator: new_propagator(),
+        }
+    }
 }
 
 impl Scheduler {
@@ -24,25 +39,32 @@ impl Scheduler {
         Ok(Self {
             bridge,
             processor: RubyProcessor::new(ruby)?,
+            propagator: new_propagator(),
         })
     }
 
+    #[instrument(level = "debug", skip(self, span, function), err)]
     pub async fn schedule<F>(
         &self,
         task_id: String,
+        span: &Span,
         function: F,
     ) -> Result<TaskHandle, SchedulerError>
     where
         F: FnOnce(&Ruby) -> Result<(), Error> + Send + 'static,
     {
+        let mut carrier: HashMap<String, String> = HashMap::with_capacity(2);
+        self.propagator
+            .inject_context(&span.context(), &mut carrier);
+
         let (result_tx, result_rx) = result_channel();
         let cloned_instance = self.processor.clone();
 
         let token = self
             .bridge
-            .run_sync(move |ruby: &Ruby| {
+            .run(move |ruby: &Ruby| {
                 cloned_instance
-                    .submit(ruby, &task_id, result_tx, function)
+                    .submit(ruby, &task_id, carrier, result_tx, function)
                     .map_err(|error| SchedulerError::Submit(error.to_string()))
             })
             .await??;
@@ -58,7 +80,7 @@ impl Drop for Scheduler {
 
         RUNTIME.spawn(async move {
             if let Err(error) = bridge
-                .run_sync(move |ruby| {
+                .run(move |ruby| {
                     processor
                         .stop(ruby)
                         .map_err(|error| SchedulerError::Shutdown(error.to_string()))
