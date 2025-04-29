@@ -1,29 +1,37 @@
 [package]
-name = "prosody"
-version = "0.1.0"
-edition = "2024"
 authors = ["Joshua Griffith <Joshua.Griffith@fnf.com>"]
+edition = "2024"
+name = "prosody"
 publish = false
+version = "0.1.0"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-magnus = { workspace = true, default-features = false }
-educe.workspace = true
-prosody = { workspace = true, default-features = false }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
-futures.workspace = true
-thiserror.workspace = true
-rb-sys.workspace = true
-tracing.workspace = true
-serde_magnus.workspace = true
-serde = { workspace = true, features = ["derive"] }
 atomic-take.workspace = true
+bumpalo = { workspace = true, features = ["collections"] }
+educe.workspace = true
+futures.workspace = true
+log = "0.4.27"
+magnus = { workspace = true, default-features = false }
+opentelemetry.workspace = true
+prosody = { workspace = true, default-features = false }
+rb-sys.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde-untagged.workspace = true
+serde_magnus.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+tokio-stream.workspace = true
+tracing.workspace = true
+tracing-opentelemetry.workspace = true
+tracing-subscriber.workspace = true
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-prosody = { workspace = true, default-features = false, features = ["cmake-build"] }
+prosody = { workspace = true, default-features = false, features = [
+    "cmake-build",
+] }
 
 [lints]
 workspace = true

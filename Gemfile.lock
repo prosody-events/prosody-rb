@@ -3,6 +3,7 @@ PATH
   specs:
     prosody (0.1.0)
       async (~> 2.23)
+      opentelemetry-api (~> 1.5)
       rb_sys (~> 0.9.111)
 
 GEM
@@ -33,6 +34,7 @@ GEM
     language_server-protocol (3.17.0.4)
     lint_roller (1.1.0)
     metrics (0.12.2)
+    opentelemetry-api (1.5.0)
     parallel (1.26.3)
     parser (3.3.7.1)
       ast (~> 2.4.1)
@@ -102,6 +104,7 @@ PLATFORMS
 DEPENDENCIES
   async (~> 2.23)
   async-rspec (~> 1.17)
+  opentelemetry-api (~> 1.5)
   prosody!
   rake (~> 13.0)
   rake-compiler
