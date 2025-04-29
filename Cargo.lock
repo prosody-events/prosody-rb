@@ -1520,9 +1520,12 @@ name = "prosody"
 version = "0.1.0"
 dependencies = [
  "atomic-take",
+ "bumpalo",
  "educe",
  "futures",
+ "log",
  "magnus",
+ "opentelemetry",
  "prosody 0.9.1",
  "rb-sys",
  "serde",
@@ -1530,13 +1533,16 @@ dependencies = [
  "serde_magnus",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]
 name = "prosody"
 version = "0.9.1"
-source = "git+https://github.com/cincpro/prosody.git?rev=4bd2f3ef500bc8a4cb16102b3d24a5553ea299ec#4bd2f3ef500bc8a4cb16102b3d24a5553ea299ec"
+source = "git+https://github.com/cincpro/prosody.git?rev=6d9b3e79cb19266584f9456dae6b0ae1af7afc51#6d9b3e79cb19266584f9456dae6b0ae1af7afc51"
 dependencies = [
  "ahash",
  "aho-corasick",

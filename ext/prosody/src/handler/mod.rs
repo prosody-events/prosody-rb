@@ -13,6 +13,7 @@ use prosody::consumer::message::{ConsumerMessage, MessageContext};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
+use tracing::instrument;
 
 mod context;
 mod message;
@@ -37,11 +38,13 @@ impl RubyHandler {
 impl FallibleHandler for RubyHandler {
     type Error = RubyHandlerError;
 
+    #[instrument(level = "debug", skip(self), err)]
     async fn on_message(
         &self,
         context: MessageContext,
         message: ConsumerMessage,
     ) -> Result<(), Self::Error> {
+        let span = message.span().clone();
         let shutdown_future = context.on_shutdown();
         let handler = self.handler.clone();
         let task_id = format!(
@@ -55,7 +58,7 @@ impl FallibleHandler for RubyHandler {
 
         let task_handle = self
             .scheduler
-            .schedule(task_id, move |ruby| {
+            .schedule(task_id, &span, move |ruby| {
                 let _: Value = handler
                     .get(ruby)
                     .funcall(id!("on_message"), (context, message))?;

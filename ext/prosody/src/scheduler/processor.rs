@@ -5,7 +5,8 @@ use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::block::Proc;
 use magnus::value::ReprValue;
-use magnus::{Class, Error, Module, RClass, Ruby, Value};
+use magnus::{Class, Error, Module, RClass, RHash, Ruby, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
@@ -35,6 +36,7 @@ impl RubyProcessor {
         &self,
         ruby: &Ruby,
         task_id: &str,
+        carrier: HashMap<String, String>,
         result_receiver: ResultSender,
         function: F,
     ) -> Result<CancellationToken, Error>
@@ -59,10 +61,12 @@ impl RubyProcessor {
             }
         });
 
+        let carrier: RHash = carrier.into_iter().collect();
+
         // def submit(task_id, callback, &task_block)
         let token = CancellationToken::new(self.processor.get(ruby).funcall_with_block(
             id!("submit"),
-            (task_id, callback),
+            (task_id, carrier, callback),
             block,
         )?);
 

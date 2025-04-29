@@ -5,7 +5,7 @@ use atomic_take::AtomicTake;
 use educe::Educe;
 use futures::executor::block_on;
 use magnus::value::{Lazy, ReprValue};
-use magnus::{Error, Module, Object, RClass, Ruby, Value, function};
+use magnus::{Error, Module, RClass, Ruby, Value};
 use std::any::Any;
 use thiserror::Error;
 use tokio::select;
@@ -39,7 +39,6 @@ struct DynamicResult(AtomicTake<Box<dyn Any + Send>>);
 
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-#[magnus::wrap(class = "Prosody::Bridge", free_immediately, frozen_shareable, size)]
 pub struct Bridge {
     #[educe(Debug(ignore))]
     tx: Sender<RubyFunction>,
@@ -67,7 +66,7 @@ impl Bridge {
         Self { tx }
     }
 
-    pub async fn run_sync<F, T>(&self, function: F) -> Result<T, BridgeError>
+    pub async fn run<F, T>(&self, function: F) -> Result<T, BridgeError>
     where
         F: FnOnce(&Ruby) -> T + Send + 'static,
         T: Send + 'static,
@@ -190,9 +189,6 @@ pub enum BridgeError {
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
     module.define_class("DynamicResult", ruby.class_object())?;
-
-    let bridge_class = module.define_class("Bridge", ruby.class_object())?;
-    bridge_class.define_singleton_method("new", function!(Bridge::new, 1))?;
 
     Ok(())
 }

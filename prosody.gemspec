@@ -38,7 +38,9 @@ Gem::Specification.new do |spec|
   # spec.add_dependency "example-gem", "~> 1.0"
   spec.add_dependency "rb_sys", "~> 0.9.111"
   spec.add_dependency "async", "~> 2.23"
+  spec.add_dependency "opentelemetry-api", "~> 1.5"
   spec.add_development_dependency "async-rspec", "~> 1.17.0"
+  spec.add_development_dependency "opentelemetry-sdk", "~> 1.8"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

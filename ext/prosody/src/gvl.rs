@@ -143,7 +143,7 @@ where
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum GvlError {
+pub enum GvlError {
     #[error("panicked while attempting to call function running outside of the GVL")]
     Panicked,
 }
