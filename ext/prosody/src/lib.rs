@@ -39,13 +39,9 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     handler::init(ruby)?;
     client::init(ruby)?;
 
-    let bridge = Bridge::new(ruby, BRIDGE_BUFFER_SIZE);
+    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
 
-    BRIDGE
-        .set(bridge.clone())
-        .map_err(|_| Error::new(ruby.exception_runtime_error(), "Bridge already initialized"))?;
-
-    initialize_tracing(Some(Logger::new(ruby, bridge)?))
+    initialize_tracing(Some(Logger::new(ruby, bridge.clone())?))
         .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
     Ok(())
