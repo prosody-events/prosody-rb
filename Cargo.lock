@@ -1523,7 +1523,6 @@ dependencies = [
  "bumpalo",
  "educe",
  "futures",
- "log",
  "magnus",
  "opentelemetry",
  "prosody 0.9.1",
