@@ -13,7 +13,6 @@ atomic-take.workspace = true
 bumpalo = { workspace = true, features = ["collections"] }
 educe.workspace = true
 futures.workspace = true
-log = "0.4.27"
 magnus = { workspace = true, default-features = false }
 opentelemetry.workspace = true
 prosody = { workspace = true, default-features = false }

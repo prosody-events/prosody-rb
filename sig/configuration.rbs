@@ -1,173 +1,131 @@
 module Prosody
+  # Configuration for the Prosody messaging client with type validation
   class Configuration
-    # Instance variables
+    private
+
+    # Internal configuration store
     @config: Hash[Symbol, untyped]
 
-    # Class methods
-    def self.config_param: (Symbol | String, ?converter: ^(untyped) -> untyped, ?default: untyped) -> void
+    public
 
-    def self.duration_converter: (untyped) -> Float
+    # Define a typed configuration parameter with optional conversion and default
+    #
+    # @param name Configuration parameter name
+    # @param converter Function to validate and convert input values
+    # @param default Value returned when parameter is unset
+    def self.config_param: (Symbol | String name, ?converter: ^(untyped) -> untyped, ?default: untyped) -> void
 
-    # Constructor with a properly typed block parameter.
-    def initialize: (?Hash[Symbol, untyped] kwargs) { (Configuration) -> void } -> void
-      | (?Hash[Symbol, untyped] kwargs) -> void
+    # Convert duration values to floating point seconds
+    #
+    # @param v Duration value to convert
+    # @raise ArgumentError when value is not a valid duration
+    def self.duration_converter: (Numeric | untyped) -> Float
 
-    # Vec[String] fields
-    # @return [Array<String>, nil] List of bootstrap servers or nil
+    # Create a new configuration with initial values
+    #
+    # @param kwargs Initial configuration values
+    def initialize: (?Hash[Symbol, untyped] kwargs) ?{ (Configuration) -> void } -> void
+
+    # Kafka bootstrap server addresses
     def bootstrap_servers: () -> Array[String]?
+    def bootstrap_servers=: (String | _ToA[String]) -> Array[String]
 
-    # @param value [String, Array<String>, nil] Server(s) to set
-    # @return [Array<String>, nil] Processed server list
-    def bootstrap_servers=: (String | Array[String]?) -> Array[String]?
-
-    # @return [Array<String>, nil] List of subscribed topics or nil
+    # Kafka topics to subscribe to
     def subscribed_topics: () -> Array[String]?
+    def subscribed_topics=: (String | _ToA[String]) -> Array[String]
 
-    # @param value [String, Array<String>, nil] Topic(s) to subscribe to
-    # @return [Array<String>, nil] Processed topic list
-    def subscribed_topics=: (String | Array[String]?) -> Array[String]?
-
-    # @return [Array<String>, nil] List of allowed events or nil
+    # Event types the consumer is allowed to process
     def allowed_events: () -> Array[String]?
+    def allowed_events=: (String | _ToA[String]) -> Array[String]
 
-    # @param value [String, Array<String>, nil] Event(s) to allow
-    # @return [Array<String>, nil] Processed event list
-    def allowed_events=: (String | Array[String]?) -> Array[String]?
-
-    # Boolean field
-    # @return [Boolean, nil] Whether mock mode is enabled
+    # Use mock Kafka implementation for testing
     def mock: () -> bool?
+    def mock=: (untyped) -> bool
 
-    # @param value [Boolean, nil] Enable/disable mock mode
-    # @return [Boolean, nil] Processed mock value
-    def mock=: (bool?) -> bool?
-
-    # Duration fields (stored as float seconds)
-    # @return [Float, nil] Send timeout in seconds
+    # Maximum time to wait for a send operation (seconds)
     def send_timeout: () -> Float?
+    def send_timeout=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Timeout to set
-    # @return [Float, nil] Timeout in seconds
-    def send_timeout=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # @return [Float, nil] Stall threshold in seconds
+    # Time threshold for detecting stalled consumers (seconds)
     def stall_threshold: () -> Float?
+    def stall_threshold=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Threshold to set
-    # @return [Float, nil] Threshold in seconds
-    def stall_threshold=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # @return [Float, nil] Shutdown timeout in seconds
+    # Maximum time to wait for clean shutdown (seconds)
     def shutdown_timeout: () -> Float?
+    def shutdown_timeout=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Timeout to set
-    # @return [Float, nil] Timeout in seconds
-    def shutdown_timeout=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # @return [Float, nil] Poll interval in seconds
+    # Interval between Kafka poll operations (seconds)
     def poll_interval: () -> Float?
+    def poll_interval=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Interval to set
-    # @return [Float, nil] Interval in seconds
-    def poll_interval=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # @return [Float, nil] Commit interval in seconds
+    # Interval between offset commit operations (seconds)
     def commit_interval: () -> Float?
+    def commit_interval=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Interval to set
-    # @return [Float, nil] Interval in seconds
-    def commit_interval=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # @return [Float, nil] Retry base in seconds
+    # Base delay for retry operations (seconds)
     def retry_base: () -> Float?
+    def retry_base=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Base to set
-    # @return [Float, nil] Base in seconds
-    def retry_base=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # @return [Float, nil] Maximum retry delay in seconds
+    # Maximum delay between retries (seconds)
     def max_retry_delay: () -> Float?
+    def max_retry_delay=: (Numeric) -> Float
 
-    # @param value [ActiveSupport::Duration, Numeric, nil] Delay to set
-    # @return [Float, nil] Delay in seconds
-    def max_retry_delay=: (ActiveSupport::Duration | Numeric | nil) -> Float?
-
-    # Numeric fields
-    # @return [Integer, nil] Idempotence cache size
+    # Size of the cache used for message idempotence
     def idempotence_cache_size: () -> Integer?
+    def idempotence_cache_size=: (Integer | _ToInt) -> Integer
 
-    # @param value [Integer, nil] Cache size to set
-    # @return [Integer, nil] Processed cache size
-    def idempotence_cache_size=: (Integer?) -> Integer?
-
-    # @return [Integer, nil] Maximum concurrency
+    # Maximum number of concurrent message processing tasks
     def max_concurrency: () -> Integer?
+    def max_concurrency=: (Integer | _ToInt) -> Integer
 
-    # @param value [Integer, nil] Concurrency to set
-    # @return [Integer, nil] Processed concurrency
-    def max_concurrency=: (Integer?) -> Integer?
-
-    # @return [Integer, nil] Maximum uncommitted messages
+    # Maximum messages to process before committing offsets
     def max_uncommitted: () -> Integer?
+    def max_uncommitted=: (Integer | _ToInt) -> Integer
 
-    # @param value [Integer, nil] Maximum to set
-    # @return [Integer, nil] Processed maximum
-    def max_uncommitted=: (Integer?) -> Integer?
-
-    # @return [Integer, nil] Maximum enqueued per key
+    # Maximum messages to enqueue for a single key
     def max_enqueued_per_key: () -> Integer?
+    def max_enqueued_per_key=: (Integer | _ToInt) -> Integer
 
-    # @param value [Integer, nil] Maximum to set
-    # @return [Integer, nil] Processed maximum
-    def max_enqueued_per_key=: (Integer?) -> Integer?
-
-    # @return [Integer, nil] Maximum retries
+    # Maximum number of retry attempts
     def max_retries: () -> Integer?
+    def max_retries=: (Integer | _ToInt) -> Integer
 
-    # @param value [Integer, nil] Maximum to set
-    # @return [Integer, nil] Processed maximum
-    def max_retries=: (Integer?) -> Integer?
-
-    # String fields
-    # @return [String, nil] Group ID
+    # Kafka consumer group ID
     def group_id: () -> String?
+    def group_id=: (_ToS) -> String
 
-    # @param value [String, nil] Group ID to set
-    # @return [String, nil] Processed group ID
-    def group_id=: (String?) -> String?
-
-    # @return [String, nil] Source system
+    # Identifier for the system producing messages
     def source_system: () -> String?
+    def source_system=: (_ToS) -> String
 
-    # @param value [String, nil] Source system to set
-    # @return [String, nil] Processed source system
-    def source_system=: (String?) -> String?
-
-    # @return [String, nil] Failure topic
+    # Topic to send failed messages to
     def failure_topic: () -> String?
+    def failure_topic=: (_ToS) -> String
 
-    # @param value [String, nil] Failure topic to set
-    # @return [String, nil] Processed failure topic
-    def failure_topic=: (String?) -> String?
+    # Operation mode: :pipeline, :low_latency, or :best_effort
+    def mode: () -> Symbol?
+    def mode=: (Symbol | String) -> Symbol
 
-    # Mode field – returns either :low_latency, :best_effort, or :pipeline
-    # @return [Symbol, nil] Current mode
-    def mode: () -> (:low_latency | :best_effort | :pipeline)?
+    # Health probe port configuration (port number, false, or nil)
+    def probe_port: () -> (Integer | false | nil)
+    def probe_port=: (Integer | Symbol | String | false | nil) -> (Integer | false | nil)
 
-    # @param value [Symbol, String, nil] Mode to set
-    # @return [Symbol, nil] Processed mode
-    def mode=: ((:low_latency | :best_effort | :pipeline | String)?) -> (:low_latency | :best_effort | :pipeline)?
-
-    # Probe port field – returns false, an Integer, or nil
-    # @return [Integer, false, nil] Current probe port or disabled state
-    def probe_port: () -> (false | Integer | nil)
-
-    # @param value [Symbol, String, Integer, false, nil] Probe port to set
-    # @return [Integer, false, nil] Processed probe port
-    def probe_port=: (:disabled | "disabled" | Integer | false | nil) -> (false | Integer | nil)
-
-    # Hash conversion
-    # @return [Hash] Configuration as a native hash
+    # Convert configuration to a hash with non-nil values only
     def to_hash: () -> Hash[Symbol, untyped]
+  end
+
+  # Helper interface for objects convertible to array
+  interface _ToA[T]
+    def to_a: () -> Array[T]
+  end
+
+  # Helper interface for objects convertible to string
+  interface _ToS
+    def to_s: () -> String
+  end
+
+  # Helper interface for objects convertible to integer
+  interface _ToInt
+    def to_int: () -> Integer
   end
 end
