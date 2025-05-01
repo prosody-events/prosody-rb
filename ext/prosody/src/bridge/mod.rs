@@ -142,7 +142,7 @@ impl Bridge {
     /// by:
     /// 1. Creating a Ruby Queue to receive the result
     /// 2. Spawning a Rust task to await the future
-    /// 3. Blocking the Ruby thread until the result is pushed to the Queue
+    /// 3. Yielding until the result is pushed to the Queue
     ///
     /// # Arguments
     ///
@@ -182,7 +182,7 @@ impl Bridge {
             }
         });
 
-        // Block until the result is available, then extract and return it
+        // Yield until the result is available, then extract and return it
         queue
             .funcall::<_, _, &DynamicResult>(id!("pop"), ())?
             .0
