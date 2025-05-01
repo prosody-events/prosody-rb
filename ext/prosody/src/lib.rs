@@ -21,7 +21,7 @@ mod util;
 
 const BRIDGE_BUFFER_SIZE: usize = 64;
 pub static BRIDGE: OnceLock<Bridge> = OnceLock::new();
-pub static LOGGER: OnceLock<()> = OnceLock::new();
+pub static TRACING_INIT: OnceLock<()> = OnceLock::new();
 
 #[allow(clippy::expect_used)]
 static RUNTIME: LazyLock<Runtime> =
@@ -43,7 +43,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 
     let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
 
-    LOGGER.get_or_init(|| {
+    TRACING_INIT.get_or_init(|| {
         let maybe_logger = Logger::new(ruby, bridge.clone())
             .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
             .ok();
