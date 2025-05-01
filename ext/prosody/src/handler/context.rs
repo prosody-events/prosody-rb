@@ -4,7 +4,7 @@
 //! `MessageContext`, allowing Ruby code to interact with message context
 //! information from Kafka messages.
 
-use crate::{id, ROOT_MOD};
+use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::{Error, Module, Ruby};
 use prosody::consumer::message::MessageContext;

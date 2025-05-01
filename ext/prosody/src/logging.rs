@@ -1,11 +1,12 @@
 //! # Logging Bridge
 //!
-//! This module provides a bridge between Rust's tracing infrastructure and Ruby's logging system.
-//! It captures tracing events from Rust code and forwards them to a Ruby logger, ensuring logs
-//! from the native extension are properly integrated into the Ruby application's logging.
+//! This module provides a bridge between Rust's tracing infrastructure and
+//! Ruby's logging system. It captures tracing events from Rust code and
+//! forwards them to a Ruby logger, ensuring logs from the native extension are
+//! properly integrated into the Ruby application's logging.
 //!
-//! It uses bump allocation for efficient string formatting and concurrent processing for
-//! high-throughput logging scenarios.
+//! It uses bump allocation for efficient string formatting and concurrent
+//! processing for high-throughput logging scenarios.
 
 #![allow(clippy::print_stderr)]
 
@@ -39,8 +40,8 @@ const CONCURRENT_LOG_REQUESTS: Option<usize> = Some(16);
 
 /// A tracing layer that forwards log events to Ruby's logging system.
 ///
-/// This struct captures tracing events from Rust and sends them to a Ruby Logger
-/// instance, ensuring consistent logging across language boundaries.
+/// This struct captures tracing events from Rust and sends them to a Ruby
+/// Logger instance, ensuring consistent logging across language boundaries.
 #[derive(Clone, Educe)]
 #[educe(Debug)]
 pub struct Logger {
@@ -154,10 +155,12 @@ impl<S: Subscriber> Layer<S> for Logger {
     }
 }
 
-/// A visitor that accumulates recorded field values into a bump-allocated string.
+/// A visitor that accumulates recorded field values into a bump-allocated
+/// string.
 ///
-/// This struct processes tracing event fields and formats them into a human-readable
-/// log message using bump allocation for efficient memory management.
+/// This struct processes tracing event fields and formats them into a
+/// human-readable log message using bump allocation for efficient memory
+/// management.
 pub struct Visitor<'a> {
     /// Reference to the bump allocator
     bump: &'a Bump,
@@ -172,8 +175,8 @@ pub struct Visitor<'a> {
 impl<'a> Visitor<'a> {
     /// Creates a new visitor for processing event fields.
     ///
-    /// Initializes the visitor with metadata from the event, including module path
-    /// and source line number.
+    /// Initializes the visitor with metadata from the event, including module
+    /// path and source line number.
     ///
     /// # Arguments
     ///
@@ -330,7 +333,8 @@ impl Display for Visitor<'_> {
     /// Formats the log message.
     ///
     /// If a "message" field was recorded, it's placed at the beginning of the
-    /// formatted string, followed by the metadata. Otherwise, only metadata is included.
+    /// formatted string, followed by the metadata. Otherwise, only metadata is
+    /// included.
     ///
     /// # Arguments
     ///

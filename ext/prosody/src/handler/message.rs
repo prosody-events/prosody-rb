@@ -3,12 +3,12 @@
 //! This module implements a Ruby-accessible wrapper around the Prosody consumer
 //! message type, exposing message properties and content as Ruby objects.
 
-use crate::{id, ROOT_MOD};
+use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::value::ReprValue;
-use magnus::{method, Error, Module, RClass, Ruby, Value};
-use prosody::consumer::message::ConsumerMessage;
+use magnus::{Error, Module, RClass, Ruby, Value, method};
 use prosody::consumer::Keyed;
+use prosody::consumer::message::ConsumerMessage;
 use serde_magnus::serialize;
 
 /// Ruby-accessible wrapper for Kafka consumer messages.

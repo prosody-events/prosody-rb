@@ -29,11 +29,13 @@ use tracing::instrument;
 mod context;
 mod message;
 
-/// A handler that bridges between Kafka messages and Ruby message processing code.
+/// A handler that bridges between Kafka messages and Ruby message processing
+/// code.
 ///
 /// This struct manages the execution of Ruby message handling code when Kafka
 /// messages are received. It uses a scheduler to run the Ruby handler code
-/// in the Ruby runtime environment, ensuring proper thread safety and error handling.
+/// in the Ruby runtime environment, ensuring proper thread safety and error
+/// handling.
 #[derive(Clone, Debug)]
 pub struct RubyHandler {
     /// Bridge for communicating between Rust and Ruby
@@ -47,7 +49,8 @@ pub struct RubyHandler {
 }
 
 impl RubyHandler {
-    /// Creates a new handler that will dispatch Kafka messages to a Ruby handler instance.
+    /// Creates a new handler that will dispatch Kafka messages to a Ruby
+    /// handler instance.
     ///
     /// # Arguments
     ///
@@ -80,7 +83,8 @@ impl FallibleHandler for RubyHandler {
     ///
     /// # Arguments
     ///
-    /// * `context` - Kafka message context containing metadata and control signals
+    /// * `context` - Kafka message context containing metadata and control
+    ///   signals
     /// * `message` - The Kafka message to be processed
     ///
     /// # Errors
@@ -153,7 +157,8 @@ impl ClassifyError for RubyHandlerError {
     ///
     /// Maps error types to their appropriate categories:
     /// - Scheduler and Bridge errors are considered transient (retryable)
-    /// - Processing errors are categorized according to their own classification
+    /// - Processing errors are categorized according to their own
+    ///   classification
     fn classify_error(&self) -> ErrorCategory {
         match self {
             RubyHandlerError::Scheduler(_) | RubyHandlerError::Bridge(_) => {
@@ -180,7 +185,8 @@ pub enum RubyHandlerError {
     Processing(#[from] ProcessingError),
 }
 
-/// Initializes the handler module by registering Ruby classes for message context and content.
+/// Initializes the handler module by registering Ruby classes for message
+/// context and content.
 ///
 /// # Arguments
 ///

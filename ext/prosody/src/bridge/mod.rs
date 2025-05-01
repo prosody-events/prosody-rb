@@ -6,8 +6,8 @@
 //! safely with the Ruby runtime.
 
 use crate::bridge::callback::AsyncCallback;
-use crate::gvl::{without_gvl, GvlError};
-use crate::{id, ROOT_MOD, RUNTIME};
+use crate::gvl::{GvlError, without_gvl};
+use crate::{ROOT_MOD, RUNTIME, id};
 use atomic_take::AtomicTake;
 use educe::Educe;
 use futures::executor::block_on;
@@ -16,7 +16,7 @@ use magnus::{Error, Module, RClass, Ruby, Value};
 use std::any::Any;
 use thiserror::Error;
 use tokio::select;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::sync::oneshot;
 use tracing::{debug, error, warn};
 

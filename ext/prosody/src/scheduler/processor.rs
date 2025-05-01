@@ -8,15 +8,15 @@
 use crate::scheduler::cancellation::CancellationToken;
 use crate::scheduler::result::ResultSender;
 use crate::util::ThreadSafeValue;
-use crate::{id, ROOT_MOD};
+use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::block::Proc;
 use magnus::value::ReprValue;
 use magnus::{Class, Error, Module, RClass, RHash, Ruby, Value};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::Arc;
 
 /// A thread-safe wrapper around a Ruby `AsyncTaskProcessor` instance.
 ///

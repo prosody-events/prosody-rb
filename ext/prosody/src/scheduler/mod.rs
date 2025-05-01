@@ -9,18 +9,18 @@
 //! handling, while preserving proper OpenTelemetry context across language
 //! boundaries.
 
+use crate::RUNTIME;
 use crate::bridge::{Bridge, BridgeError};
 use crate::scheduler::handle::TaskHandle;
 use crate::scheduler::processor::RubyProcessor;
 use crate::scheduler::result::result_channel;
-use crate::RUNTIME;
 use magnus::{Error, Ruby};
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use prosody::propagator::new_propagator;
 use std::collections::HashMap;
 use std::convert::identity;
 use thiserror::Error;
-use tracing::{error, instrument, Span};
+use tracing::{Span, error, instrument};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod cancellation;

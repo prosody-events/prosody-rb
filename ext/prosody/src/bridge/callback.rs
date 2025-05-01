@@ -1,8 +1,8 @@
-//! This module provides functionality to bridge between Rust and Ruby, allowing asynchronous
-//! operations in Rust to communicate with the Ruby runtime.
+//! This module provides functionality to bridge between Rust and Ruby, allowing
+//! asynchronous operations in Rust to communicate with the Ruby runtime.
 //!
-//! It includes mechanisms for executing Ruby code from Rust threads and for managing asynchronous
-//! callback communication between the two languages.
+//! It includes mechanisms for executing Ruby code from Rust threads and for
+//! managing asynchronous callback communication between the two languages.
 
 use crate::id;
 use crate::util::ThreadSafeValue;
@@ -11,8 +11,9 @@ use magnus::{Error, IntoValue, Ruby, Value};
 
 /// Handles asynchronous callbacks from Rust to Ruby using a thread-safe queue.
 ///
-/// This struct provides a way to send values back to Ruby from asynchronous Rust operations,
-/// ensuring thread safety by wrapping the Ruby queue in a thread-safe container.
+/// This struct provides a way to send values back to Ruby from asynchronous
+/// Rust operations, ensuring thread safety by wrapping the Ruby queue in a
+/// thread-safe container.
 pub struct AsyncCallback {
     /// A thread-safe wrapper around a Ruby Queue object
     queue: ThreadSafeValue,
@@ -32,12 +33,14 @@ impl AsyncCallback {
 
     /// Completes the callback by pushing a value to the associated Ruby queue.
     ///
-    /// This consumes the callback, preventing it from being used multiple times.
+    /// This consumes the callback, preventing it from being used multiple
+    /// times.
     ///
     /// # Arguments
     ///
     /// * `ruby` - A reference to the Ruby VM
-    /// * `value` - The value to push to the queue, which will be converted to a Ruby value
+    /// * `value` - The value to push to the queue, which will be converted to a
+    ///   Ruby value
     ///
     /// # Errors
     ///
