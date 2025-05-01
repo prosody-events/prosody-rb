@@ -197,8 +197,9 @@ impl Bridge {
 /// Polls for and executes functions in the Ruby context.
 ///
 /// This function processes commands from the receiver channel, allowing them to
-/// be executed in the Ruby context. It can handle both long-running operations
-/// and batching of multiple commands for efficiency.
+/// be executed in the Ruby context. Since the GVL is expensive to acquire, this
+/// executes multiple commands in a single poll operation to reduce the
+/// overhead.
 ///
 /// # Arguments
 ///
