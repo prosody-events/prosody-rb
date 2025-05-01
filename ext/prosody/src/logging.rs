@@ -24,10 +24,6 @@ use tracing_subscriber::layer::Context;
 
 const CONCURRENT_LOG_REQUESTS: Option<usize> = Some(16);
 
-thread_local! {
-    static LOG_BUMP: RefCell<Bump> = RefCell::new(Bump::with_capacity(1024));
-}
-
 #[derive(Clone, Educe)]
 #[educe(Debug)]
 pub struct Logger {
@@ -78,6 +74,10 @@ async fn log_event(bridge: Bridge, logger: Arc<ThreadSafeValue>, (level, msg): (
 
 impl<S: Subscriber> Layer<S> for Logger {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        thread_local! {
+            static LOG_BUMP: RefCell<Bump> = RefCell::new(Bump::with_capacity(1024));
+        }
+
         LOG_BUMP.with(|cell| {
             let mut bump = cell.borrow_mut();
             bump.reset();
