@@ -1,0 +1,9 @@
+# Type definitions for Prosody version module
+
+module Prosody
+  # Current version of the Prosody library.
+  #
+  # This version number follows semantic versioning and is used by the
+  # gem system to identify the library version.
+  VERSION: String
+end

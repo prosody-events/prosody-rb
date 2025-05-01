@@ -1,4 +1,80 @@
 module Prosody
-  VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+  # Wrapper for dynamically-typed results from async operations.
+  # This is an internal class used for bridging Rust and Ruby.
+  class DynamicResult
+    # This class should not be instantiated directly.
+    private
+    def initialize: (untyped) -> void
+  end
+
+  # Represents the context of a Kafka message.
+  # Provides metadata and control capabilities for message processing.
+  class Context
+    # This class is instantiated internally by the client.
+    private
+    def initialize: (untyped) -> void
+  end
+
+  # Represents a Kafka message with its metadata and payload.
+  # Provides access to message properties like topic, partition, offset, and content.
+  class Message
+    # Returns the Kafka topic this message was published to.
+    # @return [String] The topic name
+    def topic: () -> String
+
+    # Returns the Kafka partition number for this message.
+    # @return [Integer] The partition number
+    def partition: () -> Integer
+
+    # Returns the Kafka offset of this message within its partition.
+    # @return [Integer] The message offset
+    def offset: () -> Integer
+
+    # Returns the message key used for partitioning.
+    # @return [String] The message key
+    def key: () -> String
+
+    # Returns the timestamp when the message was created.
+    # @return [Time] The message timestamp
+    def timestamp: () -> Time
+
+    # Returns the deserialized message payload.
+    # @return [untyped] The message content
+    def payload: () -> untyped
+  end
+
+  # Main client for interacting with the Prosody messaging system.
+  # Provides methods for sending messages and subscribing to Kafka topics.
+  class Client
+    # Creates a new Prosody client with the given configuration.
+    #
+    # @param config [Hash, Configuration] Client configuration
+    # @return [Client] A new client instance
+    # @raise [ArgumentError] If the configuration is invalid
+    # @raise [RuntimeError] If client initialization fails
+    def self.new: (Hash[Symbol, untyped] | Configuration config) -> Client
+
+    # Sends a message to the specified Kafka topic.
+    #
+    # @param topic [String] The destination topic name
+    # @param key [String] The message key for partitioning
+    # @param payload [untyped] The message payload (will be serialized)
+    # @return [void]
+    # @raise [RuntimeError] If the message cannot be sent
+    def send_message: (String topic, String key, untyped payload) -> void
+
+    # Subscribes to Kafka topics using the provided handler.
+    # The handler must implement an `on_message(context, message)` method.
+    #
+    # @param handler [EventHandler] A handler object that processes messages
+    # @return [void]
+    # @raise [RuntimeError] If subscription fails
+    def subscribe: (untyped handler) -> void
+
+    # Unsubscribes from all topics, stopping message processing.
+    #
+    # @return [void]
+    # @raise [RuntimeError] If unsubscription fails
+    def unsubscribe: () -> void
+  end
 end
