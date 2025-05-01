@@ -296,21 +296,59 @@ duplicates can still occur when instances rebalance or restart.
 
 ## OpenTelemetry Tracing
 
-Prosody supports OpenTelemetry tracing, allowing you to monitor and analyze the performance of your Kafka-based
-applications. The library will automatically integrate with your application's OpenTelemetry setup.
+Prosody supports OpenTelemetry tracing, automatically propagating trace context through Kafka messages and creating spans for message production and consumption.
 
 ### Required Gems
 
-To use OpenTelemetry tracing with Prosody, you need to install the opentelemetry-api gem:
+To use OpenTelemetry tracing with Prosody, add these gems to your Gemfile:
 
 ```ruby
 # In your Gemfile
 gem "opentelemetry-api", "~> 1.5"
+gem "opentelemetry-sdk", "~> 1.5"
+gem "opentelemetry-exporter-otlp", "~> 0.25"
 ```
 
-### Initializing Tracing
+For framework-specific instrumentation, you'll need additional gems:
 
-To initialize tracing in your application:
+```ruby
+# For Rails applications
+gem "opentelemetry-instrumentation-rails"
+gem "opentelemetry-instrumentation-active_record"
+gem "opentelemetry-instrumentation-action_pack"
+gem "opentelemetry-instrumentation-active_support"
+
+# For HTTP clients
+gem "opentelemetry-instrumentation-http"
+gem "opentelemetry-instrumentation-net_http" # for Net::HTTP
+gem "opentelemetry-instrumentation-faraday"  # for Faraday
+
+# For other common libraries
+gem "opentelemetry-instrumentation-redis"
+gem "opentelemetry-instrumentation-sidekiq"
+# etc.
+```
+
+Find a complete list of available instrumentation libraries in the [OpenTelemetry Ruby instrumentation registry](https://github.com/open-telemetry/opentelemetry-ruby-contrib/tree/main/instrumentation).
+
+### Initializing OpenTelemetry
+
+First, set up the OpenTelemetry SDK in your application:
+
+```ruby
+require 'opentelemetry/sdk'
+require 'opentelemetry/exporter/otlp'
+
+# Configure the OpenTelemetry SDK
+OpenTelemetry::SDK.configure do |c|
+  c.service_name = 'my-service-name' # can also be set via the OTEL_SERVICE_NAME environment variable
+  c.use_all() # Auto-instruments all available libraries
+end
+```
+
+### Using Tracing with Prosody
+
+Prosody automatically creates spans for producing and consuming messages. When handling messages, you can create child spans that will be properly associated with the parent trace:
 
 ```ruby
 class MyHandler < Prosody::EventHandler
@@ -320,10 +358,11 @@ class MyHandler < Prosody::EventHandler
   end
 
   def on_message(context, message)
+    # The context already contains the parent span from the message consumption
+    # Any spans created here will automatically be children of the consumer span
     @tracer.in_span("process-message") do |span|
       span.add_attributes({
-        'message.key' => message.key,
-        'message.topic' => message.topic
+        custom.attribute: 'some-value'
       })
 
       # Process the message
@@ -333,36 +372,14 @@ class MyHandler < Prosody::EventHandler
 end
 ```
 
-### Setting OpenTelemetry Environment Variables
+### Environment Variables
 
-Set the following standard OpenTelemetry environment variables:
+You can configure OpenTelemetry using standard environment variables:
 
 ```
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_SERVICE_NAME=my-service-name
-```
-
-### Using Tracing in Your Application
-
-After initializing tracing, traces will be automatically propagated through Kafka. You can also create your own spans in your message handlers:
-
-```ruby
-class MyHandler < Prosody::EventHandler
-  def on_message(context, message)
-    tracer = OpenTelemetry.tracer_provider.tracer('my-service')
-
-    tracer.in_span("process-message") do |span|
-      span.add_attributes({
-        'message.key' => message.key,
-        'message.topic' => message.topic
-      })
-
-      # Process the message
-      puts "Processing message: #{message.payload}"
-    end
-  end
-end
 ```
 
 ## Best Practices
