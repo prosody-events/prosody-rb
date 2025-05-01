@@ -1,4 +1,5 @@
 #![allow(clippy::multiple_crate_versions)]
+#![allow(clippy::print_stderr)]
 #![allow(missing_docs, dead_code)] // todo: remove
 #![allow(clippy::unwrap_used)] // todo: remove
 
@@ -20,6 +21,7 @@ mod util;
 
 const BRIDGE_BUFFER_SIZE: usize = 64;
 pub static BRIDGE: OnceLock<Bridge> = OnceLock::new();
+pub static TRACING_INIT: OnceLock<()> = OnceLock::new();
 
 #[allow(clippy::expect_used)]
 static RUNTIME: LazyLock<Runtime> =
@@ -39,14 +41,17 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     handler::init(ruby)?;
     client::init(ruby)?;
 
-    let bridge = Bridge::new(ruby, BRIDGE_BUFFER_SIZE);
+    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
 
-    BRIDGE
-        .set(bridge.clone())
-        .map_err(|_| Error::new(ruby.exception_runtime_error(), "Bridge already initialized"))?;
+    TRACING_INIT.get_or_init(|| {
+        let maybe_logger = Logger::new(ruby, bridge.clone())
+            .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
+            .ok();
 
-    initialize_tracing(Some(Logger::new(ruby, bridge)?))
-        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        if let Err(error) = initialize_tracing(maybe_logger) {
+            eprintln!("failed to initialize tracing: {error:#}");
+        }
+    });
 
     Ok(())
 }
