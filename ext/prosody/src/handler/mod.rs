@@ -24,7 +24,6 @@ use prosody::consumer::message::{ConsumerMessage, MessageContext};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
-use tracing::instrument;
 
 mod context;
 mod message;
@@ -93,7 +92,6 @@ impl FallibleHandler for RubyHandler {
     /// - Scheduling the task
     /// - Communication with the Ruby runtime
     /// - The Ruby handler throws an exception
-    #[instrument(level = "debug", skip(self), err)]
     async fn on_message(
         &self,
         context: MessageContext,

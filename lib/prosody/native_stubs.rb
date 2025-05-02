@@ -122,6 +122,39 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Returns the current state of the consumer.
+    #
+    # The consumer can be in one of three states:
+    # - `:unconfigured` - The consumer has not been configured yet
+    # - `:configured` - The consumer is configured but not running
+    # - `:running` - The consumer is actively consuming messages
+    #
+    # @return [Symbol] The current consumer state
+    def consumer_state
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Returns the number of Kafka partitions currently assigned to this consumer.
+    #
+    # This method can be used to monitor the consumer's workload and ensure
+    # proper load balancing across multiple consumer instances.
+    #
+    # @return [Integer] The number of assigned partitions
+    def assigned_partitions
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Checks if the consumer is stalled.
+    #
+    # A stalled consumer is one that has stopped processing messages due to
+    # errors or reaching processing limits. This can be used to detect unhealthy
+    # consumers that need attention.
+    #
+    # @return [Boolean] true if the consumer is stalled, false otherwise
+    def is_stalled?
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Sends a message to the specified Kafka topic.
     #
     # @param topic [String] The destination topic name
@@ -156,6 +189,9 @@ module Prosody
     end
 
     # Unsubscribes from all topics, stopping message processing.
+    #
+    # This method gracefully shuts down the consumer, completing any in-flight
+    # messages before stopping.
     #
     # @return [void]
     # @raise [RuntimeError] If unsubscription fails

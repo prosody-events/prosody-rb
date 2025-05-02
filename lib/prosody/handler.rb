@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 module Prosody
+  # Base error class for all Prosody-specific exceptions.
+  #
+  # Specific error types may extend this class to provide more detailed
+  # error information and classification.
+  class Error < StandardError; end
+
   # --------------------------------------------------------------------------
   # 1) Base error classes with a `#permanent?` contract
   # --------------------------------------------------------------------------
@@ -9,7 +15,7 @@ module Prosody
   # Subclasses **must** implement `#permanent?` to indicate retry behavior.
   #
   # @abstract
-  class EventHandlerError < Prosody::Error
+  class EventHandlerError < Error
     # Indicates whether this error is permanent (no retry) or
     # transient (retryable).
     #
@@ -62,10 +68,10 @@ module Prosody
     # are caught and re-raised as Prosody::PermanentError.
     #
     # @param [Symbol] method_name the name of the method to wrap
-    # @param [Array<Class>] exception_classes one or more Exception subclasses to catch
+    # @param [Class<Exception>] exception_classes one or more Exception subclasses to catch
     # @return [void]
-    # @raise [ArgumentError] if no exception classes given or invalid
-    # @raise [NameError] if method_name is not defined
+    # @raise [ArgumentError] if no exception classes given
+    # @raise [NameError] if method_name is not defined on this class or its ancestors
     def permanent(method_name, *exception_classes)
       wrap_errors(method_name, exception_classes, PermanentError)
     end
@@ -74,32 +80,45 @@ module Prosody
     # are caught and re-raised as Prosody::TransientError.
     #
     # @param [Symbol] method_name the name of the method to wrap
-    # @param [Array<Class>] exception_classes one or more Exception subclasses to catch
+    # @param [Class<Exception>] exception_classes one or more Exception subclasses to catch
     # @return [void]
-    # @raise [ArgumentError] if no exception classes given or invalid
-    # @raise [NameError] if method_name is not defined
+    # @raise [ArgumentError] if no exception classes given
+    # @raise [NameError] if method_name is not defined on this class or its ancestors
     def transient(method_name, *exception_classes)
       wrap_errors(method_name, exception_classes, TransientError)
     end
 
     private
 
-    # Core implementation: redefines `method_name` to catch listed exceptions
-    # and re-raise them as the specified error class.
+    # Core implementation: prepends a module that defines the same method name,
+    # rescuing the specified exceptions and re-raising them as the given error_class.
     #
     # @param [Symbol] method_name the method to wrap
-    # @param [Array<Class>] exception_classes exceptions to catch
+    # @param [Array<Class<Exception>>] exception_classes exceptions to catch
     # @param [Class<EventHandlerError>] error_class the error class to wrap caught exceptions in
     # @return [void]
     def wrap_errors(method_name, exception_classes, error_class)
-      original = instance_method(method_name)
-
-      define_method(method_name) do |*args, &block|
-        original.bind_call(self, *args, &block)
-      rescue *exception_classes => e
-        # Ruby auto-assigns e as the new exception's #cause
-        raise error_class.new(e.message)
+      # Must specify at least one exception class
+      if exception_classes.empty?
+        raise ArgumentError, "At least one exception class must be provided"
       end
+
+      # Ensure the method exists (in this class or its ancestors)
+      unless instance_methods.include?(method_name)
+        raise NameError, "Method `#{method_name}` is not defined"
+      end
+
+      # Build a prepended wrapper module
+      wrapper = Module.new do
+        define_method(method_name) do |*args, &block|
+          super(*args, &block)
+        rescue *exception_classes => e
+          # The new exception's #cause will be set automatically
+          raise error_class.new(e.message)
+        end
+      end
+
+      prepend wrapper
     end
   end
 
@@ -109,16 +128,17 @@ module Prosody
 
   # Abstract base class for handling incoming messages from Prosody.
   # Subclasses **must** implement `#on_message` to process received messages.
-  # They may also use `permanent` or `transient` decorators to control retry logic
-  # for specific exceptions.
+  # They may also use `permanent` or `transient` decorators to control retry logic.
   #
   # @example
   #   class MyHandler < Prosody::EventHandler
-  #     permanent :on_message, TypeError
-  #     transient :on_message, JSON::ParserError
+  #     extend Prosody::ErrorClassification
+  #
+  #     permanent :on_message, ArgumentError
+  #     transient :on_message, RuntimeError
   #
   #     def on_message(context, message)
-  #       # Process message content...
+  #       # Process message...
   #     end
   #   end
   class EventHandler
@@ -128,8 +148,8 @@ module Prosody
     # This method must be implemented by subclasses to define
     # custom message handling logic.
     #
-    # @param [Context] context the message context containing metadata and control capabilities
-    # @param [Message] message the message content with payload and metadata
+    # @param [Context] context the message context
+    # @param [Message] message the message payload
     # @raise [NotImplementedError] if not overridden by subclass
     # @return [void]
     def on_message(context, message)

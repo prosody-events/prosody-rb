@@ -28,16 +28,3 @@ begin
 rescue LoadError
   require_relative "prosody/prosody"
 end
-
-# Top-level namespace for the Prosody library.
-#
-# The Prosody module contains all classes and functionality for interacting with
-# the underlying Prosody messaging system, including configuration, message handling,
-# and client operations.
-module Prosody
-  # Base error class for all Prosody-specific exceptions.
-  #
-  # Specific error types may extend this class to provide more detailed
-  # error information and classification.
-  class Error < StandardError; end
-end

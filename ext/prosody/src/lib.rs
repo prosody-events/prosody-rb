@@ -18,6 +18,7 @@ use prosody::tracing::initialize_tracing;
 use std::sync::{LazyLock, OnceLock};
 use tokio::runtime::Runtime;
 
+mod admin;
 mod bridge;
 mod client;
 mod gvl;
@@ -75,6 +76,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let _guard = RUNTIME.enter();
 
     // Initialize the different components of the extension
+    admin::init(ruby)?;
     bridge::init(ruby)?;
     handler::init(ruby)?;
     client::init(ruby)?;

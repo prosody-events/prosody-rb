@@ -15,10 +15,11 @@ use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
 use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, Object, RHash, RModule, Ruby, Value, function, method};
+use magnus::{Error, Module, Object, RHash, RModule, Ruby, StaticSymbol, Value, function, method};
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
+use prosody::high_level::state::ConsumerState;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::collections::HashMap;
@@ -92,6 +93,29 @@ impl Client {
             inner: Arc::new(client),
             bridge: bridge.clone(),
             propagator: new_propagator(),
+        })
+    }
+
+    /// Returns the current state of the consumer.
+    ///
+    /// The consumer can be in one of three states:
+    /// - `:unconfigured` - The consumer has not been configured yet
+    /// - `:configured` - The consumer is configured but not running
+    /// - `:running` - The consumer is actively consuming messages
+    ///
+    /// # Arguments
+    ///
+    /// * `ruby` - The Ruby VM context
+    /// * `this` - The client instance
+    ///
+    /// # Returns
+    ///
+    /// A Ruby symbol representing the current consumer state.
+    pub fn consumer_state(ruby: &Ruby, this: &Self) -> StaticSymbol {
+        ruby.sym_new(match &*this.inner.consumer_state() {
+            ConsumerState::Unconfigured => id!("unconfigured"),
+            ConsumerState::Configured(_) => id!("configured"),
+            ConsumerState::Running { .. } => id!("running"),
         })
     }
 
@@ -172,7 +196,44 @@ impl Client {
         Ok(())
     }
 
+    /// Returns the number of Kafka partitions currently assigned to this
+    /// consumer.
+    ///
+    /// This method can be used to monitor the consumer's workload and ensure
+    /// proper load balancing across multiple consumer instances.
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - The client instance
+    ///
+    /// # Returns
+    ///
+    /// The number of assigned partitions as a u32.
+    pub fn assigned_partitions(&self) -> u32 {
+        self.inner.assigned_partition_count()
+    }
+
+    /// Checks if the consumer is stalled.
+    ///
+    /// A stalled consumer is one that has stopped processing messages due to
+    /// errors or reaching processing limits. This can be used to detect
+    /// unhealthy consumers that need attention.
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - The client instance
+    ///
+    /// # Returns
+    ///
+    /// `true` if the consumer is stalled, `false` otherwise.
+    pub fn is_stalled(&self) -> bool {
+        self.inner.is_stalled()
+    }
+
     /// Unsubscribes from all topics, stopping message processing.
+    ///
+    /// This method gracefully shuts down the consumer, completing any in-flight
+    /// messages before stopping.
     ///
     /// # Arguments
     ///
@@ -194,7 +255,8 @@ impl Client {
 
 /// Initializes the client module in Ruby.
 ///
-/// Defines the `Prosody::Client` class and its methods.
+/// Defines the `Prosody::Client` class and its methods, making the client
+/// functionality available to Ruby code.
 ///
 /// # Arguments
 ///
@@ -208,8 +270,14 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let class = module.define_class(id!("Client"), ruby.class_object())?;
 
     class.define_singleton_method("new", function!(Client::new, 1))?;
+    class.define_method(id!("consumer_state"), method!(Client::consumer_state, 0))?;
     class.define_method(id!("send_message"), method!(Client::send, 3))?;
     class.define_method(id!("subscribe"), method!(Client::subscribe, 1))?;
+    class.define_method(
+        id!("assigned_partitions"),
+        method!(Client::assigned_partitions, 0),
+    )?;
+    class.define_method(id!("is_stalled?"), method!(Client::is_stalled, 0))?;
     class.define_method(id!("unsubscribe"), method!(Client::unsubscribe, 0))?;
 
     Ok(())
