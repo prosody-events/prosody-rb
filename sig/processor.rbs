@@ -34,7 +34,7 @@ module Prosody
       attr_reader block: Proc
 
       # Callback to invoke when execution completes or fails
-      attr_reader callback: Proc[[bool, untyped], void]
+      attr_reader callback: ^([bool, untyped]) -> void
 
       # Cancellation token for this task
       attr_reader token: CancellationToken
@@ -44,12 +44,12 @@ module Prosody
 
       # Creates a new execute command with all required parameters
       def initialize: (
-        String task_id,
-        Hash[String, String] carrier,
-        Proc block,
-        Proc[[bool, untyped], void] callback,
-        CancellationToken token
-      ) -> void
+          String task_id,
+          Hash[String, String] carrier,
+          Proc block,
+          ^([bool, untyped]) -> void callback,
+          CancellationToken token
+        ) -> void
     end
 
     # Command that signals the processor to shut down
@@ -94,10 +94,10 @@ module Prosody
     # @yield the block to execute asynchronously
     # @return token that can be used to cancel the task
     def submit: (
-      String task_id,
-      Hash[String, String] carrier,
-      Proc[[bool, untyped], void] callback
-    ) { () -> untyped } -> CancellationToken
+        String task_id,
+        Hash[String, String] carrier,
+        ^([bool, untyped]) -> void callback
+      ) { () -> untyped } -> CancellationToken
 
     private
 

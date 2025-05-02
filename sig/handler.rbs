@@ -64,6 +64,6 @@ module Prosody
     # @param context the message context containing metadata and control capabilities
     # @param message the message content with payload and metadata
     # @raise [NotImplementedError] if not overridden by subclass
-    def on_message: (Prosody::Context context, Prosody::Message message) -> void
+    def on_message: (Context context, Message message) -> void
   end
 end
