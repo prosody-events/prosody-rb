@@ -49,7 +49,7 @@ jobs:
       - name: Install dependencies
         run: bundle install
       - name: Compile extension with debug info
-        run: bundle exec rake compile
+        run: bundle exec rake compile:dev
       - name: Run tests
         run: bundle exec rake spec
         env:
