@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 module Prosody
+  # Base error class for all Prosody-specific exceptions.
+  #
+  # Specific error types may extend this class to provide more detailed
+  # error information and classification.
+  class Error < StandardError; end
+
   # --------------------------------------------------------------------------
   # 1) Base error classes with a `#permanent?` contract
   # --------------------------------------------------------------------------
@@ -9,7 +15,7 @@ module Prosody
   # Subclasses **must** implement `#permanent?` to indicate retry behavior.
   #
   # @abstract
-  class EventHandlerError < Prosody::Error
+  class EventHandlerError < Error
     # Indicates whether this error is permanent (no retry) or
     # transient (retryable).
     #
