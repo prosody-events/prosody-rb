@@ -393,13 +393,14 @@ RSpec.describe Prosody::Client, integration: true do
           @message_count = message_count
         end
 
+        # Make StandardError permanent (will not be retried)
+        permanent :on_message, StandardError
+
         def on_message(_context, message)
           @message_count[0] += 1
           @error_event.emit("error-event", message)
 
-          # Explicitly raise a PermanentError instead of using the decorator
-          # since we're seeing issues with the decorator in the test
-          raise Prosody::PermanentError, "Permanent error occurred"
+          raise StandardError, "Permanent error occurred"
         end
       end
 
