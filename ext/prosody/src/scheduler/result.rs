@@ -63,7 +63,6 @@ impl ResultSender {
     ///
     /// # Arguments
     ///
-    /// * `ruby` - Reference to the Ruby VM.
     /// * `is_success` - Boolean indicating if the operation succeeded.
     /// * `result` - For failures, this contains the Ruby exception.
     ///
@@ -74,12 +73,10 @@ impl ResultSender {
     /// # Errors
     ///
     /// Returns a `magnus::Error` if the result has already been sent.
-    pub fn send(&self, ruby: &Ruby, is_success: bool, result: Value) -> Result<(), Error> {
+    pub fn send(&self, is_success: bool, result: Value) {
         let Some(result_tx) = self.result_tx.take() else {
-            return Err(Error::new(
-                ruby.exception_runtime_error(),
-                "result was already sent",
-            ));
+            debug!("result was already sent");
+            return;
         };
 
         if is_success {
@@ -87,7 +84,7 @@ impl ResultSender {
                 debug!("discarding result; receiver went away");
             }
 
-            return Ok(());
+            return;
         }
 
         let is_permanent = result.funcall(id!("permanent?"), ()).unwrap_or(false);
@@ -106,8 +103,6 @@ impl ResultSender {
         if result_tx.send(Err(error)).is_err() {
             debug!("discarding result; receiver went away");
         }
-
-        Ok(())
     }
 
     /// Converts this sender into a Ruby Proc that can be called from Ruby.
@@ -124,7 +119,10 @@ impl ResultSender {
     /// A Ruby `Proc` that can be passed to Ruby code.
     pub fn into_proc(self, ruby: &Ruby) -> Proc {
         ruby.proc_from_fn(move |ruby, args, _block| match args {
-            [is_success, result, ..] => self.send(ruby, bool::try_convert(*is_success)?, *result),
+            [is_success, result, ..] => {
+                self.send(bool::try_convert(*is_success)?, *result);
+                Ok(())
+            }
             _ => Err(Error::new(
                 ruby.exception_arg_error(),
                 format!("Expected two arguments but received {}", args.len()),

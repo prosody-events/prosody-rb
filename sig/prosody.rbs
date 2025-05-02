@@ -3,7 +3,9 @@ module Prosody
   # This is an internal class used for bridging Rust and Ruby.
   class DynamicResult
     # This class should not be instantiated directly.
+
     private
+
     def initialize: (untyped) -> void
   end
 
@@ -11,7 +13,9 @@ module Prosody
   # Provides metadata and control capabilities for message processing.
   class Context
     # This class is instantiated internally by the client.
+
     private
+
     def initialize: (untyped) -> void
   end
 
@@ -54,6 +58,24 @@ module Prosody
     # @raise [RuntimeError] If client initialization fails
     def self.new: (Hash[Symbol, untyped] | Configuration config) -> Client
 
+    # Returns the current state of the consumer.
+    #
+    # @return [Symbol] The consumer state: :unconfigured, :configured, or :running
+    def consumer_state: () -> Symbol
+
+    # Returns the number of Kafka partitions currently assigned to this consumer.
+    #
+    # @return [Integer] The number of assigned partitions
+    def assigned_partitions: () -> Integer
+
+    # Checks if the consumer is stalled.
+    #
+    # A stalled consumer is one that has stopped processing messages due to
+    # errors or reaching processing limits.
+    #
+    # @return [Boolean] true if the consumer is stalled, false otherwise
+    def is_stalled?: () -> bool
+
     # Sends a message to the specified Kafka topic.
     #
     # @param topic [String] The destination topic name
@@ -69,7 +91,7 @@ module Prosody
     # @param handler [EventHandler] A handler object that processes messages
     # @return [void]
     # @raise [RuntimeError] If subscription fails
-    def subscribe: (untyped handler) -> void
+    def subscribe: (EventHandler) -> void
 
     # Unsubscribes from all topics, stopping message processing.
     #

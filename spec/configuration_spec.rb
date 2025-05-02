@@ -3,9 +3,12 @@
 require "spec_helper"
 
 RSpec.describe Prosody::Configuration do
+  # Test instance of the configuration class
   subject(:config) { described_class.new }
 
   describe "default values" do
+    # Tests that all configuration parameters have nil default values
+    # when not explicitly set
     it "has nil for all unset fields" do
       expect(config.bootstrap_servers).to be_nil
       expect(config.mock).to be_nil
@@ -33,14 +36,19 @@ RSpec.describe Prosody::Configuration do
 
   describe "field accessors" do
     context "Vec[String] fields" do
+      # Tests string array parameters that accept both single strings
+      # and arrays of strings, converting them appropriately
       %i[bootstrap_servers subscribed_topics allowed_events].each do |field|
         it "sets and gets #{field}" do
+          # Test single string gets converted to array
           config.public_send(:"#{field}=", "one")
           expect(config.public_send(field)).to eq(["one"])
 
+          # Test array remains array
           config.public_send(:"#{field}=", %w[one two])
           expect(config.public_send(field)).to eq(%w[one two])
 
+          # Test nil is allowed
           config.public_send(:"#{field}=", nil)
           expect(config.public_send(field)).to be_nil
         end
@@ -48,6 +56,7 @@ RSpec.describe Prosody::Configuration do
     end
 
     context "boolean field" do
+      # Tests the mock parameter which accepts boolean values
       it "sets and gets mock" do
         config.mock = true
         expect(config.mock).to eq(true)
@@ -61,6 +70,8 @@ RSpec.describe Prosody::Configuration do
     end
 
     context "duration fields" do
+      # Tests configuration parameters that represent time durations,
+      # converting them to floating-point seconds
       {
         send_timeout: 5.0,
         stall_threshold: 2.0,
@@ -81,6 +92,7 @@ RSpec.describe Prosody::Configuration do
     end
 
     context "numeric fields" do
+      # Tests integer configuration parameters
       {
         idempotence_cache_size: 10,
         max_concurrency: 3,
@@ -99,6 +111,7 @@ RSpec.describe Prosody::Configuration do
     end
 
     context "string fields" do
+      # Tests string configuration parameters
       {
         group_id: "group1",
         source_system: "system1",
@@ -115,6 +128,8 @@ RSpec.describe Prosody::Configuration do
     end
 
     context "mode field" do
+      # Tests the mode parameter which accepts specific symbols or strings,
+      # normalizing them to standardized symbols
       it "accepts valid mode symbols" do
         config.mode = :pipeline
         expect(config.mode).to eq(:pipeline)
@@ -138,6 +153,7 @@ RSpec.describe Prosody::Configuration do
       end
 
       it "accepts alternate mode forms" do
+        # Tests case-insensitive mode normalization
         config.mode = "PIPELINE"
         expect(config.mode).to eq(:pipeline)
 
@@ -161,6 +177,8 @@ RSpec.describe Prosody::Configuration do
     end
 
     context "probe_port field" do
+      # Tests the probe_port parameter which has special handling for
+      # enabling/disabling health probe functionality
       it "returns nil when probe_port is unset" do
         config.probe_port = nil
         expect(config.probe_port).to be_nil
@@ -194,6 +212,7 @@ RSpec.describe Prosody::Configuration do
   end
 
   describe "initialization with keyword arguments" do
+    # Tests initializing a configuration with multiple parameters at once
     it "sets all fields from the keyword hash" do
       config = described_class.new(
         bootstrap_servers: "server1",
@@ -219,6 +238,7 @@ RSpec.describe Prosody::Configuration do
         probe_port: 1234
       )
 
+      # Verify all parameters were correctly set and transformed
       expect(config.bootstrap_servers).to eq(["server1"])
       expect(config.mock).to eq(true)
       expect(config.send_timeout).to eq(5.0)
@@ -242,6 +262,7 @@ RSpec.describe Prosody::Configuration do
       expect(config.probe_port).to eq(1234)
     end
 
+    # Tests that the configuration can be modified via a block
     it "yields the configuration to a block if provided" do
       yielded_config = nil
       config = described_class.new(bootstrap_servers: "server1") do |c|
@@ -256,6 +277,7 @@ RSpec.describe Prosody::Configuration do
   end
 
   describe "#to_hash" do
+    # Tests the to_hash method which converts configuration to a native-compatible hash
     it "returns a hash with only non-nil values" do
       config.bootstrap_servers = "server1"
       config.mode = :pipeline
@@ -263,6 +285,7 @@ RSpec.describe Prosody::Configuration do
 
       native_hash = config.to_hash
 
+      # Verify only non-nil values are included
       expect(native_hash).to include(
         bootstrap_servers: ["server1"],
         mode: :pipeline,
