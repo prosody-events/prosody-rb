@@ -48,10 +48,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Install dependencies
         run: bundle install
-      - name: Compile extension in development mode
-        run: rake compile:dev
+      - name: Compile extension with debug info
+        run: bundle exec rake compile
       - name: Run tests
-        run: rake spec
+        run: bundle exec rake spec
         env:
           PROSODY_BOOTSTRAP_SERVERS: localhost:9094
           RUST_BACKTRACE: "1"
