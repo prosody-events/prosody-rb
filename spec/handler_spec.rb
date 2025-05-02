@@ -2,12 +2,16 @@
 
 require "spec_helper"
 
+# Tests for the base Prosody::Error class, which serves as the root of
+# the error hierarchy for the Prosody library.
 RSpec.describe Prosody::Error do
   it "inherits from StandardError" do
     expect(described_class.superclass).to eq(StandardError)
   end
 end
 
+# Tests for the abstract error class that requires subclasses to define
+# whether errors are permanent (non-retryable) or transient (retryable).
 RSpec.describe Prosody::EventHandlerError do
   it "inherits from Prosody::Error" do
     expect(described_class.superclass).to eq(Prosody::Error)
@@ -19,6 +23,7 @@ RSpec.describe Prosody::EventHandlerError do
   end
 end
 
+# Tests for TransientError, which represents retryable errors in message processing.
 RSpec.describe Prosody::TransientError do
   it "inherits from EventHandlerError" do
     expect(described_class.superclass).to eq(Prosody::EventHandlerError)
@@ -30,6 +35,7 @@ RSpec.describe Prosody::TransientError do
   end
 end
 
+# Tests for PermanentError, which represents non-retryable errors in message processing.
 RSpec.describe Prosody::PermanentError do
   it "inherits from EventHandlerError" do
     expect(described_class.superclass).to eq(Prosody::EventHandlerError)
@@ -41,15 +47,17 @@ RSpec.describe Prosody::PermanentError do
   end
 end
 
+# Tests for the ErrorClassification mixin, which provides the permanent and transient
+# method decorators that automatically wrap exceptions with the appropriate error type.
 RSpec.describe Prosody::ErrorClassification do
   before(:all) do
-    # Define test exception classes
+    # Define test exception classes used across all test cases
     Object.const_set(:TestError1, Class.new(StandardError))
     Object.const_set(:TestError2, Class.new(StandardError))
   end
 
   after(:all) do
-    # Clean up test exception classes
+    # Clean up test exception classes to avoid polluting the global namespace
     Object.send(:remove_const, "TestError1")
     Object.send(:remove_const, "TestError2")
   end
@@ -58,7 +66,7 @@ RSpec.describe Prosody::ErrorClassification do
     Class.new do
       extend Prosody::ErrorClassification
 
-      # Define methods that will be wrapped
+      # Define methods that will be wrapped with error classification
       def method_with_permanent_error
         raise TestError1, "A permanent error occurred"
       end
@@ -71,7 +79,7 @@ RSpec.describe Prosody::ErrorClassification do
         raise TestError1, "Could be either type"
       end
 
-      # Apply decorators
+      # Apply error classification decorators
       permanent :method_with_permanent_error, TestError1
       transient :method_with_transient_error, TestError2
     end
@@ -124,7 +132,7 @@ RSpec.describe Prosody::ErrorClassification do
           yield
         end
 
-        # Decorate with multiple exception types
+        # Test handling multiple exception types with a single decorator
         permanent :method_with_errors, TestError1, TestError2
       end
     end
@@ -175,6 +183,8 @@ RSpec.describe Prosody::ErrorClassification do
   end
 end
 
+# Tests for the EventHandler base class, which provides the interface for
+# processing Kafka messages and integrates with the error classification system.
 RSpec.describe Prosody::EventHandler do
   it "extends ErrorClassification" do
     expect(described_class.singleton_class.included_modules).to include(Prosody::ErrorClassification)
@@ -192,13 +202,14 @@ RSpec.describe Prosody::EventHandler do
       Class.new(Prosody::EventHandler) do
         attr_reader :message_received
 
+        # Demonstrate both error classification decorators in a real handler
         permanent :on_message, ArgumentError
         transient :on_message, RuntimeError
 
         def on_message(context, message)
           @message_received = message
 
-          # Error handling cases
+          # Test cases for different error handling scenarios
           if message == "cause_argument_error"
             raise ArgumentError, "Bad argument"
           elsif message == "cause_runtime_error"

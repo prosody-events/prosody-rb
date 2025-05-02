@@ -4,23 +4,34 @@ require "spec_helper"
 require "timeout"
 require "securerandom"
 
+# Integration tests for Prosody::Client, verifying end-to-end messaging functionality
+# with a real Kafka instance. Tests cover initialization, subscription, message
+# publishing/consumption, message ordering, shutdown, and error handling.
 RSpec.describe Prosody::Client, integration: true do
-  # Constants
-  MESSAGE_TIMEOUT = 5
-  GROUP_NAME = "test-group"
-  SOURCE_NAME = "test-source"
-  BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094")
+  # Test configuration constants
+  MESSAGE_TIMEOUT = 5 # Time to wait for message delivery in seconds
+  GROUP_NAME = "test-group" # Consumer group name for tests
+  SOURCE_NAME = "test-source" # Source system identifier for tests
+  BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094") # Kafka connection string
 
-  # Simple message stream class that collects and provides messages
+  # Collects and provides messages in a thread-safe manner.
+  # Used to verify message receipt in tests.
   class MessageStream
     def initialize
       @queue = Queue.new
     end
 
+    # Add a message to the stream
+    # @param message [Prosody::Message] Message to add
+    # @return [void]
     def push(message)
       @queue.push(message)
     end
 
+    # Retrieve a specific number of messages with timeout
+    # @param count [Integer] Number of messages to retrieve
+    # @param timeout [Numeric] How long to wait for each message in seconds
+    # @return [Array<Prosody::Message>] Retrieved messages (may be fewer than requested)
     def wait_for_messages(count, timeout)
       messages = []
 
@@ -36,13 +47,18 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
-  # Asynchronous event notification system
+  # Thread-safe event notification system for coordinating test activities
+  # across threads. Allows tests to wait for specific events to occur.
   class EventNotifier
     def initialize
       @listeners = {}
       @mutex = Mutex.new
     end
 
+    # Wait for a single occurrence of the specified event
+    # @param event_name [String, Symbol] Event to wait for
+    # @param timeout [Numeric, nil] Maximum wait time in seconds (nil for indefinite)
+    # @return [Object, nil] Event data or nil if timeout occurred
     def once(event_name, timeout = nil)
       queue = Queue.new
 
@@ -64,6 +80,10 @@ RSpec.describe Prosody::Client, integration: true do
       end
     end
 
+    # Trigger an event with optional data
+    # @param event_name [String, Symbol] Event to trigger
+    # @param args [Array] Data to pass to listeners
+    # @return [void]
     def emit(event_name, *args)
       # Nothing to do if no listeners
       return unless @listeners[event_name]
@@ -80,14 +100,18 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
-  # Thread-safe semaphore implementation
+  # Thread-safe counting semaphore implementation for coordinating
+  # concurrent activities in tests.
   class ThreadSafeSemaphore
+    # @param permits [Integer] Initial number of permitted acquisitions
     def initialize(permits = 1)
       @permits = permits
       @mutex = Mutex.new
       @condition = ConditionVariable.new
     end
 
+    # Wait until a permit is available, then acquire it
+    # @return [Boolean] true if permit was acquired
     def acquire
       @mutex.synchronize do
         while @permits <= 0
@@ -98,6 +122,8 @@ RSpec.describe Prosody::Client, integration: true do
       end
     end
 
+    # Release a permit, potentially unblocking a waiting thread
+    # @return [Boolean] true if permit was released
     def release
       @mutex.synchronize do
         @permits += 1
@@ -107,15 +133,16 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
-  # Helper methods
+  # Create a unique topic name for test isolation
+  # @return [String] Generated unique topic name
   def generate_topic_name
     "test-topic-#{Time.now.to_i}-#{SecureRandom.hex(4)}"
   end
 
-  # Setup OpenTelemetry
+  # OpenTelemetry tracer for test spans
   let(:tracer) { OpenTelemetry.tracer_provider.tracer("prosody-ruby-test") }
 
-  # Test subjects
+  # Test variables
   let(:topic) { generate_topic_name }
   let(:message_stream) { MessageStream.new }
   let(:config) do
@@ -132,15 +159,15 @@ RSpec.describe Prosody::Client, integration: true do
   let(:admin_client_class) { Prosody.const_get(:AdminClient) }
   let(:admin) { admin_client_class.new([BOOTSTRAP_SERVERS]) }
 
-  # Test lifecycle
+  # Test setup: create the topic before each test
   before do
-    # Create topic before each test
     admin.create_topic(topic, 4, 1)
 
     # Add a small delay to ensure topic creation propagates
     sleep 1
   end
 
+  # Test cleanup: unsubscribe client and delete topic
   after do
     # Clean up after each test - only unsubscribe if running
     if client.respond_to?(:consumer_state) && client.consumer_state == :running
@@ -154,15 +181,17 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  # Verify client initialization works correctly
   it "initializes correctly" do
     tracer.in_span("test.initialize") do |span|
       expect(client).to be_a(Prosody::Client)
     end
   end
 
+  # Verify basic subscription and unsubscription functionality
   it "subscribes and unsubscribes" do
     tracer.in_span("test.subscribe_unsubscribe") do |span|
-      # Create handler class
+      # Create handler class that pushes messages to our stream
       handler_class = Class.new(Prosody::EventHandler) do
         def initialize(stream)
           @stream = stream
@@ -188,9 +217,10 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  # Verify end-to-end message delivery functionality
   it "sends and receives a message" do
     tracer.in_span("test.send_receive") do |span|
-      # Create handler class
+      # Create handler class that forwards messages to our stream
       handler_class = Class.new(Prosody::EventHandler) do
         def initialize(stream)
           @stream = stream
@@ -221,14 +251,15 @@ RSpec.describe Prosody::Client, integration: true do
       expect(received_message).not_to be_nil
       expect(received_message.topic).to eq(topic)
       expect(received_message.key).to eq(test_message[:key])
-      # Fix: Compare with string keys since JSON serializes to string keys
+      # Compare with string keys since JSON serializes to string keys
       expect(received_message.payload).to eq(test_message[:payload].transform_keys(&:to_s))
     end
   end
 
+  # Verify correct handling of multiple messages with ordering guarantees
   it "handles multiple messages with correct ordering" do
     tracer.in_span("test.multiple_messages") do |span|
-      # Create handler class
+      # Create handler class that forwards messages to our stream
       handler_class = Class.new(Prosody::EventHandler) do
         def initialize(stream)
           @stream = stream
@@ -285,14 +316,14 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
-  # Test for clean shutdown using thread-safe components
+  # Verify client handles clean shutdown during active message processing
   it "handles clean shutdown during message processing" do
     tracer.in_span("test.shutdown_during_processing") do |span|
       # Set up event notification
       events = EventNotifier.new
       processing_semaphore = ThreadSafeSemaphore.new(0) # Start locked (0 permits)
 
-      # Handler that will emit an event when processing starts
+      # Handler that signals when processing starts and waits on a semaphore
       handler_class = Class.new(Prosody::EventHandler) do
         def initialize(events, semaphore)
           @events = events
@@ -338,12 +369,13 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  # Verify transient errors are retried properly
   it "handles transient errors with retry" do
     tracer.in_span("test.transient_error") do |span|
       message_count = [0] # Use array to share state
       retry_event = EventNotifier.new
 
-      # Create a handler that will fail transiently on first attempt
+      # Create a handler that fails on first attempt but succeeds on retry
       handler_class = Class.new(Prosody::EventHandler) do
         extend Prosody::ErrorClassification
 
@@ -381,12 +413,13 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  # Verify permanent errors are not retried
   it "handles permanent errors without retry" do
     tracer.in_span("test.permanent_error") do |span|
       message_count = [0] # Use array to share state
       error_event = EventNotifier.new
 
-      # Create a handler that will fail permanently
+      # Create a handler that permanently fails
       handler_class = Class.new(Prosody::EventHandler) do
         def initialize(error_event, message_count)
           @error_event = error_event

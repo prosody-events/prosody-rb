@@ -1,11 +1,16 @@
+# frozen_string_literal: true
+
 require "prosody"
 require "async"
 require "logger"
 require "opentelemetry-api"
 
+# Tests for the CancellationToken class which provides a mechanism
+# for canceling in-flight asynchronous tasks
 RSpec.describe Prosody::CancellationToken do
   subject(:token) { described_class.new }
 
+  # Verify that cancellation properly signals waiting threads
   describe "#cancel and #wait" do
     it "unblocks wait and returns true" do
       signal_queue = Queue.new
@@ -19,7 +24,10 @@ RSpec.describe Prosody::CancellationToken do
   end
 end
 
+# Tests for the Execute command used to schedule task execution
+# in the AsyncTaskProcessor
 RSpec.describe Prosody::Commands::Execute do
+  # Test inputs
   let(:task_id) { "task-123" }
   let(:carrier) { {"trace-id" => "abc"} }
   let(:block) { proc { 42 } }
@@ -28,6 +36,7 @@ RSpec.describe Prosody::Commands::Execute do
 
   subject(:command) { described_class.new(task_id, carrier, block, callback, token) }
 
+  # Verify that all command attributes are accessible
   describe "attributes" do
     it "exposes task_id, carrier, block, callback, and token" do
       expect(command.task_id).to eq(task_id)
@@ -39,15 +48,21 @@ RSpec.describe Prosody::Commands::Execute do
   end
 end
 
+# Tests for the Shutdown command used to gracefully stop
+# the AsyncTaskProcessor
 RSpec.describe Prosody::Commands::Shutdown do
   subject(:shutdown) { described_class.new }
 
+  # Verify that Shutdown is a Command subclass
   it "is a Command" do
     expect(shutdown).to be_a(Prosody::Commands::Command)
   end
 end
 
+# Tests for the AsyncTaskProcessor which manages asynchronous
+# task execution with OpenTelemetry context propagation
 RSpec.describe Prosody::AsyncTaskProcessor do
+  # Mock logger to avoid actual logging during tests
   let(:logger) { instance_double(Logger) }
 
   before do
@@ -58,6 +73,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
 
   subject(:processor) { described_class.new(logger) }
 
+  # Tests for the start method which creates the worker thread
   describe "#start" do
     context "when not already running" do
       it "starts a new thread and logs debug" do
@@ -77,6 +93,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     end
   end
 
+  # Tests for the stop method which gracefully shuts down the processor
   describe "#stop" do
     let(:shutdown_cmd_class) { Prosody::Commands::Shutdown }
 
@@ -100,6 +117,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     end
   end
 
+  # Tests for the submit method which schedules tasks for execution
   describe "#submit" do
     let(:task_id) { "my-task" }
     let(:carrier) { {"foo" => "bar"} }
@@ -119,7 +137,9 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     end
   end
 
+  # Integration tests for the full lifecycle of tasks in the processor
   context "integration: concurrent execution and cancellation" do
+    # Track tokens to ensure proper cleanup
     let(:tokens) { [] }
 
     before { processor.start }
@@ -129,6 +149,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       processor.instance_variable_get(:@processing_thread).join
     end
 
+    # Verify successful task execution with result callback
     it "executes tasks and invokes callback with result" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
@@ -139,6 +160,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       expect(result).to eq("hello")
     end
 
+    # Verify that tasks can be cancelled during execution
     it "cancels in-flight tasks and invokes callback with cancellation error" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
@@ -155,7 +177,9 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     end
   end
 
+  # Tests for exception handling during task execution
   context "task exception handling" do
+    # Prevent cancellation in these tests by overriding the wait method
     before do
       allow(Prosody::CancellationToken).to receive(:new).and_wrap_original do |orig, *args|
         tok = orig.call(*args)
@@ -174,6 +198,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       processor.instance_variable_get(:@processing_thread).join
     end
 
+    # Verify that exceptions in tasks are properly handled and reported
     it "invokes callback with false and exception, and logs error" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
@@ -186,7 +211,9 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     end
   end
 
+  # Tests for graceful shutdown behavior, ensuring tasks complete
   context "graceful shutdown waits for tasks" do
+    # Prevent cancellation to test task completion during shutdown
     before do
       allow(Prosody::CancellationToken).to receive(:new).and_wrap_original do |orig, *args|
         tok = orig.call(*args)
@@ -200,6 +227,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       processor.start
     end
 
+    # Verify that shutdown waits for in-flight tasks to complete
     it "waits for in-flight tasks to complete before stopping" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
