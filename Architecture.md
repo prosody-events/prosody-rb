@@ -1,10 +1,119 @@
-# Prosody Architecture Overview
+# Prosody Ruby Architecture: Under The Hood
 
-This document outlines the architecture of the Prosody system, which bridges Rust and Ruby to provide a high-performance Kafka client with an idiomatic Ruby interface.
+This document explains how the Prosody Ruby gem works internally. We'll start with high-level concepts, then dive deeper into the components and their interactions.
 
-## Sequence Diagram
+## The Basics: What Makes Prosody Different
 
-Below is the sequence diagram illustrating the flow of processing a Kafka message in Prosody:
+Ruby gems for Kafka typically fall into three categories:
+- Pure Ruby implementations (simple but performance-limited by the GVL)
+- C library bindings (better performance but expose low-level Kafka internals)
+- Java wrappers (performant but require JRuby and non-idiomatic APIs)
+
+Existing Ruby Kafka gems process messages synchronously—one per partition at a time—so a slow message blocks all others behind it, regardless of key. Prosody is async, processing multiple messages per partition concurrently while preserving per-key order. Built with Rust for performance and wrapped in an idiomatic Ruby interface, this approach creates unique challenges:
+
+1. **Bridging two languages**: Ruby and Rust have different memory models and concurrency approaches
+2. **Concurrent processing**: Processing messages efficiently without blocking
+3. **Safe communication**: Ensuring that errors in one language don't crash the other
+
+## Background Concepts
+
+Before diving into Prosody's architecture, let's understand some key concepts:
+
+### The Global VM Lock (GVL)
+
+Ruby's interpreter uses a Global VM Lock (GVL) that allows only one thread to execute Ruby code at a time. This means:
+
+- Multiple Ruby threads can exist, but only one runs Ruby code at any moment
+- When a thread performs I/O or other blocking operations, it can release the GVL
+- Native extensions (like our Rust code) can release the GVL to let other Ruby threads run
+
+### The Ruby/Rust Thread Boundary
+
+A critical limitation: **Rust cannot directly call Ruby methods from Rust-created threads**. This is because:
+
+1. Only Ruby-created threads can safely run Ruby code
+2. Ruby's memory management expects certain thread-local state
+3. Running Ruby code from a non-Ruby thread can cause memory corruption or crashes
+
+This is why we need a bridge—a dedicated Ruby thread that can safely execute Ruby code on behalf of Rust.
+
+### Fibers and Cooperative Concurrency
+
+Ruby supports lightweight threads called Fibers that enable cooperative concurrency:
+
+- Fibers are managed by Ruby (not the OS)
+- A Fiber runs until it explicitly yields control
+- Multiple Fibers can run on a single Ruby thread
+- The `async` gem builds a concurrency framework on top of Fibers
+
+### Blocking vs. Yielding: A Critical Distinction
+
+In concurrent programming:
+
+- **Blocking**: Stops an entire thread, preventing any code in that thread from running
+- **Yielding**: Pauses the current Fiber but allows other Fibers in the same thread to run
+
+This distinction is crucial for Prosody's performance. Consider two approaches:
+
+```ruby
+# Approach 1: Blocking
+def process_messages
+  # This blocks the entire thread while waiting
+  result = blocking_operation()
+  # No other work happens during the wait
+end
+
+# Approach 2: Yielding
+def process_messages
+  Async do
+    # This yields the fiber while waiting, letting other fibers run
+    result = queue.pop
+    # Other fibers continue working during the wait
+  end
+end
+```
+
+When processing thousands of messages, yielding allows much higher throughput because work continues during waits.
+
+## Architecture Overview
+
+Prosody combines a Rust core with a Ruby interface:
+
+```mermaid
+graph TD
+    A[Ruby Application] --> B[Prosody Ruby Interface]
+    B --> C[Bridge]
+    C --> D[Prosody Rust Core]
+    D --> E[Kafka]
+
+    subgraph "Ruby Process"
+        A
+        B
+        C
+        D
+    end
+```
+
+### Main Components
+
+1. **Ruby Interface Layer**: The classes you interact with directly
+   - `Prosody::Client`: The main entry point for applications
+   - `Prosody::EventHandler`: Base class for handling messages
+   - `Prosody::Message`: Represents a Kafka message
+
+2. **Rust Core**: The foundation
+   - Kafka Connectivity: Handles the connection to Kafka brokers
+   - Message Processing: Decodes, routes, and processes messages
+   - Error Handling: Manages retries and error classification
+
+3. **Bridge**: The crucial connection between Ruby and Rust
+   - Enables safe communication between languages
+   - Manages memory safety across the boundary
+   - Handles concurrency coordination
+
+## Message Flow
+
+This sequence diagram shows how a message flows through the system:
 
 ```mermaid
 sequenceDiagram
@@ -34,164 +143,462 @@ sequenceDiagram
     RubyHandler -->>- Client: processing complete
 ```
 
-## Components
+Let's break this down:
 
-### 1. **Configuration System**
+1. **Message Reception**: Rust client receives a message from Kafka
+2. **Scheduling**: The message is prepared for processing in Ruby
+3. **Bridge Crossing**: A function is scheduled to run in Ruby-land
+4. **Task Processing**: Your handler code processes the message
+5. **Result Reporting**: The result is sent back to Rust
+6. **Completion**: Processing finishes and Kafka offsets can be committed
 
-The configuration system bridges Ruby settings to native Rust structures:
+## The Bridge: How Ruby and Rust Communicate
 
-- `Prosody::Configuration` provides a Ruby DSL for declaring typed, validated parameters
-- Ruby configuration values are serialized to a Rust `NativeConfiguration`
-- Configuration is converted to specific Rust builder types (Consumer, Producer, Retry, etc.)
-- Handles multiple parameter types: strings, arrays, durations, integers, enums
-- Manages environment variable fallbacks for configuration settings
+The Bridge is the most complex part of Prosody. It allows two different languages with different concurrency models to work together safely.
 
-### 2. **Prosody::Client (Rust)**
+### Why We Need A Bridge
 
-The main entry point for interacting with Prosody:
+Rust cannot directly call Ruby methods from Rust threads. Consider what would happen without a bridge:
 
-- Provides the core interface for sending and receiving Kafka messages
-- Manages three operation modes: pipeline, low_latency, and best_effort
-- Tracks consumer state, partition assignments, and stall detection
-- Provides health checks for liveness and readiness probes
+```
+Rust Thread → directly calls → Ruby method
+                   ↓
+    🔥 Memory corruption or crash 🔥
+```
 
-### 3. **RubyHandler (Rust)**
+Instead, we need a bridge pattern:
 
-Bridges Kafka consumer messages to Ruby handler implementations:
+```
+Rust Thread → sends command → Ruby Thread → safely executes → Ruby method
+                    ↓                              ↓
+         Waits for completion           Returns result back to Rust
+```
 
-- Converts Kafka messages into Ruby-compatible objects
-- Schedules the execution of Ruby handlers using the Scheduler
-- Handles task cancellation during shutdown
-- Implements error classification for proper retry behavior
+The bridge provides this safe communication channel between languages.
 
-### 4. **Scheduler (Rust)**
+### How it Works: Queue-Based Communication
 
-Manages task execution in the Ruby runtime:
+The Bridge uses queues (or channels) to pass data between Ruby and Rust:
 
-- Schedules functions to run in Ruby with proper context propagation
-- Creates span context carriers for distributed tracing
-- Provides task handles for cancellation and result monitoring
-- Ensures graceful shutdown with proper resource cleanup
+```mermaid
+graph TD
+    A[Rust Code] -->|sends functions| B[Command Queue]
+    B -->|executed by| C[Ruby Thread]
+    C -->|calls| D[Your Handler Code]
+    D -->|returns via| E[Result Queue]
+    E -->|received by| A
+```
 
-### 5. **Result Channel (Rust)**
+1. **Command Queue**: Rust puts functions to be executed in a queue
+2. **Ruby Thread**: A dedicated Ruby thread executes these functions
+3. **Result Queue**: Results flow back through another queue
 
-One-shot communication channel for task results:
+### Why Queues Instead of Just Releasing the GVL?
 
-- Enables async waiting for Ruby task completion
-- Converts Ruby errors to Rust-compatible error types
-- Categorizes errors as permanent or transient for retry decisions
-- Ensures results are only delivered once
+You might wonder: "Why not just release the GVL and let Rust do its work directly?"
 
-### 6. **Bridge (Rust/Ruby)**
+The answer is multi-layered:
 
-Enables safe communication between Rust and Ruby:
+1. **Thread Ownership**: Only Ruby-created threads can safely run Ruby code
+2. **Concurrency Model**: Releasing the GVL lets other Ruby threads run, but doesn't help with fiber-based concurrency
+3. **Cooperative Yielding**: Using Ruby's `Queue` operations causes the current fiber to yield, enabling other fibers to run
 
-- Maintains a dedicated Ruby thread for processing Rust-initiated calls
-- Handles GVL (Global VM Lock) management to prevent thread blocking
-- Uses oneshot channels for synchronization and result passing
-- Batches operations to reduce GVL acquisition overhead
+This is critical for Prosody's high-concurrency processing model. By using queues with fiber-aware operations, we get the best of both worlds:
 
-### 7. **AsyncTaskProcessor (Ruby)**
+```ruby
+# This is what happens inside Prosody's processing loop
+Async do
+  # When queue.pop is called, this fiber yields control
+  result = queue.pop
 
-Executes tasks asynchronously using the Ruby `async` gem:
+  # During the yield, other fibers can run and process other messages
+  # When the result is available, this fiber resumes
+  process_result(result)
+end
+```
 
-- Processes tasks in Fibers for cooperative concurrency
-- Propagates OpenTelemetry context bidirectionally
-- Provides cancellation tokens to abort in-flight operations
-- Tracks active tasks for graceful shutdown
+### Concrete Example: Processing a Message
 
-### 8. **EventHandler (Ruby)**
+When a message arrives from Kafka:
 
-User-defined Ruby class that processes messages:
+1. Rust code receives the message from Kafka
+2. It creates a Ruby-compatible wrapper for the message
+3. It places a function in the command queue: "call handler.on_message with this message"
+4. The Ruby thread picks up this function and executes it
+5. Your handler processes the message and returns a result
+6. The result is placed in a result queue
+7. Rust code receives the result and updates Kafka offsets
 
-- Implements `on_message(context, message)` with custom processing logic
-- Can categorize exceptions as permanent or transient using decorators
-- Receives messages with deserialized JSON payloads
-- Operates within the OpenTelemetry context of the message
+### Code Flow Example
 
-### 9. **Health Probe Server**
+Here's a simplified view of how the bridge works:
 
-Provides HTTP endpoints for monitoring consumer health:
+```ruby
+# In Ruby: How your code interfaces with the bridge
+client = Prosody::Client.new(config)
+client.subscribe(MyHandler.new)
 
-- `/readyz`: Readiness probe checking partition assignment status
-- `/livez`: Liveness probe detecting stalled partitions
-- Configurable port with ability to disable
-- Automatically starts with the consumer and stops on unsubscribe
+# Behind the scenes: What the bridge does
+# 1. Rust code receives a message from Kafka
+# 2. It needs to call your Ruby handler, so it sends a function to the bridge:
 
-## Message Processing Flow
+bridge.run do |ruby|
+  # This block runs in a Ruby thread with the GVL
+  handler.get(ruby).funcall("on_message", (context, message))
+end
 
-### 1. **Initialization**
+# 3. To get the result back asynchronously:
+bridge.wait_for(ruby, future) do
+  # Create a Ruby queue to receive the result
+  queue = Thread::Queue.new
 
-- Ruby code creates a `Prosody::Client` with configuration
-- Configuration is converted to Rust-compatible format
-- Native client initializes with appropriate Kafka settings
-- Operation mode (pipeline, low_latency, best_effort) is configured
+  # Spawn a task to await the future and send the result to the queue
+  RUNTIME.spawn(async {
+    result = future.await
+    # Send the result back through a function executed in Ruby
+    bridge.run do |ruby|
+      queue.push(result)
+    end
+  })
 
-### 2. **Subscription**
+  # Wait for the result (this releases the GVL)
+  queue.pop
+end
+```
 
-- Ruby code provides a handler implementing `on_message`
-- Handler is wrapped in `RubyHandler` and registered with the Kafka consumer
-- Consumer begins polling for messages
+## AsyncTaskProcessor: Ruby-Side Concurrent Processing
 
-### 3. **Message Reception**
+The `AsyncTaskProcessor` is the Ruby component that manages concurrent task execution:
 
-- Native Rust client receives a message from Kafka
-- Message is wrapped as a Ruby-compatible `Message` object
-- Context is wrapped as a Ruby-compatible `Context` object
+```ruby
+# Conceptual implementation (simplified)
+class AsyncTaskProcessor
+  def initialize
+    @command_queue = Queue.new  # Thread-safe queue for commands
+  end
 
-### 4. **Processing**
+  def start
+    @thread = Thread.new do
+      Async do  # Start the async reactor
+        loop do
+          # This yields the fiber while waiting for a command
+          command = @command_queue.pop
 
-- `RubyHandler` schedules task execution via the `Scheduler`
-- OpenTelemetry context is extracted from the message span
-- Scheduler submits the task to `AsyncTaskProcessor` through the `Bridge`
-- `AsyncTaskProcessor` executes the handler with distributed tracing context
-- Ruby handler processes the message and returns a result or raises an error
+          case command
+          when Execute
+            # Execute the task in a new fiber
+            Async do
+              begin
+                command.block.call  # Run the actual task
+                command.callback.call(true, nil)  # Signal success
+              rescue => e
+                command.callback.call(false, e)  # Signal failure
+              end
+            end
+          when Shutdown
+            break  # Exit the loop and terminate
+          end
+        end
+      end
+    end
+  end
 
-### 5. **Result Handling**
+  def submit(task_id, callback, &block)
+    token = CancellationToken.new
+    @command_queue.push(Execute.new(task_id, callback, token, block))
+    token
+  end
 
-- Success or error is sent through the `ResultChannel`
-- Errors are classified as permanent or transient
-- The Kafka consumer handles the result based on operation mode:
-  - Pipeline mode: Retries transient errors indefinitely
-  - Low-latency mode: Limited retries, then sends to failure topic
-  - Best-effort mode: Limited retries, then skips the message
+  def stop
+    @command_queue.push(Shutdown.new)
+    @thread.join
+  end
+end
+```
 
-### 6. **Shutdown**
+This class is critical because:
 
-- Ruby code calls `unsubscribe` on the client
-- In-progress tasks complete or are cancelled
-- Resources are properly released
-- Kafka offsets are committed
+1. It creates a fiber-based concurrency environment using `Async`
+2. It processes tasks concurrently without blocking
+3. It enables work to continue even when some tasks are waiting
+4. It provides a clean mechanism for task cancellation
 
-## Key Technical Features
+## The Power of Cooperative Concurrency
 
-### 1. **Bidirectional OpenTelemetry Propagation**
+Prosody uses Ruby's `async` gem to process multiple messages concurrently without blocking:
 
-- Trace context propagates from Ruby to Kafka (on send)
-- Trace context propagates from Kafka to Ruby (on receive)
-- Creates properly nested spans for the entire message journey
-- Records errors and metadata in the trace
+```ruby
+# Simplified version of how Prosody processes messages
+def process_message(message)
+  Async do
+    # Create two concurrent fibers
 
-### 2. **Error Classification System**
+    # Worker fiber that processes the message
+    Async do
+      begin
+        # Call your handler
+        handler.on_message(context, message)
+        report_success()
+      rescue => e
+        report_error(e)
+      end
+    end
 
-- Errors can be declaratively classified using Ruby decorators:
-  ```ruby
-  permanent :on_message, TypeError, NoMethodError
-  transient :on_message, JSON::ParserError
-  ```
-- Custom error classes can implement the `permanent?` contract
-- Error classification determines retry behavior based on operation mode
+    # Cancellation watcher fiber
+    Async do
+      # This yields while waiting for cancellation
+      cancellation_token.wait
+      # Handle cancellation if needed
+    end
+  end
+end
+```
 
-### 3. **GVL Management**
+Let's break down what happens when a message is processed:
 
-- Releases Ruby's GVL during polling operations
-- Uses batched execution to minimize GVL acquisition overhead
-- Properly handles cancellation while waiting for the GVL
-- Prevents unwinding across the C FFI boundary
+1. Two fibers are created to handle the message
+2. The worker fiber calls your handler code
+3. The cancellation watcher monitors for cancellation signals
+4. If one fiber is waiting (e.g., for I/O), the other can continue running
+5. This allows concurrent processing even with Ruby's GVL
 
-### 4. **Message Lifecycle Management**
+## The CancellationToken System
 
-- Tracks message offsets for proper Kafka commits
-- Maintains key-based ordering while allowing parallel processing
-- Provides idempotence cache for message deduplication
-- Handles partition rebalancing during consumer group changes
+Prosody needs to gracefully cancel in-progress tasks (e.g., during shutdown). It uses a token system:
+
+```ruby
+# Conceptual implementation (simplified)
+class CancellationToken
+  def initialize
+    @queue = Queue.new  # Thread-safe queue for signaling
+  end
+
+  def cancel
+    # Signal cancellation request
+    @queue.push(:cancel)
+  end
+
+  def wait
+    # Wait for cancellation signal (yields the fiber while waiting)
+    @queue.pop
+    true
+  end
+end
+```
+
+Why use a Queue instead of a simple flag? Because `Queue#pop` is fiber-aware:
+
+1. When `wait` is called, the fiber yields
+2. Other fibers can continue running
+3. When `cancel` is called, the waiting fiber resumes
+
+This enables non-blocking cancellation coordination between fibers.
+
+## Error Handling and Classification
+
+Prosody has a sophisticated error handling system that classifies errors as permanent or transient:
+
+### Error Classification
+
+```ruby
+class MyHandler < Prosody::EventHandler
+  # Mark these errors as permanent (will not be retried)
+  permanent :on_message, TypeError, ArgumentError
+
+  # Mark these errors as transient (will be retried)
+  transient :on_message, NetworkError
+
+  def on_message(context, message)
+    # Process message...
+  end
+end
+```
+
+Under the hood, this works by:
+
+1. Using Ruby's method wrapping capabilities to intercept exceptions
+2. Re-raising caught exceptions as either `PermanentError` or `TransientError`
+3. These error types implement a `permanent?` method that Rust code can check
+4. Rust applies the appropriate retry strategy based on this classification
+
+The implementation uses Ruby's metaprogramming to wrap methods:
+
+```ruby
+# Simplified version of the error classification mechanism
+module ErrorClassification
+  def permanent(method_name, *exception_classes)
+    wrap_errors(method_name, exception_classes, PermanentError)
+  end
+
+  def transient(method_name, *exception_classes)
+    wrap_errors(method_name, exception_classes, TransientError)
+  end
+
+  private
+
+  def wrap_errors(method_name, exception_classes, error_class)
+    # Create a module that will be prepended to the class
+    wrapper = Module.new do
+      define_method(method_name) do |*args, &block|
+        begin
+          # Call the original method
+          super(*args, &block)
+        rescue *exception_classes => e
+          # Re-raise as the appropriate error type
+          raise error_class.new(e.message)
+        end
+      end
+    end
+
+    # Prepend the wrapper module to intercept method calls
+    prepend wrapper
+  end
+end
+```
+
+## OpenTelemetry Integration
+
+Prosody automatically traces message processing across the Ruby-Rust boundary:
+
+```mermaid
+graph TD
+    A[Producer Code] -->|creates span| B[Kafka Message]
+    B -->|span context in headers| C[Consumer]
+    C -->|extracts context| D[Rust Processing]
+    D -->|propagates context| E[Ruby Handler]
+    E -->|creates child span| F[Your Business Logic]
+```
+
+The trace context flows:
+1. From producing code into Kafka message headers
+2. From Kafka to the Rust consumer
+3. Through the bridge to your Ruby handler
+4. Into any nested operations you perform
+
+This gives you end-to-end visibility of message processing across systems.
+
+## Key Technical Points
+
+### Memory Safety Across Languages
+
+Rust's ownership system prevents memory leaks and data races, but special care is needed at the Ruby boundary:
+
+- Ruby objects referenced by Rust are protected from garbage collection
+- Rust manages memory that crosses the boundary
+- Cleanup happens automatically when objects are no longer needed
+
+The bridge uses several techniques to ensure safety:
+
+1. **BoxValue**: Safely wraps Ruby values and prevents them from being garbage collected
+2. **AtomicTake**: Ensures values can only be consumed once
+3. **Queues**: Provide coordination between Rust and Ruby
+
+### Concurrency Coordination
+
+Prosody coordinates three concurrency mechanisms:
+
+1. **Ruby Threads**: Limited by the GVL, good for I/O-bound operations
+2. **Ruby Fibers**: Lightweight, cooperative concurrency within a thread
+3. **Rust Tasks**: Asynchronous, non-blocking operations in Rust
+
+The key insight is that by using queues with fiber-aware operations, we get the best of all worlds.
+
+### GVL Management
+
+The Bridge carefully manages Ruby's GVL:
+- Releases the GVL when executing Rust code
+- Acquires the GVL when calling into Ruby
+- Batches operations to minimize GVL acquisition overhead
+
+This code shows how the bridge releases the GVL for Rust operations:
+
+```rust
+// Simplified code for releasing the GVL
+fn without_gvl<F, R>(func: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    // Setup callback for Rust function
+    let callback = Box::new(func);
+    let callback_ptr = Box::into_raw(callback);
+
+    // Call into C/Ruby to release GVL and execute our function
+    let result_ptr = unsafe {
+        rb_thread_call_without_gvl(
+            execute_rust_function,
+            callback_ptr as *mut _,
+            NULL,
+            NULL,
+        )
+    };
+
+    // Extract the result
+    unsafe { Box::from_raw(result_ptr as *mut R).as_ref().clone() }
+}
+```
+
+### Yielding For Maximum Concurrency
+
+Prosody uses queues extensively to coordinate between components:
+- **Command Queue**: Rust → Ruby function execution
+- **Result Queue**: Ruby → Rust result reporting
+- **Cancellation Queue**: Signaling task cancellation
+
+The key advantage of using queues is that operations like `Queue#pop` yield the current fiber instead of blocking the entire thread. This allows other fibers to run concurrently, maximizing throughput.
+
+## The Full Picture
+
+Putting it all together, Prosody's architecture enables:
+
+1. **Efficient Processing**: Messages are processed concurrently without blocking
+2. **Safe Language Interop**: Ruby and Rust communicate without memory issues
+3. **Graceful Error Handling**: Errors are properly classified and handled
+4. **Distributed Tracing**: Operations are traced across system boundaries
+5. **Resource Management**: Memory and connections are properly cleaned up
+
+This hybrid approach gives you the performance benefits of Rust with the developer experience of Ruby, all while maintaining safety and reliability.
+
+## Practical Implications
+
+Understanding this architecture helps you write better Prosody applications:
+
+1. **Write Non-Blocking Handlers**: Use async I/O in your handlers to maximize concurrency
+   ```ruby
+   def on_message(context, message)
+     # Good: Uses async HTTP client that yields
+     response = AsyncHTTP.get(message.payload["url"])
+     process_response(response)
+   end
+   ```
+
+2. **Classify Errors Properly**: Use `permanent` and `transient` to control retry behavior
+   ```ruby
+   # Retry network errors, but not data errors
+   transient :on_message, NetworkError, ServiceUnavailableError
+   permanent :on_message, ValidationError, DataFormatError
+   ```
+
+3. **Ensure Clean Shutdown**: Always call `unsubscribe` before exiting
+   ```ruby
+   # Set up proper signal handling
+   Signal.trap("INT") { client.unsubscribe }
+   Signal.trap("TERM") { client.unsubscribe }
+   ```
+
+4. **Monitor with Traces**: Use OpenTelemetry to understand message processing
+   ```ruby
+   def on_message(context, message)
+     # Create a child span (parent span is automatic)
+     OpenTelemetry.tracer.in_span("process_message") do |span|
+       span.add_attributes({
+         "message.type" => message.payload["type"],
+         "message.size" => message.payload.to_s.size
+       })
+
+       # Process the message
+       process_message(message)
+     end
+   end
+   ```
+
+By leveraging Prosody's architecture, you can build high-performance, reliable Kafka applications in Ruby.
