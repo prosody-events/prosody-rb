@@ -3,7 +3,6 @@
 module Prosody
   # Provides a mechanism for canceling asynchronous tasks
   class CancellationToken
-    # Internal queue for signaling cancellation
     @queue: Queue
 
     # Creates a new token with an internal queue for signaling
@@ -14,15 +13,14 @@ module Prosody
     def cancel: () -> void
 
     # Blocks until cancellation is requested
-    #
     # @return always returns true after cancellation is received
     def wait: () -> bool
   end
 
-  # Internal command types for the AsyncTaskProcessor's command queue
   module Commands
     # Base class for all processor commands
     class Command
+
     end
 
     # Command to execute a task with the given parameters
@@ -31,10 +29,10 @@ module Prosody
       attr_reader task_id: String
 
       # The block of code to execute
-      attr_reader block: Proc
+      attr_reader block: ^() -> void
 
       # Callback to invoke when execution completes or fails
-      attr_reader callback: ^([bool, untyped]) -> void
+      attr_reader callback: ^(bool, untyped) -> bool
 
       # Cancellation token for this task
       attr_reader token: CancellationToken
@@ -44,71 +42,59 @@ module Prosody
 
       # Creates a new execute command with all required parameters
       def initialize: (
-          String task_id,
-          Hash[String, String] carrier,
-          Proc block,
-          ^([bool, untyped]) -> void callback,
-          CancellationToken token
+          task_id: String,
+          carrier: Hash[String, String],
+          block: ^() -> void,
+          callback: ^(bool, untyped) -> bool,
+          token: CancellationToken
         ) -> void
     end
 
     # Command that signals the processor to shut down
     class Shutdown < Command
+
     end
   end
 
-  # Processes asynchronous tasks in a dedicated thread with OpenTelemetry tracing
   class AsyncTaskProcessor
-    # Logger for diagnostic messages
     @logger: Logger
-
-    # Queue for commands to be processed
     @command_queue: Queue
-
-    # Thread that processes commands
     @processing_thread: Thread?
-
-    # OpenTelemetry tracer for spans
     @tracer: untyped?
 
     # Creates a new processor with the given logger
-    #
     # @param logger logger for diagnostic messages (defaults to STDOUT)
-    def initialize: (?Logger logger) -> void
+    def initialize: (?Logger) -> void
 
     # Starts the processor by launching a dedicated thread
-    # The OpenTelemetry tracer is initialized in the processing thread
     # Does nothing if the processor is already running
+    # @return the Thread if started, or nil if already running
     def start: () -> Thread?
 
     # Gracefully stops the processor
-    # Tasks in progress will complete before the processor fully shuts down
     # Does nothing if the processor is already stopped
     def stop: () -> void
 
     # Submits a task for asynchronous execution
-    #
     # @param task_id unique identifier for the task
     # @param carrier OpenTelemetry context carrier for tracing
     # @param callback called with (success, result) when task completes
     # @yield the block to execute asynchronously
     # @return token that can be used to cancel the task
     def submit: (
-        String task_id,
-        Hash[String, String] carrier,
-        ^([bool, untyped]) -> bool callback
+        task_id: String,
+        carrier: Hash[String, String],
+        callback: ^(bool, untyped) -> bool
       ) { () -> untyped } -> CancellationToken
 
     private
 
     # Main processing loop for the async thread
-    # Uses the async gem to handle concurrent task execution
     def process_commands: () -> void
 
     # Handles execution of a task with proper context propagation and error handling
-    #
     # @param command the command containing task details
     # @param barrier barrier for tracking active tasks
-    def handle_execute: (Commands::Execute command, Async::Barrier barrier) -> void
+    def handle_execute: (Commands::Execute, Async::Barrier) -> void
   end
 end
