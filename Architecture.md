@@ -13,8 +13,7 @@ Ruby gems for Kafka typically fall into three categories:
 
 Existing Ruby Kafka gems process messages synchronously—one per partition at a time—so a slow message blocks all others
 behind it, regardless of key. Prosody is async, processing multiple messages per partition concurrently while preserving
-per-key order. Built with Rust for performance and wrapped in an idiomatic Ruby interface, this approach creates unique
-challenges:
+per-key order. This approach creates unique challenges:
 
 1. **Bridging two languages**: Ruby and Rust have different memory models and concurrency approaches
 2. **Concurrent processing**: Processing messages efficiently without blocking
