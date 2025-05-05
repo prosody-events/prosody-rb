@@ -193,6 +193,18 @@ graph TD
 2. **Ruby Thread**: A dedicated Ruby thread executes these functions
 3. **Result Queue**: Results flow back through another queue
 
+The bridge operates as a continuous poll loop, constantly checking for new functions to execute:
+
+```
+Loop:
+  1. Check for commands in the queue
+  2. If found, acquire GVL and execute in Ruby
+  3. Send results back
+  4. Release GVL and continue polling
+```
+
+This polling approach allows the bridge to efficiently process commands while minimizing GVL contention.
+
 ### Why Queues Instead of Just Releasing the GVL?
 
 You might wonder: "Why not just release the GVL and let Rust do its work directly?"
@@ -234,35 +246,44 @@ When a message arrives from Kafka:
 Here's a simplified view of how the bridge works:
 
 ```ruby
-# In Ruby: How your code interfaces with the bridge
+# CONCEPTUAL MODEL: How Prosody communicates between Ruby and Rust
+# (this is simplified to show the concept, not actual implementation)
+
+# 1. Ruby side: How your code interfaces with the bridge
 client = Prosody::Client.new(config)
 client.subscribe(MyHandler.new)
 
-# Behind the scenes: What the bridge does
-# 1. Rust code receives a message from Kafka
-# 2. It needs to call your Ruby handler, so it sends a function to the bridge:
+# 2. Behind the scenes: What happens when a message arrives from Kafka
+#
+#    In Rust: Message from Kafka → Added to processing queue
+#                                ↓
+#    Bridge poll loop: Takes message from queue → Schedules Ruby execution
+#                                               ↓
+#    In Ruby: Your handler processes message → Returns result
+#                                            ↓
+#    Bridge poll loop: Takes result → Reports back to Rust
+#
+# The bridge continuously polls for commands to execute and results to collect
 
-bridge.run do |ruby|
-  # This block runs in a Ruby thread with the GVL
-  handler.get(ruby).funcall("on_message", (context, message))
-end
+# 3. How the bridge executes your handler (simplified Ruby-like pseudocode)
+def bridge_poll_loop
+  loop do
+    # Get next command from the queue (yields while waiting)
+    command = command_queue.pop
 
-# 3. To get the result back asynchronously:
-bridge.wait_for(ruby, future) do
-  # Create a Ruby queue to receive the result
-  queue = Thread::Queue.new
-
-  # Spawn a task to await the future and send the result to the queue
-  RUNTIME.spawn(async {
-    result = future.await
-    # Send the result back through a function executed in Ruby
-    bridge.run do |ruby|
-      queue.push(result)
+    # Execute the command in the Ruby context
+    if command.is_a?(ExecuteHandler)
+      begin
+        # Call your handler with the message
+        result = command.handler.on_message(command.context, command.message)
+        # Report success back through the result channel
+        command.result_channel.send(success: true, result: result)
+      rescue => e
+        # Report failure back through the result channel
+        command.result_channel.send(success: false, error: e)
+      end
     end
-  })
-
-  # Wait for the result (this releases the GVL)
-  queue.pop
+  end
 end
 ```
 
@@ -328,7 +349,26 @@ This class is critical because:
 Prosody uses Ruby's `async` gem to process multiple messages concurrently without blocking:
 
 ```ruby
-# Simplified version of how Prosody processes messages
+# How Prosody processes multiple messages concurrently
+#
+# Without concurrency (traditional approach):
+#   [Message 1] → Process → Done
+#                   ↓
+#   [Message 2] → Process → Done
+#                   ↓
+#   [Message 3] → Process → Done
+#
+# With Prosody's fiber-based concurrency:
+#   [Message 1] → Start → Yield while waiting → Resume → Done
+#        ↓
+#   [Message 2] → Start → Yield while waiting → Resume → Done
+#        ↓
+#   [Message 3] → Start → Yield while waiting → Resume → Done
+#
+# This allows processing to continue even when some messages are waiting
+# for external resources (database, API calls, etc.)
+
+# Simplified version of how Prosody processes a single message:
 def process_message(message)
   Async do
     # Create two concurrent fibers
@@ -367,7 +407,15 @@ Let's break down what happens when a message is processed:
 Prosody needs to gracefully cancel in-progress tasks (e.g., during shutdown). It uses a token system:
 
 ```ruby
-# Conceptual implementation (simplified)
+# How Prosody handles graceful cancellation
+#
+# When you call client.unsubscribe or the process is shutting down:
+#
+# 1. Prosody signals cancellation to in-progress messages
+# 2. Your handler can detect cancellation and clean up
+# 3. Resources are released properly
+#
+# Implementation (simplified):
 class CancellationToken
   def initialize
     @queue = Queue.new  # Thread-safe queue for signaling
@@ -384,6 +432,11 @@ class CancellationToken
     true
   end
 end
+
+# Prosody uses this system to ensure resources are properly cleaned up:
+# - Database transactions are rolled back
+# - Temporary files are closed
+# - Network connections are terminated
 ```
 
 Why use a Queue instead of a simple flag? Because `Queue#pop` is fiber-aware:
@@ -402,14 +455,23 @@ Prosody has a sophisticated error handling system that classifies errors as perm
 
 ```ruby
 class MyHandler < Prosody::EventHandler
-  # Mark these errors as permanent (will not be retried)
-  permanent :on_message, TypeError, ArgumentError
+  # Tell Prosody: "Don't retry these errors - they won't succeed"
+  permanent :on_message,
+    ArgumentError,    # Bad arguments - won't fix themselves
+    TypeError,        # Type mismatches - message format issues
+    JSON::ParseError  # Corrupt data - retrying won't help
 
-  # Mark these errors as transient (will be retried)
-  transient :on_message, NetworkError
+  # Tell Prosody: "Do retry these errors - they might succeed later"
+  transient :on_message,
+    NetworkError,            # Network might recover
+    ServiceUnavailableError, # Service might become available
+    TimeoutError             # Operation might complete next time
 
   def on_message(context, message)
     # Process message...
+    user_id = message.payload.fetch("user_id")
+    api_result = ApiClient.call(user_id)
+    Database.save(api_result)
   end
 end
 ```
@@ -510,31 +572,26 @@ The Bridge carefully manages Ruby's GVL:
 - Acquires the GVL when calling into Ruby
 - Batches operations to minimize GVL acquisition overhead
 
-This code shows how the bridge releases the GVL for Rust operations:
-
-```rust
-// Simplified code for releasing the GVL
-fn without_gvl<F, R>(func: F) -> R
-where
-    F: FnOnce() -> R,
-{
-    // Setup callback for Rust function
-    let callback = Box::new(func);
-    let callback_ptr = Box::into_raw(callback);
-
-    // Call into C/Ruby to release GVL and execute our function
-    let result_ptr = unsafe {
-        rb_thread_call_without_gvl(
-            execute_rust_function,
-            callback_ptr as *mut _,
-            NULL,
-            NULL,
-        )
-    };
-
-    // Extract the result
-    unsafe { Box::from_raw(result_ptr as *mut R).as_ref().clone() }
-}
+```ruby
+# CONCEPTUAL MODEL: How Ruby's Global VM Lock works with Prosody
+#
+# Ruby normally allows only one thread to run Ruby code at a time:
+#
+#     Thread 1 ---> Ruby VM ---> Thread 2 ---> Thread 3
+#      running       (GVL)        waiting       waiting
+#
+# Prosody can temporarily release the GVL when running Rust code:
+#
+#     Thread 1 ---> Ruby VM <--- Thread 2       Thread 3
+#    running Rust     (GVL)       running       waiting
+#       code                     Ruby code
+#
+# The bridge poll loop constantly alternates between:
+# 1. Releasing the GVL to handle Rust operations efficiently
+# 2. Acquiring the GVL to execute Ruby code when needed
+#
+# This keeps your Ruby application responsive while Prosody
+# handles heavy processing in Rust
 ```
 
 ### Yielding For Maximum Concurrency
@@ -565,17 +622,26 @@ Understanding this architecture helps you write better Prosody applications:
 1. **Write Non-Blocking Handlers**: Use async I/O in your handlers to maximize concurrency
    ```ruby
    def on_message(context, message)
-     # Good: Uses async HTTP client that yields
+     # Good: Uses async HTTP client that yields while waiting
      response = AsyncHTTP.get(message.payload["url"])
-     process_response(response)
+
+     # When response arrives, processing resumes
+     save_result(response)
    end
    ```
 
 2. **Classify Errors Properly**: Use `permanent` and `transient` to control retry behavior
    ```ruby
    # Retry network errors, but not data errors
-   transient :on_message, NetworkError, ServiceUnavailableError
-   permanent :on_message, ValidationError, DataFormatError
+   transient :on_message,
+     NetworkError,            # Network might recover
+     ServiceUnavailableError, # Service might become available
+     DatabaseConnectionError  # Database might come back online
+
+   permanent :on_message,
+     ValidationError,         # Bad data - won't fix itself
+     DataFormatError,         # Schema mismatch - retrying won't help
+     AuthorizationError       # Permission issues need manual fixing
    ```
 
 3. **Ensure Clean Shutdown**: Always call `unsubscribe` before exiting
@@ -583,20 +649,28 @@ Understanding this architecture helps you write better Prosody applications:
    # Set up proper signal handling
    Signal.trap("INT") { client.unsubscribe }
    Signal.trap("TERM") { client.unsubscribe }
+
+   # This ensures:
+   # - In-progress messages complete or cancel gracefully
+   # - Resources are properly released
+   # - Kafka offsets are committed correctly
    ```
 
 4. **Monitor with Traces**: Use OpenTelemetry to understand message processing
    ```ruby
    def on_message(context, message)
      # Create a child span (parent span is automatic)
-     OpenTelemetry.tracer.in_span("process_message") do |span|
+     OpenTelemetry.tracer.in_span("process_payment") do |span|
+       payment = message.payload
+
+       # Add context to help with debugging and monitoring
        span.add_attributes({
-         "message.type" => message.payload["type"],
-         "message.size" => message.payload.to_s.size
+         "payment.id" => payment["id"],
+         "payment.amount" => payment["amount"]
        })
 
        # Process the message
-       process_message(message)
+       process_payment(payment)
      end
    end
    ```
