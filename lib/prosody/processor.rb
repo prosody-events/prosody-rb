@@ -8,20 +8,28 @@ require "prosody/version"
 
 module Prosody
   # Provides a mechanism for canceling asynchronous tasks.
-  # Used by the AsyncTaskProcessor to allow tasks to be canceled while in-flight.
+  #
+  # This class implements a simple cancellation mechanism using a Ruby Queue,
+  # allowing tasks to be safely canceled while they're in progress. Each token
+  # maintains its own queue for signaling cancellation.
   class CancellationToken
-    # Creates a new token with an internal queue for signaling.
+    # Creates a new cancellation token with an internal queue for signaling.
     def initialize
       @queue = Queue.new
     end
 
     # Signals that the associated task should be canceled.
-    # Wakes up any threads waiting on #wait.
+    #
+    # This method pushes a cancellation signal to the internal queue, which will
+    # wake up any threads waiting on #wait.
     def cancel
       @queue.push(:cancel)
     end
 
     # Blocks until cancellation is requested.
+    #
+    # This method blocks the current thread until the token is canceled by
+    # another thread calling #cancel.
     #
     # @return [Boolean] Always returns true after cancellation is received
     def wait
@@ -30,16 +38,27 @@ module Prosody
     end
   end
 
-  # Internal command types for the AsyncTaskProcessor's command queue.
-  # Implements a command pattern for communication with the processor thread.
+  # Contains command classes for the AsyncTaskProcessor's command queue.
+  #
+  # This module implements a command pattern for communication with the processor
+  # thread, allowing for type-safe message passing between threads.
   module Commands
-    # Base class for all processor commands
+    # Base class for all processor commands.
+    #
+    # All commands sent to the AsyncTaskProcessor must inherit from this class
+    # for proper type identification.
     class Command; end
 
-    # Command to execute a task with the given parameters
+    # Command to execute a task with the given parameters.
+    #
+    # This command encapsulates all the information needed to execute an
+    # asynchronous task in the Ruby runtime.
     class Execute < Command
       # Task identifier for logging and debugging
       attr_reader :task_id
+
+      # OpenTelemetry context carrier for trace propagation
+      attr_reader :carrier
 
       # The block of code to execute
       attr_reader :block
@@ -50,10 +69,7 @@ module Prosody
       # Cancellation token for this task
       attr_reader :token
 
-      # OpenTelemetry context carrier for trace propagation
-      attr_reader :carrier
-
-      # Creates a new execute command with all required parameters
+      # Creates a new execute command with all required parameters.
       #
       # @param task_id [String] Unique identifier for the task
       # @param carrier [Hash] OpenTelemetry context carrier with trace information
@@ -69,19 +85,24 @@ module Prosody
       end
     end
 
-    # Command that signals the processor to shut down
+    # Command that signals the processor to shut down.
+    #
+    # When received, the processor will complete all in-flight tasks before
+    # shutting down.
     class Shutdown < Command; end
   end
 
   # Processes asynchronous tasks in a dedicated thread with OpenTelemetry tracing.
   #
-  # This processor handles:
-  # - Executing tasks asynchronously using the async gem
-  # - Propagating OpenTelemetry context for distributed tracing
-  # - Providing cancellation support for in-flight tasks
-  # - Ensuring graceful shutdown when requested
+  # This processor manages a dedicated Ruby thread that executes tasks asynchronously
+  # with proper OpenTelemetry context propagation. It provides:
+  #
+  # - Task submission and execution in an isolated thread
+  # - Cancellation support for in-flight tasks
+  # - Context propagation for distributed tracing
+  # - Graceful shutdown with task completion
   class AsyncTaskProcessor
-    # Creates a new processor with the given logger
+    # Creates a new processor with the given logger.
     #
     # @param logger [Logger] Logger for diagnostic messages (defaults to STDOUT)
     def initialize(logger = Logger.new($stdout))
@@ -92,15 +113,17 @@ module Prosody
     end
 
     # Starts the processor by launching a dedicated thread.
-    # The OpenTelemetry tracer is initialized in the processing thread
-    # to avoid crossing thread boundaries.
     #
-    # Does nothing if the processor is already running.
+    # The OpenTelemetry tracer is initialized in the processing thread
+    # to avoid crossing thread boundaries. Does nothing if the processor
+    # is already running.
     def start
-      return if @processing_thread&.alive?
+      return if running?
 
       @logger.debug("Starting async task processor")
       @processing_thread = Thread.new do
+        # Initialize the tracer in the processing thread to keep
+        # OpenTelemetry context within the same thread
         @tracer = OpenTelemetry.tracer_provider.tracer(
           "Prosody::AsyncTaskProcessor",
           Prosody::VERSION
@@ -110,16 +133,17 @@ module Prosody
     end
 
     # Gracefully stops the processor.
-    # Tasks in progress will complete before the processor fully shuts down.
     #
+    # Tasks in progress will complete before the processor fully shuts down.
     # Does nothing if the processor is already stopped.
     def stop
-      return unless @processing_thread&.alive?
+      return unless running?
+
       @logger.debug("Stopping async task processor")
       @command_queue.push(Commands::Shutdown.new)
     end
 
-    # Submits a task for asynchronous execution
+    # Submits a task for asynchronous execution.
     #
     # @param task_id [String] Unique identifier for the task
     # @param carrier [Hash] OpenTelemetry context carrier for tracing
@@ -136,8 +160,17 @@ module Prosody
 
     private
 
+    # Checks if the processor thread is running.
+    #
+    # @return [Boolean] true if the processor is running, false otherwise
+    def running?
+      @processing_thread&.alive?
+    end
+
     # Main processing loop for the async thread.
-    # Uses the async gem to handle concurrent task execution.
+    #
+    # Uses the async gem to handle concurrent task execution and tracks
+    # active tasks with a barrier for clean shutdown.
     def process_commands
       Async do
         # Barrier tracks all running tasks for clean shutdown
@@ -183,44 +216,70 @@ module Prosody
 
       # Execute within the extracted OpenTelemetry context
       OpenTelemetry::Context.with_current(parent_ctx) do
-        @tracer.in_span(
-          "ruby-receive",
-          kind: :consumer
-        ) do |span, _span_ctx|
+        @tracer.in_span("ruby-receive", kind: :consumer) do |span, _|
           @logger.debug("Executing task #{task_id}")
 
           barrier.async do
-            # Launch two concurrent tasks - one for cancellation and one for work
-
-            # Cancellation watcher monitors the token and cancels the task if requested
-            Async do |task|
-              task.annotate("Cancellation watcher for task #{task_id}")
-              begin
-                token.wait
-                @logger.debug("Cancellation received for task #{task_id}")
-                callback.call(false, RuntimeError.new("Task cancelled"))
-              rescue => e
-                @logger.debug("Cancellation watcher error: #{e.message}")
-                span.record_exception(e)
-                span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-              end
-            end
-
-            # Worker executes the actual task and calls back with the result
-            Async do |task|
-              task.annotate("Worker for task #{task_id}")
-              begin
-                result = task_block.call
-                @logger.debug("Task #{task_id} completed successfully")
-                callback.call(true, result)
-              rescue => e
-                @logger.error("Error executing task #{task_id}: #{e.message}")
-                span.record_exception(e)
-                span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-                callback.call(false, e)
-              end
-            end
+            start_cancellation_watcher(task_id, token, callback, span)
+            start_worker(task_id, token, task_block, callback, span)
           end
+        end
+      end
+    end
+
+    # Creates a task that watches for cancellation requests.
+    #
+    # This method launches an async task that waits for the cancellation token
+    # to be triggered and handles the cancellation if it occurs.
+    #
+    # @param task_id [String] The task identifier for logging
+    # @param token [CancellationToken] The token to monitor for cancellation
+    # @param callback [Proc] The callback to notify of cancellation
+    # @param span [OpenTelemetry::Span] The tracing span for this task
+    def start_cancellation_watcher(task_id, token, callback, span)
+      Async do |task|
+        task.annotate("Cancellation watcher for task #{task_id}")
+        begin
+          token.wait
+
+          if callback.call(false, RuntimeError.new("Task cancelled"))
+            @logger.debug("Cancellation received for task #{task_id}")
+          end
+        rescue => e
+          @logger.debug("Cancellation watcher error: #{e.message}")
+          span.record_exception(e)
+          span.status = OpenTelemetry::Trace::Status.error(e.to_s)
+        end
+      end
+    end
+
+    # Creates a task that executes the work and handles completion or errors.
+    #
+    # This method launches an async task that executes the provided block
+    # and calls the callback with the result or error.
+    #
+    # @param task_id [String] The task identifier for logging
+    # @param token [CancellationToken] The token to cancel when complete
+    # @param task_block [Proc] The work to execute
+    # @param callback [Proc] The callback to notify of completion or error
+    # @param span [OpenTelemetry::Span] The tracing span for this task
+    def start_worker(task_id, token, task_block, callback, span)
+      Async do |task|
+        task.annotate("Worker for task #{task_id}")
+        begin
+          result = task_block.call
+          if callback.call(true, result)
+            @logger.debug("Task #{task_id} completed successfully")
+          end
+        rescue => e
+          if callback.call(false, e)
+            @logger.error("Error executing task #{task_id}: #{e.message}")
+            span.record_exception(e)
+            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
+          end
+        ensure
+          # Always cancel the token to notify the cancellation watcher
+          token.cancel
         end
       end
     end
