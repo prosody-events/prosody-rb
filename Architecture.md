@@ -1,12 +1,10 @@
 # Prosody Architecture Overview
 
-This document provides an architectural overview of the Prosody system, focusing on the interaction between its Rust and
-Ruby components. The system is designed to process Kafka messages efficiently, leveraging Rust for high-performance
-operations and Ruby for user-defined message handling logic.
+This document outlines the architecture of the Prosody system, which bridges Rust and Ruby to provide a high-performance Kafka client with an idiomatic Ruby interface.
 
 ## Sequence Diagram
 
-Below is the sequence diagram illustrating the flow of processing a Kafka message in the Prosody system:
+Below is the sequence diagram illustrating the flow of processing a Kafka message in Prosody:
 
 ```mermaid
 sequenceDiagram
@@ -38,125 +36,162 @@ sequenceDiagram
 
 ## Components
 
-### 1. **Prosody::Client (Rust)**
+### 1. **Configuration System**
 
-The `Client` is the main entry point for interacting with the Prosody system. It is responsible for:
+The configuration system bridges Ruby settings to native Rust structures:
 
-- Receiving messages from Kafka.
-- Delegating message processing to the `RubyHandler`.
+- `Prosody::Configuration` provides a Ruby DSL for declaring typed, validated parameters
+- Ruby configuration values are serialized to a Rust `NativeConfiguration`
+- Configuration is converted to specific Rust builder types (Consumer, Producer, Retry, etc.)
+- Handles multiple parameter types: strings, arrays, durations, integers, enums
+- Manages environment variable fallbacks for configuration settings
 
-### 2. **RubyHandler (Rust)**
+### 2. **Prosody::Client (Rust)**
 
-The `RubyHandler` acts as a bridge between Kafka messages and Ruby-defined message handlers. It:
+The main entry point for interacting with Prosody:
 
-- Converts Kafka messages into Ruby-compatible objects.
-- Schedules the execution of Ruby handlers using the `Scheduler`.
-- Waits for the result of the Ruby handler execution via the `ResultChannel`.
+- Provides the core interface for sending and receiving Kafka messages
+- Manages three operation modes: pipeline, low_latency, and best_effort
+- Tracks consumer state, partition assignments, and stall detection
+- Provides health checks for liveness and readiness probes
 
-### 3. **Scheduler (Rust)**
+### 3. **RubyHandler (Rust)**
 
-The `Scheduler` is responsible for:
+Bridges Kafka consumer messages to Ruby handler implementations:
 
-- Managing the lifecycle of tasks that need to be executed in the Ruby runtime.
-- Propagating OpenTelemetry tracing context to Ruby.
-- Submitting tasks to the `AsyncTaskProcessor` in Ruby via the `Bridge`.
+- Converts Kafka messages into Ruby-compatible objects
+- Schedules the execution of Ruby handlers using the Scheduler
+- Handles task cancellation during shutdown
+- Implements error classification for proper retry behavior
 
-### 4. **Result Channel (Rust)**
+### 4. **Scheduler (Rust)**
 
-The `ResultChannel` is a one-shot communication channel used to:
+Manages task execution in the Ruby runtime:
 
-- Send the result of a Ruby handler's execution back to the `RubyHandler`.
-- Ensure that results are only sent once and are properly handled.
+- Schedules functions to run in Ruby with proper context propagation
+- Creates span context carriers for distributed tracing
+- Provides task handles for cancellation and result monitoring
+- Ensures graceful shutdown with proper resource cleanup
 
-### 5. **Bridge (Rust/Ruby)**
+### 5. **Result Channel (Rust)**
 
-The `Bridge` facilitates communication between Rust and Ruby. It ensures safe and efficient interaction between the two
-runtimes by:
+One-shot communication channel for task results:
 
-- **Ruby Thread Safety**: Ensuring all calls to Ruby are made from a Ruby thread, as required by the Ruby runtime.
-- **Poll Loop**: Running a poll loop in a dedicated Ruby thread to process Rust-to-Ruby calls. This loop takes
-  messages (closures) from a Rust queue and executes them in the Ruby runtime.
-- **GVL Management**: Releasing the Global VM Lock (GVL) during polling to allow other Ruby threads to run concurrently.
-- **Async Ruby Calls**: Representing Ruby calls as Rust futures, enabling non-blocking interactions between the two
-  runtimes.
-- **Ruby Waiting on Rust Futures**: Allowing Ruby code to wait on Rust futures without blocking the Ruby runtime. This
-  is achieved using Ruby's `Thread::Queue`, which yields control when run on a Fiber-based runtime (e.g., `async` gem).
+- Enables async waiting for Ruby task completion
+- Converts Ruby errors to Rust-compatible error types
+- Categorizes errors as permanent or transient for retry decisions
+- Ensures results are only delivered once
 
-### 6. **AsyncTaskProcessor (Ruby)**
+### 6. **Bridge (Rust/Ruby)**
 
-The `AsyncTaskProcessor` is a Ruby class that:
+Enables safe communication between Rust and Ruby:
 
-- Executes tasks asynchronously using the `async` gem.
-- Propagates OpenTelemetry tracing context for distributed tracing.
-- Handles task cancellation and ensures graceful shutdown.
+- Maintains a dedicated Ruby thread for processing Rust-initiated calls
+- Handles GVL (Global VM Lock) management to prevent thread blocking
+- Uses oneshot channels for synchronization and result passing
+- Batches operations to reduce GVL acquisition overhead
 
-### 7. **EventHandler (Ruby)**
+### 7. **AsyncTaskProcessor (Ruby)**
 
-The `EventHandler` is a user-defined Ruby class that processes messages. It:
+Executes tasks asynchronously using the Ruby `async` gem:
 
-- Implements the `on_message(context, message)` method to define custom message handling logic.
-- Can classify errors as permanent or transient for retry logic.
+- Processes tasks in Fibers for cooperative concurrency
+- Propagates OpenTelemetry context bidirectionally
+- Provides cancellation tokens to abort in-flight operations
+- Tracks active tasks for graceful shutdown
 
-## Flow Description
+### 8. **EventHandler (Ruby)**
 
-### 1. **Message Received from Kafka**
+User-defined Ruby class that processes messages:
 
-- The `Client` receives a message from Kafka and invokes the `on_message` method on the `RubyHandler`.
+- Implements `on_message(context, message)` with custom processing logic
+- Can categorize exceptions as permanent or transient using decorators
+- Receives messages with deserialized JSON payloads
+- Operates within the OpenTelemetry context of the message
 
-### 2. **Prepare for Processing in Ruby**
+### 9. **Health Probe Server**
 
-- The `RubyHandler` schedules the execution of the Ruby handler using the `Scheduler`.
-- It provides a unique task ID, tracing span, and a closure (`function`) to be executed in Ruby.
+Provides HTTP endpoints for monitoring consumer health:
 
-### 3. **Bridge to Ruby Runtime**
+- `/readyz`: Readiness probe checking partition assignment status
+- `/livez`: Liveness probe detecting stalled partitions
+- Configurable port with ability to disable
+- Automatically starts with the consumer and stops on unsubscribe
 
-- The `Scheduler` uses the `Bridge` to submit the task to Ruby.
-- The `Bridge` invokes the `submit` method on the `AsyncTaskProcessor` in Ruby, passing the task ID, OpenTelemetry
-  context carrier, a callback, and the task block.
+## Message Processing Flow
 
-### 4. **Process in Ruby**
+### 1. **Initialization**
 
-- The `AsyncTaskProcessor` executes the task block, which calls the `on_message` method on the user-defined
-  `EventHandler`.
-- The `EventHandler` processes the message and returns either a success or an error.
+- Ruby code creates a `Prosody::Client` with configuration
+- Configuration is converted to Rust-compatible format
+- Native client initializes with appropriate Kafka settings
+- Operation mode (pipeline, low_latency, best_effort) is configured
 
-### 5. **Callback to ResultChannel**
+### 2. **Subscription**
 
-- The `AsyncTaskProcessor` invokes the callback with the result of the task (success or error).
-- The callback sends the result to the `ResultChannel`.
+- Ruby code provides a handler implementing `on_message`
+- Handler is wrapped in `RubyHandler` and registered with the Kafka consumer
+- Consumer begins polling for messages
 
-### 6. **Result Received by RubyHandler**
+### 3. **Message Reception**
 
-- The `RubyHandler` waits for the result from the `ResultChannel`.
-- Once the result is received, it completes the processing of the message.
+- Native Rust client receives a message from Kafka
+- Message is wrapped as a Ruby-compatible `Message` object
+- Context is wrapped as a Ruby-compatible `Context` object
 
-### 7. **Complete Processing**
+### 4. **Processing**
 
-- The `RubyHandler` notifies the `Client` that the message processing is complete.
+- `RubyHandler` schedules task execution via the `Scheduler`
+- OpenTelemetry context is extracted from the message span
+- Scheduler submits the task to `AsyncTaskProcessor` through the `Bridge`
+- `AsyncTaskProcessor` executes the handler with distributed tracing context
+- Ruby handler processes the message and returns a result or raises an error
 
-## Key Features
+### 5. **Result Handling**
 
-### 1. **Asynchronous Processing**
+- Success or error is sent through the `ResultChannel`
+- Errors are classified as permanent or transient
+- The Kafka consumer handles the result based on operation mode:
+  - Pipeline mode: Retries transient errors indefinitely
+  - Low-latency mode: Limited retries, then sends to failure topic
+  - Best-effort mode: Limited retries, then skips the message
 
-- Tasks are executed asynchronously in Ruby using the `async` gem, allowing for high concurrency and efficient resource
-  utilization.
+### 6. **Shutdown**
 
-### 2. **OpenTelemetry Integration**
+- Ruby code calls `unsubscribe` on the client
+- In-progress tasks complete or are cancelled
+- Resources are properly released
+- Kafka offsets are committed
 
-- Tracing context is propagated across Rust and Ruby boundaries, enabling distributed tracing for end-to-end
-  observability.
+## Key Technical Features
 
-### 3. **Error Classification**
+### 1. **Bidirectional OpenTelemetry Propagation**
 
-- Errors raised by the `EventHandler` can be classified as permanent or transient, allowing for fine-grained control
-  over retry logic.
+- Trace context propagates from Ruby to Kafka (on send)
+- Trace context propagates from Kafka to Ruby (on receive)
+- Creates properly nested spans for the entire message journey
+- Records errors and metadata in the trace
 
-### 4. **Cancellation Support**
+### 2. **Error Classification System**
 
-- Tasks can be canceled mid-execution using a `CancellationToken`, ensuring that resources are not wasted on unnecessary
-  work.
+- Errors can be declaratively classified using Ruby decorators:
+  ```ruby
+  permanent :on_message, TypeError, NoMethodError
+  transient :on_message, JSON::ParserError
+  ```
+- Custom error classes can implement the `permanent?` contract
+- Error classification determines retry behavior based on operation mode
 
-### 5. **Graceful Shutdown**
+### 3. **GVL Management**
 
-- The `AsyncTaskProcessor` ensures that all in-flight tasks are completed before shutting down, maintaining data
-  integrity.
+- Releases Ruby's GVL during polling operations
+- Uses batched execution to minimize GVL acquisition overhead
+- Properly handles cancellation while waiting for the GVL
+- Prevents unwinding across the C FFI boundary
+
+### 4. **Message Lifecycle Management**
+
+- Tracks message offsets for proper Kafka commits
+- Maintains key-based ordering while allowing parallel processing
+- Provides idempotence cache for message deduplication
+- Handles partition rebalancing during consumer group changes
