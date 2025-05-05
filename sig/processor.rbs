@@ -96,7 +96,7 @@ module Prosody
     def submit: (
         String task_id,
         Hash[String, String] carrier,
-        ^([bool, untyped]) -> void callback
+        ^([bool, untyped]) -> bool callback
       ) { () -> untyped } -> CancellationToken
 
     private

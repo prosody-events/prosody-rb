@@ -197,8 +197,10 @@ module Prosody
               task.annotate("Cancellation watcher for task #{task_id}")
               begin
                 token.wait
-                @logger.debug("Cancellation received for task #{task_id}")
-                callback.call(false, RuntimeError.new("Task cancelled"))
+
+                if callback.call(false, RuntimeError.new("Task cancelled"))
+                  @logger.debug("Cancellation received for task #{task_id}")
+                end
               rescue => e
                 @logger.debug("Cancellation watcher error: #{e.message}")
                 span.record_exception(e)
@@ -211,13 +213,17 @@ module Prosody
               task.annotate("Worker for task #{task_id}")
               begin
                 result = task_block.call
-                @logger.debug("Task #{task_id} completed successfully")
-                callback.call(true, result)
+                if callback.call(true, result)
+                  @logger.debug("Task #{task_id} completed successfully")
+                end
               rescue => e
-                @logger.error("Error executing task #{task_id}: #{e.message}")
-                span.record_exception(e)
-                span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-                callback.call(false, e)
+                if callback.call(false, e)
+                  @logger.error("Error executing task #{task_id}: #{e.message}")
+                  span.record_exception(e)
+                  span.status = OpenTelemetry::Trace::Status.error(e.to_s)
+                end
+              ensure
+                token.cancel
               end
             end
           end
