@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/cincpro/prosody-rb/compare/v0.2.0...v0.2.1) (2025-05-05)
+
+
+### Bug Fixes
+
+* ensure all cancellation tasks are cleaned up ([#10](https://github.com/cincpro/prosody-rb/issues/10)) ([5e16f3f](https://github.com/cincpro/prosody-rb/commit/5e16f3fb19efa96200b56f7c685f3a71729bd0be))
+* type signatures ([#7](https://github.com/cincpro/prosody-rb/issues/7)) ([4140d9d](https://github.com/cincpro/prosody-rb/commit/4140d9d7918b8c0461e31e70efbbb1040eb84fe5))
+
 ## 0.2.0 (2025-05-02)
 
 
