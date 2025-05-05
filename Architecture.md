@@ -456,7 +456,7 @@ This enables non-blocking cancellation coordination between fibers.
 
 ## Error Handling and Classification
 
-Prosody has a sophisticated error handling system that classifies errors as permanent or transient:
+Prosody has an error handling system that classifies errors as permanent or transient:
 
 ### Error Classification
 
