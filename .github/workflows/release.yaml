@@ -96,8 +96,8 @@ jobs:
           path: ${{ steps.cross-gem.outputs.gem-path }}
 
   build-source-gem:
-    #    needs: release-please
-    #    if: ${{ needs.release-please.outputs.release_created }}
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     name: Build source gem
     steps:
