@@ -436,7 +436,7 @@ module ErrorClassification
   private
 
   def wrap_errors(method_name, exception_classes, error_class)
-    # Create a module that will be prepended to the class
+    # Create a module that will be extended from the class
     wrapper = Module.new do
       define_method(method_name) do |*args, &block|
         begin
@@ -449,8 +449,8 @@ module ErrorClassification
       end
     end
 
-    # Prepend the wrapper module to intercept method calls
-    prepend wrapper
+    # Extend the wrapper module to intercept method calls
+    extend wrapper
   end
 end
 ```
