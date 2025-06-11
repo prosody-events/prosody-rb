@@ -15,3 +15,5 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 end
+
+BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094") # Kafka connection string
