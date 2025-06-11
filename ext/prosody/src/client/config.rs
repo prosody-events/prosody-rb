@@ -7,9 +7,9 @@
 //! builders.
 
 use magnus::{Error, TryConvert, Value};
-use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::failure::retry::RetryConfigurationBuilder;
 use prosody::consumer::failure::topic::FailureTopicConfigurationBuilder;
+use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
 use serde::{Deserialize, Deserializer};
@@ -86,7 +86,7 @@ pub struct NativeConfiguration {
     failure_topic: Option<String>,
 
     /// Configuration for the health probe port
-    probe_port: ProbePort,
+    probe_port: Option<ProbePort>,
 }
 
 /// Configuration for the health probe port.
@@ -271,13 +271,15 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
             builder.mock(*mock);
         }
 
-        match &config.probe_port {
-            ProbePort::Unconfigured => {}
-            ProbePort::Disabled => {
-                builder.probe_port(None);
-            }
-            ProbePort::Configured(port) => {
-                builder.probe_port(*port);
+        if let Some(probe_port) = &config.probe_port {
+            match probe_port {
+                ProbePort::Unconfigured => {}
+                ProbePort::Disabled => {
+                    builder.probe_port(None);
+                }
+                ProbePort::Configured(port) => {
+                    builder.probe_port(*port);
+                }
             }
         }
 
