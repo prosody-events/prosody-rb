@@ -39,6 +39,7 @@ gem install prosody --source=https://gem.fury.io/realgeeks/
 require "prosody"
 
 # Initialize the client with Kafka bootstrap server, consumer group, and topics
+# You can pass configuration parameters directly as a hash (shown here) or use a Configuration object
 client = Prosody::Client.new(
   # Bootstrap servers should normally be set using the PROSODY_BOOTSTRAP_SERVERS environment variable
   bootstrap_servers: "localhost:9092",
@@ -84,7 +85,7 @@ Prosody enables efficient, parallel processing of Kafka messages while maintaini
 
 ## Configuration
 
-The `Prosody::Client` constructor accepts these key parameters via a `Prosody::Configuration` object or a hash:
+The `Prosody::Client` constructor accepts these key parameters either as a hash (recommended for simplicity) or via a `Prosody::Configuration` object:
 
 - `bootstrap_servers` (String | Array[String]): Kafka bootstrap servers (required)
 - `group_id` (String): Consumer group ID (required for consumption)
@@ -96,7 +97,19 @@ The `Prosody::Client` constructor accepts these key parameters via a `Prosody::C
 Additional optional parameters control behavior like message committal, polling intervals, and retry logic. Most
 parameters can be set via environment variables (e.g., `PROSODY_BOOTSTRAP_SERVERS`).
 
-Example with `Prosody::Configuration`:
+Example with a hash (recommended):
+
+```ruby
+client = Prosody::Client.new(
+  bootstrap_servers: ["kafka1:9092", "kafka2:9092"],
+  group_id: "my-consumer-group",
+  subscribed_topics: ["topic1", "topic2"],
+  max_concurrency: 10,
+  mode: :low_latency
+)
+```
+
+Alternative example using `Prosody::Configuration` object:
 
 ```ruby
 config = Prosody::Configuration.new do |c|
@@ -110,6 +123,8 @@ end
 client = Prosody::Client.new(config)
 ```
 
+Both approaches provide the same type coercion and validation - when you pass a hash, it's automatically converted to a `Configuration` object internally.
+
 ## Liveness and Readiness Probes
 
 Prosody includes a built-in probe server for consumer-based applications that provides health check endpoints. The probe
@@ -121,7 +136,7 @@ server is tied to the consumer's lifecycle and offers two main endpoints:
 2. `/livez`: A liveness probe that checks if any partitions have stalled (haven't processed a message within a
    configured time threshold).
 
-Configure the probe server using either the client constructor:
+Configure the probe server by passing parameters directly to the client constructor:
 
 ```ruby
 client = Prosody::Client.new(
@@ -530,7 +545,7 @@ client.unsubscribe
 
 The main client for interacting with Kafka:
 
-- `initialize(config)`: Create a new client with the given configuration.
+- `initialize(config)`: Create a new client with the given configuration. Accepts either a hash or a `Prosody::Configuration` object.
 - `send_message(topic, key, payload)`: Send a message to a specified topic.
 - `subscribe(handler)`: Subscribe to messages using the provided handler.
 - `unsubscribe()`: Unsubscribe from messages and shut down the consumer.
