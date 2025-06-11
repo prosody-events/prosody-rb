@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/cincpro/prosody-rb/compare/v0.2.1...v0.3.0) (2025-06-11)
+
+
+### Features
+
+* support Configuration objects in Client.new and make probe_port optional ([#11](https://github.com/cincpro/prosody-rb/issues/11)) ([0e472d1](https://github.com/cincpro/prosody-rb/commit/0e472d169b1d20bffd9f54320bf8421796a7fa45))
+
 ## [0.2.1](https://github.com/cincpro/prosody-rb/compare/v0.2.0...v0.2.1) (2025-05-05)
 
 
