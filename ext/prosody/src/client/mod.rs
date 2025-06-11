@@ -15,7 +15,9 @@ use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
 use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value, function, method};
+use magnus::{
+    Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value, function, method,
+};
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
@@ -52,7 +54,8 @@ impl Client {
     /// # Arguments
     ///
     /// * `ruby` - The Ruby VM context
-    /// * `config` - A Ruby Configuration object or hash containing client configuration options
+    /// * `config` - A Ruby Configuration object or hash containing client
+    ///   configuration options
     ///
     /// # Errors
     ///
@@ -65,7 +68,7 @@ impl Client {
         ruby.require("opentelemetry-api")?;
 
         let _guard = RUNTIME.enter();
-        
+
         // Check if config is already a Configuration object, if not create one
         let config_class: RClass = ruby.get_inner(&ROOT_MOD).const_get(id!("Configuration"))?;
         let config_obj = if config.is_kind_of(config_class) {
@@ -73,7 +76,7 @@ impl Client {
         } else {
             config_class.funcall(id!("new"), (config,))?
         };
-        
+
         let native_config: NativeConfiguration = config_obj.funcall(id!("to_hash"), ())?;
         let config_ref = &native_config;
 
