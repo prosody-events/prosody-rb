@@ -107,7 +107,8 @@ pub struct NativeConfiguration {
     /// Password for authenticating with Cassandra
     cassandra_password: Option<String>,
 
-    /// Retention period for failed/unprocessed timer data in Cassandra (in seconds)
+    /// Retention period for failed/unprocessed timer data in Cassandra (in
+    /// seconds)
     cassandra_retention: Option<f32>,
 }
 

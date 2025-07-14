@@ -50,13 +50,12 @@ impl Timer {
     fn time(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         // Direct access to epoch seconds - CompactDateTime has no sub-second precision
         let epoch_seconds = i64::from(this.inner.time.epoch_seconds());
-        
+
         // Create Ruby Time with zero nanoseconds (CompactDateTime precision limit)
         ruby.module_kernel()
             .const_get::<_, RClass>(id!("Time"))?
             .funcall(id!("at"), (epoch_seconds,))
     }
-
 }
 
 impl From<Trigger> for Timer {
