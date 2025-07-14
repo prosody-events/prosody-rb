@@ -12,6 +12,7 @@
 use crate::bridge::{Bridge, BridgeError};
 use crate::handler::context::Context;
 use crate::handler::message::Message;
+use crate::handler::trigger::Timer;
 use crate::id;
 use crate::scheduler::result::ProcessingError;
 use crate::scheduler::{Scheduler, SchedulerError};
@@ -19,14 +20,17 @@ use crate::util::ThreadSafeValue;
 use futures::pin_mut;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, Value};
+use prosody::consumer::event_context::EventContext;
 use prosody::consumer::failure::{ClassifyError, ErrorCategory, FallibleHandler};
-use prosody::consumer::message::{ConsumerMessage, MessageContext};
+use prosody::consumer::message::ConsumerMessage;
+use prosody::timers::Trigger as ProsodyTrigger;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
 
 mod context;
 mod message;
+mod trigger;
 
 /// A handler that bridges between Kafka messages and Ruby message processing
 /// code.
@@ -92,11 +96,10 @@ impl FallibleHandler for RubyHandler {
     /// - Scheduling the task
     /// - Communication with the Ruby runtime
     /// - The Ruby handler throws an exception
-    async fn on_message(
-        &self,
-        context: MessageContext,
-        message: ConsumerMessage,
-    ) -> Result<(), Self::Error> {
+    async fn on_message<C>(&self, context: C, message: ConsumerMessage) -> Result<(), Self::Error>
+    where
+        C: EventContext,
+    {
         // Capture the tracing span for propagation to Ruby
         let span = message.span().clone();
 
@@ -115,7 +118,7 @@ impl FallibleHandler for RubyHandler {
         );
 
         // Convert the Kafka message and context to Ruby-compatible types
-        let context: Context = context.into();
+        let context = Context::new(context.boxed(), self.bridge.clone());
         let message: Message = message.into();
 
         // Schedule the task to run in Ruby
@@ -125,6 +128,57 @@ impl FallibleHandler for RubyHandler {
                 let _: Value = handler
                     .get(ruby)
                     .funcall(id!("on_message"), (context, message))?;
+
+                Ok(())
+            })
+            .await?;
+
+        // Get the future that will complete when the task is done
+        let result_future = task_handle.result.receive();
+        pin_mut!(result_future);
+
+        // Wait for either task completion or shutdown signal
+        select! {
+            result = &mut result_future => {
+                result?;
+            }
+            () = shutdown_future => {
+                // If shutdown requested, cancel the task and wait for it to complete
+                task_handle.cancellation_token.cancel(&self.bridge).await?;
+                result_future.await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn on_timer<C>(&self, context: C, trigger: ProsodyTrigger) -> Result<(), Self::Error>
+    where
+        C: EventContext,
+    {
+        // Capture the tracing span for propagation to Ruby
+        let span = trigger.span.clone();
+
+        // Get a future that completes when the consumer is shutdown
+        let shutdown_future = context.on_shutdown();
+
+        // Clone the handler reference for use in the closure
+        let handler = self.handler.clone();
+
+        // Create a unique task ID for this timer
+        let task_id = format!("timer/{}", trigger.key);
+
+        // Convert the timer trigger and context to Ruby-compatible types
+        let context = Context::new(context.boxed(), self.bridge.clone());
+        let timer: Timer = trigger.into();
+
+        // Schedule the task to run in Ruby
+        let task_handle = self
+            .scheduler
+            .schedule(task_id, &span, move |ruby| {
+                let _: Value = handler
+                    .get(ruby)
+                    .funcall(id!("on_timer"), (context, timer))?;
 
                 Ok(())
             })
@@ -196,6 +250,7 @@ pub enum RubyHandlerError {
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     context::init(ruby)?;
     message::init(ruby)?;
+    trigger::init(ruby)?;
 
     Ok(())
 }

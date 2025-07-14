@@ -17,3 +17,6 @@ RSpec.configure do |config|
 end
 
 BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094") # Kafka connection string
+
+# Set default Cassandra configuration for tests
+ENV["PROSODY_CASSANDRA_NODES"] ||= "localhost:9042"

@@ -13,20 +13,20 @@
 use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
-use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
+use crate::{id, BRIDGE, ROOT_MOD, RUNTIME};
 use magnus::value::ReprValue;
 use magnus::{
-    Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value, function, method,
+    function, method, Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value,
 };
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
-use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
 use prosody::high_level::state::ConsumerState;
+use prosody::high_level::HighLevelClient;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{Instrument, info_span};
+use tracing::{info_span, Instrument};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
@@ -90,6 +90,7 @@ impl Client {
             &config_ref.into(),
             &config_ref.into(),
             &config_ref.into(),
+            &config_ref.into(),
         )
         .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
@@ -123,12 +124,17 @@ impl Client {
     /// # Returns
     ///
     /// A Ruby symbol representing the current consumer state.
-    pub fn consumer_state(ruby: &Ruby, this: &Self) -> StaticSymbol {
-        ruby.sym_new(match &*this.inner.consumer_state() {
-            ConsumerState::Unconfigured => id!("unconfigured"),
-            ConsumerState::Configured(_) => id!("configured"),
-            ConsumerState::Running { .. } => id!("running"),
-        })
+    pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+        let inner = this.inner.clone();
+        let state = this.bridge.wait_for(ruby, async move {
+            match *inner.consumer_state().await {
+                ConsumerState::Unconfigured => "unconfigured",
+                ConsumerState::Configured(_) => "configured",
+                ConsumerState::Running { .. } => "running",
+            }
+        })?;
+
+        Ok(ruby.sym_new(state))
     }
 
     /// Sends a message to the specified Kafka topic.
@@ -201,8 +207,10 @@ impl Client {
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
         let _guard = RUNTIME.enter();
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
-        this.inner
-            .subscribe(wrapper)
+        let inner = this.inner.clone();
+
+        this.bridge
+            .wait_for(ruby, async move { inner.subscribe(wrapper).await })?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(())
@@ -221,8 +229,10 @@ impl Client {
     /// # Returns
     ///
     /// The number of assigned partitions as a u32.
-    pub fn assigned_partitions(&self) -> u32 {
-        self.inner.assigned_partition_count()
+    pub fn assigned_partitions(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
+        let inner = this.inner.clone();
+        this.bridge
+            .wait_for(ruby, async move { inner.assigned_partition_count().await })
     }
 
     /// Checks if the consumer is stalled.
@@ -238,8 +248,10 @@ impl Client {
     /// # Returns
     ///
     /// `true` if the consumer is stalled, `false` otherwise.
-    pub fn is_stalled(&self) -> bool {
-        self.inner.is_stalled()
+    pub fn is_stalled(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+        let inner = this.inner.clone();
+        this.bridge
+            .wait_for(ruby, async move { inner.is_stalled().await })
     }
 
     /// Unsubscribes from all topics, stopping message processing.

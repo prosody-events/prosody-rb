@@ -31,6 +31,13 @@ RSpec.describe Prosody::Configuration do
       expect(config.max_retry_delay).to be_nil
       expect(config.failure_topic).to be_nil
       expect(config.probe_port).to be_nil
+      expect(config.cassandra_nodes).to be_nil
+      expect(config.cassandra_keyspace).to eq("prosody")
+      expect(config.cassandra_datacenter).to be_nil
+      expect(config.cassandra_rack).to be_nil
+      expect(config.cassandra_user).to be_nil
+      expect(config.cassandra_password).to be_nil
+      expect(config.cassandra_retention).to be_nil
     end
   end
 
@@ -38,7 +45,7 @@ RSpec.describe Prosody::Configuration do
     context "Vec[String] fields" do
       # Tests string array parameters that accept both single strings
       # and arrays of strings, converting them appropriately
-      %i[bootstrap_servers subscribed_topics allowed_events].each do |field|
+      %i[bootstrap_servers subscribed_topics allowed_events cassandra_nodes].each do |field|
         it "sets and gets #{field}" do
           # Test single string gets converted to array
           config.public_send(:"#{field}=", "one")
@@ -79,7 +86,8 @@ RSpec.describe Prosody::Configuration do
         poll_interval: 4.0,
         commit_interval: 5.0,
         retry_base: 0.1,
-        max_retry_delay: 1.0
+        max_retry_delay: 1.0,
+        cassandra_retention: 2_592_000.0
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
@@ -115,7 +123,12 @@ RSpec.describe Prosody::Configuration do
       {
         group_id: "group1",
         source_system: "system1",
-        failure_topic: "fail_topic"
+        failure_topic: "fail_topic",
+        cassandra_keyspace: "test_keyspace",
+        cassandra_datacenter: "dc1",
+        cassandra_rack: "rack1",
+        cassandra_user: "cassandra_user",
+        cassandra_password: "cassandra_password"
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
@@ -235,7 +248,14 @@ RSpec.describe Prosody::Configuration do
         max_retries: 3,
         max_retry_delay: 1.0,
         failure_topic: "fail_topic",
-        probe_port: 1234
+        probe_port: 1234,
+        cassandra_nodes: ["cassandra1", "cassandra2"],
+        cassandra_keyspace: "test_keyspace",
+        cassandra_datacenter: "dc1",
+        cassandra_rack: "rack1",
+        cassandra_user: "test_user",
+        cassandra_password: "test_password",
+        cassandra_retention: 2_592_000.0
       )
 
       # Verify all parameters were correctly set and transformed
@@ -260,6 +280,13 @@ RSpec.describe Prosody::Configuration do
       expect(config.max_retry_delay).to eq(1.0)
       expect(config.failure_topic).to eq("fail_topic")
       expect(config.probe_port).to eq(1234)
+      expect(config.cassandra_nodes).to eq(["cassandra1", "cassandra2"])
+      expect(config.cassandra_keyspace).to eq("test_keyspace")
+      expect(config.cassandra_datacenter).to eq("dc1")
+      expect(config.cassandra_rack).to eq("rack1")
+      expect(config.cassandra_user).to eq("test_user")
+      expect(config.cassandra_password).to eq("test_password")
+      expect(config.cassandra_retention).to eq(2_592_000.0)
     end
 
     # Tests that the configuration can be modified via a block

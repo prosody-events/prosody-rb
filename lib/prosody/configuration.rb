@@ -154,6 +154,38 @@ module Prosody
     # Topic to send failed messages to.
     config_param :failure_topic, converter: lambda(&:to_s)
 
+    # List of Cassandra contact nodes (hostnames or IPs).
+    # Accepts a string (single node) or array of strings (multiple nodes).
+    config_param :cassandra_nodes,
+      converter: lambda { |v|
+        if v.is_a?(String)
+          [v.to_s]
+        elsif v.respond_to?(:to_a)
+          v.to_a.map(&:to_s)
+        else
+          raise ArgumentError, "Invalid type for cassandra_nodes"
+        end
+      }
+
+    # Keyspace to use for storing timer data in Cassandra.
+    config_param :cassandra_keyspace, converter: lambda(&:to_s), default: "prosody"
+
+    # Preferred datacenter for Cassandra query routing.
+    config_param :cassandra_datacenter, converter: lambda(&:to_s)
+
+    # Preferred rack identifier for Cassandra topology-aware routing.
+    config_param :cassandra_rack, converter: lambda(&:to_s)
+
+    # Username for authenticating with Cassandra.
+    config_param :cassandra_user, converter: lambda(&:to_s)
+
+    # Password for authenticating with Cassandra.
+    config_param :cassandra_password, converter: lambda(&:to_s)
+
+    # Retention period for failed/unprocessed timer data in Cassandra.
+    # Accepts duration objects or numeric values (in seconds).
+    config_param :cassandra_retention, converter: ->(v) { duration_converter(v) }
+
     # Operation mode of the client.
     #
     # Valid values:

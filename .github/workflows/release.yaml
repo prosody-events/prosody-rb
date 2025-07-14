@@ -163,10 +163,35 @@ jobs:
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
             docker.io/bitnami/kafka:3.7
+      - name: Start Cassandra container
+        run: |
+          docker run -d --name cassandra --network kafka-test-network \
+            -p 9042:9042 \
+            cassandra:latest
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Cassandra and Kafka to be ready..."
+          
+          # Wait for Cassandra
+          echo "🔍 Checking Cassandra..."
+          for i in {1..60}; do
+            if docker exec cassandra cqlsh -e "SELECT cluster_name FROM system.local;" >/dev/null 2>&1; then
+              echo "✅ Cassandra is ready after ${i} attempts (${i} seconds)"
+              break
+            elif [ $i -eq 60 ]; then
+              echo "❌ Cassandra failed to start after 60 seconds"
+              docker logs cassandra
+              exit 1
+            else
+              echo "⏳ Cassandra attempt $i: not ready yet..."
+              sleep 1
+            fi
+          done
       - name: Run tests
         run: |
           docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             ruby:3.3 \
@@ -204,10 +229,35 @@ jobs:
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
             docker.io/bitnami/kafka:3.7
+      - name: Start Cassandra container
+        run: |
+          docker run -d --name cassandra --network kafka-test-network \
+            -p 9042:9042 \
+            cassandra:latest
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Cassandra and Kafka to be ready..."
+          
+          # Wait for Cassandra
+          echo "🔍 Checking Cassandra..."
+          for i in {1..60}; do
+            if docker exec cassandra cqlsh -e "SELECT cluster_name FROM system.local;" >/dev/null 2>&1; then
+              echo "✅ Cassandra is ready after ${i} attempts (${i} seconds)"
+              break
+            elif [ $i -eq 60 ]; then
+              echo "❌ Cassandra failed to start after 60 seconds"
+              docker logs cassandra
+              exit 1
+            else
+              echo "⏳ Cassandra attempt $i: not ready yet..."
+              sleep 1
+            fi
+          done
       - name: Run tests
         run: |
           docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             ruby:3.3-alpine \
@@ -251,10 +301,35 @@ jobs:
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
             docker.io/bitnami/kafka:3.7
+      - name: Start Cassandra container
+        run: |
+          docker run -d --name cassandra --network kafka-test-network \
+            -p 9042:9042 \
+            cassandra:latest
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Cassandra and Kafka to be ready..."
+          
+          # Wait for Cassandra
+          echo "🔍 Checking Cassandra..."
+          for i in {1..60}; do
+            if docker exec cassandra cqlsh -e "SELECT cluster_name FROM system.local;" >/dev/null 2>&1; then
+              echo "✅ Cassandra is ready after ${i} attempts (${i} seconds)"
+              break
+            elif [ $i -eq 60 ]; then
+              echo "❌ Cassandra failed to start after 60 seconds"
+              docker logs cassandra
+              exit 1
+            else
+              echo "⏳ Cassandra attempt $i: not ready yet..."
+              sleep 1
+            fi
+          done
       - name: Run tests
         run: |
           docker run --rm --platform linux/arm64 --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             arm64v8/ruby:3.3 \
@@ -298,10 +373,35 @@ jobs:
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
             docker.io/bitnami/kafka:3.7
+      - name: Start Cassandra container
+        run: |
+          docker run -d --name cassandra --network kafka-test-network \
+            -p 9042:9042 \
+            cassandra:latest
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Cassandra and Kafka to be ready..."
+          
+          # Wait for Cassandra
+          echo "🔍 Checking Cassandra..."
+          for i in {1..60}; do
+            if docker exec cassandra cqlsh -e "SELECT cluster_name FROM system.local;" >/dev/null 2>&1; then
+              echo "✅ Cassandra is ready after ${i} attempts (${i} seconds)"
+              break
+            elif [ $i -eq 60 ]; then
+              echo "❌ Cassandra failed to start after 60 seconds"
+              docker logs cassandra
+              exit 1
+            else
+              echo "⏳ Cassandra attempt $i: not ready yet..."
+              sleep 1
+            fi
+          done
       - name: Run tests
         run: |
           docker run --rm --platform linux/arm64 --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
+            -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
             arm64v8/ruby:3.3-alpine \

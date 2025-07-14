@@ -61,6 +61,14 @@ class MyHandler < Prosody::EventHandler
     # Process the received message
     puts "Received message: #{message.payload.inspect}"
     puts "From topic: #{message.topic}, partition: #{message.partition}, offset: #{message.offset}"
+    
+    # Schedule a timer for delayed processing (requires Cassandra unless mock: true)
+    context.schedule(Time.now + 30) if message.payload["schedule_followup"]
+  end
+  
+  def on_timer(context, timer)
+    # Handle timer firing
+    puts "Timer fired for key: #{timer.key} at #{timer.time}"
   end
 end
 
@@ -592,6 +600,81 @@ Represents a Kafka message with the following methods:
 ### Prosody::Context
 
 Represents the context of a Kafka message, providing metadata and control capabilities for message handling.
+
+The context provides timer scheduling methods that allow you to delay execution or implement timeout behavior:
+
+- `schedule(time)`: Schedules a timer to fire at the specified time
+- `clear_and_schedule(time)`: Clears all timers and schedules a new one
+- `unschedule(time)`: Removes a timer scheduled for the specified time
+- `clear_scheduled`: Removes all scheduled timers
+- `scheduled`: Returns an array of all scheduled timer times
+
+### Timer Functionality
+
+Prosody supports timer-based delayed execution within message handlers. When a timer fires, your handler's `on_timer` method will be called:
+
+```ruby
+class MyHandler < Prosody::EventHandler
+  def on_message(context, message)
+    # Schedule a timer to fire in 30 seconds
+    context.schedule(Time.now + 30)
+    
+    # Schedule multiple timers
+    context.schedule(Time.now + 60)
+    context.schedule(Time.now + 120)
+    
+    # Check what's scheduled
+    puts "Scheduled timers: #{context.scheduled.length}"
+  end
+  
+  def on_timer(context, timer)
+    puts "Timer fired!"
+    puts "Key: #{timer.key}"
+    puts "Scheduled time: #{timer.time}"
+    puts "Epoch seconds: #{timer.time.to_i}"  # Use standard Ruby method
+  end
+end
+```
+
+### Prosody::Timer
+
+Represents a timer that has fired, provided to the `on_timer` method:
+
+- `key`: The entity key identifying what this timer belongs to (String)
+- `time`: The time when this timer was scheduled to fire (Time)
+
+**Note**: Timer precision is limited to seconds due to the underlying storage format. Sub-second precision in scheduled times will be rounded to the nearest second.
+
+#### Timer Configuration
+
+Timer functionality requires Cassandra for persistence unless running in mock mode. Configure Cassandra connection via environment variable:
+
+```bash
+PROSODY_CASSANDRA_NODES=localhost:9042  # Required for timer persistence
+```
+
+Or programmatically when creating the client:
+
+```ruby
+client = Prosody::Client.new(
+  bootstrap_servers: "localhost:9092",
+  group_id: "my-application",
+  subscribed_topics: "my-topic",
+  cassandra_nodes: "localhost:9042"  # Required unless mock: true
+)
+```
+
+For testing, you can use mock mode to avoid Cassandra dependency:
+
+```ruby
+# Mock mode for testing (timers work but aren't persisted)
+client = Prosody::Client.new(
+  bootstrap_servers: "localhost:9092",
+  group_id: "my-application", 
+  subscribed_topics: "my-topic",
+  mock: true  # No Cassandra required in mock mode
+)
+```
 
 ## Release Process
 
