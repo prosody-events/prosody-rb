@@ -38,8 +38,116 @@ module Prosody
       raise NotImplementedError, "This class is implemented natively in Rust"
     end
 
-    # NOTE: Additional context methods may be added in the future to provide
-    # more control over message processing, such as manual acknowledgement.
+    # Checks if shutdown has been requested.
+    #
+    # This method can be called within message handlers to detect when the
+    # consumer is shutting down and handle graceful termination.
+    #
+    # @return [Boolean] true if shutdown has been requested, false otherwise
+    def should_shutdown?
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Schedules a timer to fire at the specified time.
+    #
+    # Timers allow you to delay execution or implement timeout behavior within
+    # your message handlers. When a timer fires, your handler's #on_timer method
+    # will be called with the timer object.
+    #
+    # @param time [Time] When the timer should fire
+    # @return [void]
+    # @raise [ArgumentError] If the time is invalid or outside the supported range (1970-2106)
+    # @raise [RuntimeError] If timer scheduling fails
+    #
+    # @example Scheduling a delayed action
+    #   def on_message(context, message)
+    #     # Schedule a timer to fire in 30 seconds
+    #     context.schedule(Time.now + 30)
+    #   end
+    #
+    #   def on_timer(context, timer)
+    #     puts "Timer fired for key: #{timer.key}"
+    #   end
+    def schedule(time)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Clears all scheduled timers and schedules a new one at the specified time.
+    #
+    # This is equivalent to calling clear_scheduled followed by schedule, but
+    # performed atomically.
+    #
+    # @param time [Time] When the new timer should fire
+    # @return [void]
+    # @raise [ArgumentError] If the time is invalid or outside the supported range
+    # @raise [RuntimeError] If timer operations fail
+    #
+    # @example Replacing all timers with a new one
+    #   def on_message(context, message)
+    #     # Clear any existing timers and schedule a new one
+    #     context.clear_and_schedule(Time.now + 60)
+    #   end
+    def clear_and_schedule(time)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Unschedules a timer that was scheduled for the specified time.
+    #
+    # If multiple timers were scheduled for the same time, this will remove one
+    # of them. If no timer exists for the specified time, this method does nothing.
+    #
+    # @param time [Time] The time for which to unschedule the timer
+    # @return [void]
+    # @raise [ArgumentError] If the time is invalid
+    # @raise [RuntimeError] If timer unscheduling fails
+    #
+    # @example Canceling a specific timer
+    #   def on_message(context, message)
+    #     timer_time = Time.now + 30
+    #     context.schedule(timer_time)
+    #     
+    #     # Later, cancel that specific timer
+    #     context.unschedule(timer_time)
+    #   end
+    def unschedule(time)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Clears all scheduled timers.
+    #
+    # After calling this method, no timers will be scheduled to fire for this
+    # message context.
+    #
+    # @return [void]
+    # @raise [RuntimeError] If clearing timers fails
+    #
+    # @example Canceling all timers
+    #   def on_message(context, message)
+    #     context.clear_scheduled
+    #   end
+    def clear_scheduled
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Returns all currently scheduled timer times.
+    #
+    # The returned array contains Time objects representing when each scheduled
+    # timer will fire. The array may be empty if no timers are scheduled.
+    #
+    # @return [Array<Time>] Array of scheduled timer times
+    # @raise [RuntimeError] If retrieving scheduled times fails
+    #
+    # @example Checking scheduled timers
+    #   def on_message(context, message)
+    #     scheduled_times = context.scheduled
+    #     puts "#{scheduled_times.length} timers scheduled"
+    #     scheduled_times.each do |time|
+    #       puts "Timer will fire at: #{time}"
+    #     end
+    #   end
+    def scheduled
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
   end
 
   # Represents a Kafka message with its metadata and payload.
@@ -92,6 +200,41 @@ module Prosody
     def payload
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
+  end
+
+  # Represents a timer that was scheduled to fire at a specific time.
+  #
+  # Timer instances are created by the native code and passed to your
+  # EventHandler's #on_timer method when a scheduled timer fires.
+  #
+  # @see ext/prosody/src/handler/trigger.rs for implementation
+  class Timer
+    # @private
+    def initialize
+      raise NotImplementedError, "This class is implemented natively in Rust"
+    end
+
+    # Returns the entity key identifying what this timer belongs to.
+    #
+    # The key is typically the same as the message key that was being processed
+    # when the timer was scheduled.
+    #
+    # @return [String] The entity key
+    def key
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Returns the time when this timer was scheduled to fire.
+    #
+    # Note: Due to CompactDateTime's second-level precision, the returned time
+    # will have zero nanoseconds even if the original scheduled time had
+    # sub-second precision.
+    #
+    # @return [Time] The scheduled execution time
+    def time
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
   end
 
   # Main client for interacting with the Prosody messaging system.

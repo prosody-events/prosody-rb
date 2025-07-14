@@ -32,6 +32,15 @@ jobs:
           KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
           KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
           KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      cassandra:
+        image: cassandra:latest
+        ports:
+          - "9042:9042"
+        options: >-
+          --health-cmd "cqlsh -e 'SELECT cluster_name FROM system.local;'"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 15
     steps:
       - uses: actions/checkout@v3
       - uses: de-vri-es/setup-git-credentials@v2
@@ -54,6 +63,7 @@ jobs:
         run: bundle exec rake spec
         env:
           PROSODY_BOOTSTRAP_SERVERS: localhost:9094
+          PROSODY_CASSANDRA_NODES: localhost:9042
           RUST_BACKTRACE: "1"
   fmt:
     name: Format
