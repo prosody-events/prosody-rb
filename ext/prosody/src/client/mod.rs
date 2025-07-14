@@ -13,20 +13,20 @@
 use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
-use crate::{id, BRIDGE, ROOT_MOD, RUNTIME};
+use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
 use magnus::value::ReprValue;
 use magnus::{
-    function, method, Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value,
+    Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value, function, method,
 };
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
+use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
 use prosody::high_level::state::ConsumerState;
-use prosody::high_level::HighLevelClient;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info_span, Instrument};
+use tracing::{Instrument, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations

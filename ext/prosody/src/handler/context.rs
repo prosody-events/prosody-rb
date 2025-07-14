@@ -5,12 +5,12 @@
 //! information from Kafka messages and schedule timer events.
 
 use crate::bridge::Bridge;
-use crate::{id, ROOT_MOD};
+use crate::{ROOT_MOD, id};
 use educe::Educe;
 use futures::TryStreamExt;
 use magnus::exception::{arg_error, runtime_error};
 use magnus::value::ReprValue;
-use magnus::{method, Error, Module, RClass, Ruby, Value};
+use magnus::{Error, Module, RClass, Ruby, Value, method};
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
 
@@ -265,11 +265,12 @@ impl Context {
                 )
             })?;
 
-        // Convert CompactDateTime objects to Ruby Time objects using idiomatic iterator pattern
+        // Convert CompactDateTime objects to Ruby Time objects using idiomatic iterator
+        // pattern
         let ruby_array = ruby.ary_try_from_iter(
-            scheduled_times.into_iter().map(|compact_time| {
-                compact_datetime_to_time(ruby, compact_time)
-            })
+            scheduled_times
+                .into_iter()
+                .map(|compact_time| compact_datetime_to_time(ruby, compact_time)),
         )?;
 
         Ok(ruby_array.as_value())

@@ -631,7 +631,6 @@ class MyHandler < Prosody::EventHandler
     puts "Timer fired!"
     puts "Key: #{timer.key}"
     puts "Scheduled time: #{timer.time}"
-    puts "Epoch seconds: #{timer.time.to_i}"  # Use standard Ruby method
   end
 end
 ```
