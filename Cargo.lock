@@ -1578,7 +1578,7 @@ dependencies = [
 [[package]]
 name = "prosody"
 version = "0.10.3"
-source = "git+https://github.com/cincpro/prosody.git?rev=d7dfa47d31bdd942f14fe974bdfb5a2f85e42d20#d7dfa47d31bdd942f14fe974bdfb5a2f85e42d20"
+source = "git+https://github.com/cincpro/prosody.git?rev=b0f83fc9698ec3def1af20e0bf12d9e0f9059aa1#b0f83fc9698ec3def1af20e0bf12d9e0f9059aa1"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1744,9 +1744,9 @@ checksum = "a35802679f07360454b418a5d1735c89716bde01d35b1560fc953c1415a0b3bb"
 
 [[package]]
 name = "rdkafka"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14b52c81ac3cac39c9639b95c20452076e74b8d9a71bc6fc4d83407af2ea6fff"
+checksum = "5f1856d72dbbbea0d2a5b2eaf6af7fb3847ef2746e883b11781446a51dbc85c0"
 dependencies = [
  "futures-channel",
  "futures-util",
