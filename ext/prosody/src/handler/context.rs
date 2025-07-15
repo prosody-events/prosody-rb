@@ -271,8 +271,8 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
 /// (1970-2106) or if the Ruby Time object is invalid.
 fn time_to_compact_datetime(_ruby: &Ruby, ruby_time: Value) -> Result<CompactDateTime, Error> {
     // Extract epoch seconds and nanoseconds from Ruby Time
-    let epoch_seconds: i64 = ruby_time.funcall("to_i", ())?;
-    let nanos: u32 = ruby_time.funcall("nsec", ())?;
+    let epoch_seconds: i64 = ruby_time.funcall(id!(ruby, "to_i"), ())?;
+    let nanos: u32 = ruby_time.funcall(id!(ruby, "nsec"), ())?;
 
     // Validate CompactDateTime range (1970-2106)
     let seconds_u32 = u32::try_from(epoch_seconds).map_err(|_| {
