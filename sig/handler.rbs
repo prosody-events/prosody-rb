@@ -68,10 +68,12 @@ module Prosody
 
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.
-    # The default implementation does nothing.
+    # This method must be implemented by subclasses to define
+    # custom timer handling logic.
     #
     # @param context the timer context containing metadata and control capabilities
     # @param timer the timer object with key and time information
+    # @raise [NotImplementedError] if not overridden by subclass
     def on_timer: (Context context, Timer timer) -> void
   end
 end
