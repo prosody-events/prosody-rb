@@ -53,8 +53,8 @@ impl Timer {
 
         // Create Ruby Time with zero nanoseconds (CompactDateTime precision limit)
         ruby.module_kernel()
-            .const_get::<_, RClass>(id!("Time"))?
-            .funcall(id!("at"), (epoch_seconds,))
+            .const_get::<_, RClass>(id!(ruby, "Time"))?
+            .funcall(id!(ruby, "at"), (epoch_seconds,))
     }
 }
 
@@ -84,10 +84,10 @@ impl From<Trigger> for Timer {
 /// Returns an error if class or method definition fails.
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!("Timer"), ruby.class_object())?;
+    let class = module.define_class(id!(ruby, "Timer"), ruby.class_object())?;
 
-    class.define_method(id!("key"), method!(Timer::key, 0))?;
-    class.define_method(id!("time"), method!(Timer::time, 0))?;
+    class.define_method(id!(ruby, "key"), method!(Timer::key, 0))?;
+    class.define_method(id!(ruby, "time"), method!(Timer::time, 0))?;
 
     Ok(())
 }

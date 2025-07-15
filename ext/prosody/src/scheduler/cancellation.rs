@@ -55,7 +55,7 @@ impl CancellationToken {
             .run(move |ruby: &Ruby| {
                 self.token
                     .get(ruby)
-                    .funcall::<_, _, Value>(id!("cancel"), ())
+                    .funcall::<_, _, Value>(id!(ruby, "cancel"), ())
                     .map_err(|error| SchedulerError::Cancel(error.to_string()))?;
 
                 Ok(())

@@ -85,8 +85,8 @@ fn compact_datetime_to_time(ruby: &Ruby, compact_time: CompactDateTime) -> Resul
 
     // Create Ruby Time with zero nanoseconds (CompactDateTime precision limit)
     ruby.module_kernel()
-        .const_get::<_, RClass>(id!("Time"))?
-        .funcall(id!("at"), (epoch_seconds,))
+        .const_get::<_, RClass>(id!(ruby, "Time"))?
+        .funcall(id!(ruby, "at"), (epoch_seconds,))
 }
 
 /// Ruby wrapper for a Kafka message context.
@@ -301,23 +301,26 @@ impl Context {
 /// Returns a Magnus error if the class definition fails
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!("Context"), ruby.class_object())?;
+    let class = module.define_class(id!(ruby, "Context"), ruby.class_object())?;
 
     // Shutdown methods
     class.define_method(
-        id!("should_shutdown?"),
+        id!(ruby, "should_shutdown?"),
         method!(Context::should_shutdown, 0),
     )?;
 
     // Timer scheduling methods
-    class.define_method(id!("schedule"), method!(Context::schedule, 1))?;
+    class.define_method(id!(ruby, "schedule"), method!(Context::schedule, 1))?;
     class.define_method(
-        id!("clear_and_schedule"),
+        id!(ruby, "clear_and_schedule"),
         method!(Context::clear_and_schedule, 1),
     )?;
-    class.define_method(id!("unschedule"), method!(Context::unschedule, 1))?;
-    class.define_method(id!("clear_scheduled"), method!(Context::clear_scheduled, 0))?;
-    class.define_method(id!("scheduled"), method!(Context::scheduled, 0))?;
+    class.define_method(id!(ruby, "unschedule"), method!(Context::unschedule, 1))?;
+    class.define_method(
+        id!(ruby, "clear_scheduled"),
+        method!(Context::clear_scheduled, 0),
+    )?;
+    class.define_method(id!(ruby, "scheduled"), method!(Context::scheduled, 0))?;
 
     Ok(())
 }

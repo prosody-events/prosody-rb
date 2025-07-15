@@ -128,7 +128,7 @@ impl FallibleHandler for RubyHandler {
             .schedule(task_id, &span, move |ruby| {
                 let _: Value = handler
                     .get(ruby)
-                    .funcall(id!("on_message"), (context, message))?;
+                    .funcall(id!(ruby, "on_message"), (context, message))?;
 
                 Ok(())
             })
@@ -180,7 +180,7 @@ impl FallibleHandler for RubyHandler {
             .schedule(task_id, &span, move |ruby| {
                 let _: Value = handler
                     .get(ruby)
-                    .funcall(id!("on_timer"), (context, timer))?;
+                    .funcall(id!(ruby, "on_timer"), (context, timer))?;
 
                 Ok(())
             })
