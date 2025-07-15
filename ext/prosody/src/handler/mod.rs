@@ -104,7 +104,8 @@ impl FallibleHandler for RubyHandler {
         let span = message.span().clone();
 
         // Get a future that completes when the consumer is shutdown
-        let shutdown_future = context.on_shutdown();
+        let cloned_context = context.clone();
+        let shutdown_future = cloned_context.on_shutdown();
 
         // Clone the handler reference for use in the closure
         let handler = self.handler.clone();
@@ -160,7 +161,8 @@ impl FallibleHandler for RubyHandler {
         let span = trigger.span.clone();
 
         // Get a future that completes when the consumer is shutdown
-        let shutdown_future = context.on_shutdown();
+        let cloned_context = context.clone();
+        let shutdown_future = cloned_context.on_shutdown();
 
         // Clone the handler reference for use in the closure
         let handler = self.handler.clone();
