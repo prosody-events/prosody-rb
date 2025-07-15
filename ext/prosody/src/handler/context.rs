@@ -15,6 +15,7 @@ use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
 
 /// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
+/// At 0.5 seconds, times round up; below 0.5 seconds, they round down.
 const NANOSECOND_ROUNDING_THRESHOLD: u32 = 500_000_000;
 
 /// Ruby wrapper for a Kafka message context.
@@ -285,7 +286,7 @@ fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDate
         )
     })?;
 
-    // Apply CompactDateTime's rounding logic: >= 500ms rounds up
+    // Apply CompactDateTime's rounding logic
     let final_seconds = if nanos >= NANOSECOND_ROUNDING_THRESHOLD {
         seconds_u32.checked_add(1).ok_or_else(|| {
             Error::new(
