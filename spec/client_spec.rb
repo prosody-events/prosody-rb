@@ -755,7 +755,8 @@ RSpec.describe Prosody::Client, integration: true do
         scheduled_event[:timer2_target]
       end
       
-      expect(event[:actual_fire_time]).to be_within(2).of(expected_target)
+      # Using a 1-second tolerance to ensure timer accuracy while accounting for minor system delays.
+      expect(event[:actual_fire_time]).to be_within(1).of(expected_target)
       expect(event[:timer_time].to_i).to be_within(1).of(expected_target.to_i)
     end
 
