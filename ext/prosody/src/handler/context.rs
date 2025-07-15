@@ -5,89 +5,14 @@
 //! information from Kafka messages and schedule timer events.
 
 use crate::bridge::Bridge;
-use crate::{ROOT_MOD, id};
+use crate::{id, ROOT_MOD};
 use educe::Educe;
 use futures::TryStreamExt;
 use magnus::exception::{arg_error, runtime_error};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, RClass, Ruby, Value, method};
+use magnus::{method, Error, Module, RClass, Ruby, Value};
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
-
-/// Converts a Ruby Time object to `CompactDateTime`.
-///
-/// `CompactDateTime` stores only epoch seconds (u32) with second-level
-/// precision. This function extracts nanoseconds from Ruby Time to implement
-/// proper rounding.
-///
-/// # Arguments
-///
-/// * `_ruby` - Reference to the Ruby VM (ensures Ruby thread safety)
-/// * `ruby_time` - Ruby Time object to convert
-///
-/// # Returns
-///
-/// `CompactDateTime` representing the same time, rounded to nearest second.
-///
-/// # Errors
-///
-/// Returns an error if the time is outside the `CompactDateTime` range
-/// (1970-2106) or if the Ruby Time object is invalid.
-fn time_to_compact_datetime(_ruby: &Ruby, ruby_time: Value) -> Result<CompactDateTime, Error> {
-    // Extract epoch seconds and nanoseconds from Ruby Time
-    let epoch_seconds: i64 = ruby_time.funcall("to_i", ())?;
-    let nanos: u32 = ruby_time.funcall("nsec", ())?;
-
-    // Validate CompactDateTime range (1970-2106)
-    let seconds_u32 = u32::try_from(epoch_seconds).map_err(|_| {
-        Error::new(
-            arg_error(),
-            format!("Time {epoch_seconds} is outside CompactDateTime range (1970-2106)"),
-        )
-    })?;
-
-    // Apply CompactDateTime's rounding logic: >= 500ms rounds up
-    let final_seconds = if nanos >= 500_000_000 {
-        seconds_u32.checked_add(1).ok_or_else(|| {
-            Error::new(
-                arg_error(),
-                "Time overflow during rounding to nearest second",
-            )
-        })?
-    } else {
-        seconds_u32
-    };
-
-    Ok(CompactDateTime::from(final_seconds))
-}
-
-/// Converts a `CompactDateTime` to a Ruby Time object.
-///
-/// `CompactDateTime` only stores epoch seconds, so the resulting Ruby Time
-/// will have zero nanoseconds. This is the most efficient conversion.
-///
-/// # Arguments
-///
-/// * `ruby` - Reference to the Ruby VM
-/// * `compact_time` - `CompactDateTime` to convert
-///
-/// # Returns
-///
-/// Ruby Time object representing the same time with zero nanoseconds.
-///
-/// # Errors
-///
-/// Returns an error if the Ruby Time class cannot be accessed or if
-/// creating the Time object fails.
-fn compact_datetime_to_time(ruby: &Ruby, compact_time: CompactDateTime) -> Result<Value, Error> {
-    // Direct access to epoch seconds - CompactDateTime has no sub-second precision
-    let epoch_seconds = i64::from(compact_time.epoch_seconds());
-
-    // Create Ruby Time with zero nanoseconds (CompactDateTime precision limit)
-    ruby.module_kernel()
-        .const_get::<_, RClass>(id!(ruby, "Time"))?
-        .funcall(id!(ruby, "at"), (epoch_seconds,))
-}
 
 /// Ruby wrapper for a Kafka message context.
 ///
@@ -323,4 +248,79 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_method(id!(ruby, "scheduled"), method!(Context::scheduled, 0))?;
 
     Ok(())
+}
+
+/// Converts a Ruby Time object to `CompactDateTime`.
+///
+/// `CompactDateTime` stores only epoch seconds (u32) with second-level
+/// precision. This function extracts nanoseconds from Ruby Time to implement
+/// proper rounding.
+///
+/// # Arguments
+///
+/// * `_ruby` - Reference to the Ruby VM (ensures Ruby thread safety)
+/// * `ruby_time` - Ruby Time object to convert
+///
+/// # Returns
+///
+/// `CompactDateTime` representing the same time, rounded to nearest second.
+///
+/// # Errors
+///
+/// Returns an error if the time is outside the `CompactDateTime` range
+/// (1970-2106) or if the Ruby Time object is invalid.
+fn time_to_compact_datetime(_ruby: &Ruby, ruby_time: Value) -> Result<CompactDateTime, Error> {
+    // Extract epoch seconds and nanoseconds from Ruby Time
+    let epoch_seconds: i64 = ruby_time.funcall("to_i", ())?;
+    let nanos: u32 = ruby_time.funcall("nsec", ())?;
+
+    // Validate CompactDateTime range (1970-2106)
+    let seconds_u32 = u32::try_from(epoch_seconds).map_err(|_| {
+        Error::new(
+            arg_error(),
+            format!("Time {epoch_seconds} is outside CompactDateTime range (1970-2106)"),
+        )
+    })?;
+
+    // Apply CompactDateTime's rounding logic: >= 500ms rounds up
+    let final_seconds = if nanos >= 500_000_000 {
+        seconds_u32.checked_add(1).ok_or_else(|| {
+            Error::new(
+                arg_error(),
+                "Time overflow during rounding to nearest second",
+            )
+        })?
+    } else {
+        seconds_u32
+    };
+
+    Ok(CompactDateTime::from(final_seconds))
+}
+
+/// Converts a `CompactDateTime` to a Ruby Time object.
+///
+/// `CompactDateTime` only stores epoch seconds, so the resulting Ruby Time
+/// will have zero nanoseconds. This is the most efficient conversion.
+///
+/// # Arguments
+///
+/// * `ruby` - Reference to the Ruby VM
+/// * `compact_time` - `CompactDateTime` to convert
+///
+/// # Returns
+///
+/// Ruby Time object representing the same time with zero nanoseconds.
+///
+/// # Errors
+///
+/// Returns an error if the Ruby Time class cannot be accessed or if
+/// creating the Time object fails.
+fn compact_datetime_to_time(ruby: &Ruby, compact_time: CompactDateTime) -> Result<Value, Error> {
+    // Direct access to epoch seconds - CompactDateTime has no sub-second precision
+    let epoch_seconds = i64::from(compact_time.epoch_seconds());
+
+    // Create Ruby Time with zero nanoseconds (CompactDateTime precision limit)
+    ruby.module_kernel()
+        .const_get::<_, RClass>(id!(ruby, "Time"))?
+        .funcall(id!(ruby, "at"), (epoch_seconds,))
 }
