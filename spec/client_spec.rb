@@ -8,12 +8,6 @@ require "securerandom"
 # with a real Kafka instance. Tests cover initialization, subscription, message
 # publishing/consumption, message ordering, shutdown, and error handling.
 RSpec.describe Prosody::Client, integration: true do
-  # Test configuration constants
-  MESSAGE_TIMEOUT = 5 # Time to wait for message delivery in seconds
-  GROUP_NAME = "test-group" # Consumer group name for tests
-  SOURCE_NAME = "test-source" # Source system identifier for tests
-  BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094") # Kafka connection string
-  CASSANDRA_NODES = ENV.fetch("PROSODY_CASSANDRA_NODES", "localhost:9042") # Cassandra connection string
 
   # Collects and provides messages in a thread-safe manner.
   # Used to verify message receipt in tests.
@@ -204,20 +198,10 @@ RSpec.describe Prosody::Client, integration: true do
   # Test variables
   let(:topic) { generate_topic_name }
   let(:message_stream) { MessageStream.new }
-  let(:config) do
-    Prosody::Configuration.new(
-      bootstrap_servers: BOOTSTRAP_SERVERS,
-      group_id: GROUP_NAME,
-      source_system: SOURCE_NAME,
-      subscribed_topics: topic,
-      probe_port: false,
-      mode: :pipeline,
-      cassandra_nodes: CASSANDRA_NODES
-    )
-  end
+  let(:config) { TestConfig.create_configuration(topic) }
   let(:client) { Prosody::Client.new(config) }
   let(:admin_client_class) { Prosody.const_get(:AdminClient) }
-  let(:admin) { admin_client_class.new([BOOTSTRAP_SERVERS]) }
+  let(:admin) { admin_client_class.new([TestConfig::BOOTSTRAP_SERVERS]) }
 
   # Test setup: create the topic before each test
   before do
@@ -304,7 +288,7 @@ RSpec.describe Prosody::Client, integration: true do
       client.send_message(topic, test_message[:key], test_message[:payload])
 
       # Wait for the message
-      received_messages = message_stream.wait_for_messages(1, MESSAGE_TIMEOUT)
+      received_messages = message_stream.wait_for_messages(1, TestConfig::MESSAGE_TIMEOUT)
       received_message = received_messages.first
 
       # Verify the message
@@ -349,7 +333,7 @@ RSpec.describe Prosody::Client, integration: true do
       end
 
       # Wait for all messages
-      received_messages = message_stream.wait_for_messages(messages_to_send.length, MESSAGE_TIMEOUT)
+      received_messages = message_stream.wait_for_messages(messages_to_send.length, TestConfig::MESSAGE_TIMEOUT)
 
       # Check message count
       expect(received_messages.length).to eq(messages_to_send.length)
@@ -413,7 +397,7 @@ RSpec.describe Prosody::Client, integration: true do
       client.send_message(topic, "test-key", {content: "Long running task"})
 
       # Wait for processing to start
-      events.once("processing_started", MESSAGE_TIMEOUT)
+      events.once("processing_started", TestConfig::MESSAGE_TIMEOUT)
 
       # Allow processing to continue
       processing_semaphore.release
@@ -466,7 +450,7 @@ RSpec.describe Prosody::Client, integration: true do
       client.send_message(topic, "test-key", {content: "Trigger transient error"})
 
       # Wait for retry to succeed
-      retry_event.once("retry", MESSAGE_TIMEOUT)
+      retry_event.once("retry", TestConfig::MESSAGE_TIMEOUT)
 
       # Expect message_count to be greater than 1 (initial + retry)
       expect(message_count[0]).to be > 1
@@ -505,7 +489,7 @@ RSpec.describe Prosody::Client, integration: true do
       client.send_message(topic, "test-key", {content: "Trigger permanent error"})
 
       # Wait for error to occur
-      error_event.once("error-event", MESSAGE_TIMEOUT)
+      error_event.once("error-event", TestConfig::MESSAGE_TIMEOUT)
 
       # Wait a bit to ensure no retries happen
       sleep 2
@@ -659,7 +643,7 @@ RSpec.describe Prosody::Client, integration: true do
     client.send_message(topic, "timer-ops-5", { action: "test_scheduled_empty" })
     
     # Wait for all operations to complete using proper synchronization
-    timer_operations_data = timer_stream.wait_for_events(5, MESSAGE_TIMEOUT)
+    timer_operations_data = timer_stream.wait_for_events(5, TestConfig::MESSAGE_TIMEOUT)
     
     # Verify all operations completed
     expect(timer_operations_data.length).to eq(5)
@@ -746,7 +730,7 @@ RSpec.describe Prosody::Client, integration: true do
     client.send_message(topic, "timer-fire-test", { action: "test_timer_firing" })
 
     # Wait for scheduling event using proper synchronization
-    scheduling_events = timer_stream.wait_for_events(1, MESSAGE_TIMEOUT)
+    scheduling_events = timer_stream.wait_for_events(1, TestConfig::MESSAGE_TIMEOUT)
     expect(scheduling_events.length).to eq(1)
     
     scheduled_event = scheduling_events.first

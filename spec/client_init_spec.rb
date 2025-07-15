@@ -6,7 +6,7 @@ RSpec.describe Prosody::Client, integration: true do
   it "initializes a client when given minimal producer configuration as hash" do
     # Create the client with a hash directly
     client = Prosody::Client.new(
-      bootstrap_servers: BOOTSTRAP_SERVERS,
+      bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
       source_system:     "init-test-system",
     )
 
@@ -17,12 +17,12 @@ RSpec.describe Prosody::Client, integration: true do
   it "initializes a client when given a Configuration object" do
     # Build a Configuration object explicitly
     config = Prosody::Configuration.new(
-      bootstrap_servers: BOOTSTRAP_SERVERS,
+      bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
       source_system:     "init-test-system",
     )
 
     # Ensure the configuration converted the string to an array
-    expect(config.bootstrap_servers).to eq([BOOTSTRAP_SERVERS])
+    expect(config.bootstrap_servers).to eq([TestConfig::BOOTSTRAP_SERVERS])
 
     # Create the client with the Configuration object
     client = Prosody::Client.new(config)
