@@ -211,7 +211,8 @@ RSpec.describe Prosody::Client, integration: true do
       source_system: SOURCE_NAME,
       subscribed_topics: topic,
       probe_port: false,
-      mode: :pipeline
+      mode: :pipeline,
+      cassandra_nodes: CASSANDRA_NODES
     )
   end
   let(:client) { Prosody::Client.new(config) }
