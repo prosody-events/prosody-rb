@@ -14,6 +14,9 @@ use magnus::{Error, Module, RClass, Ruby, Value, method};
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
 
+/// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
+const NANOSECOND_ROUNDING_THRESHOLD: u32 = 500_000_000;
+
 /// Ruby wrapper for a Kafka message context.
 ///
 /// This struct wraps the native Prosody `MessageContext` and exposes it to Ruby
@@ -269,7 +272,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
 ///
 /// Returns an error if the time is outside the `CompactDateTime` range
 /// (1970-2106) or if the Ruby Time object is invalid.
-fn time_to_compact_datetime(_ruby: &Ruby, ruby_time: Value) -> Result<CompactDateTime, Error> {
+fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDateTime, Error> {
     // Extract epoch seconds and nanoseconds from Ruby Time
     let epoch_seconds: i64 = ruby_time.funcall(id!(ruby, "to_i"), ())?;
     let nanos: u32 = ruby_time.funcall(id!(ruby, "nsec"), ())?;
@@ -283,7 +286,7 @@ fn time_to_compact_datetime(_ruby: &Ruby, ruby_time: Value) -> Result<CompactDat
     })?;
 
     // Apply CompactDateTime's rounding logic: >= 500ms rounds up
-    let final_seconds = if nanos >= 500_000_000 {
+    let final_seconds = if nanos >= NANOSECOND_ROUNDING_THRESHOLD {
         seconds_u32.checked_add(1).ok_or_else(|| {
             Error::new(
                 arg_error(),
