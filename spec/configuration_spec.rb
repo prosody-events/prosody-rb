@@ -32,7 +32,7 @@ RSpec.describe Prosody::Configuration do
       expect(config.failure_topic).to be_nil
       expect(config.probe_port).to be_nil
       expect(config.cassandra_nodes).to be_nil
-      expect(config.cassandra_keyspace).to eq("prosody")
+      expect(config.cassandra_keyspace).to be_nil
       expect(config.cassandra_datacenter).to be_nil
       expect(config.cassandra_rack).to be_nil
       expect(config.cassandra_user).to be_nil
