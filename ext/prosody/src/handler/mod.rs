@@ -168,7 +168,7 @@ impl FallibleHandler for RubyHandler {
         let handler = self.handler.clone();
 
         // Create a unique task ID for this timer
-        let task_id = format!("timer/{}", trigger.key);
+        let task_id = format!("timer/{}/{}", trigger.key, trigger.time);
 
         // Convert the timer trigger and context to Ruby-compatible types
         let context = Context::new(context.boxed(), self.bridge.clone());
