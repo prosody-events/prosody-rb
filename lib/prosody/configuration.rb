@@ -168,7 +168,7 @@ module Prosody
       }
 
     # Keyspace to use for storing timer data in Cassandra.
-    config_param :cassandra_keyspace, converter: lambda(&:to_s), default: "prosody"
+    config_param :cassandra_keyspace, converter: lambda(&:to_s)
 
     # Preferred datacenter for Cassandra query routing.
     config_param :cassandra_datacenter, converter: lambda(&:to_s)
