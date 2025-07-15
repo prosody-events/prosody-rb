@@ -151,7 +151,12 @@ impl Context {
 
         this.bridge
             .wait_for(ruby, async move { inner.schedule(compact_time).await })?
-            .map_err(|e| Error::new(runtime_error(), format!("Failed to schedule timer: {e}")))
+            .map_err(|error| {
+                Error::new(
+                    runtime_error(),
+                    format!("Failed to schedule timer: {error:#}"),
+                )
+            })
     }
 
     /// Clear all scheduled timers and schedule a new one at the specified time.
@@ -178,10 +183,10 @@ impl Context {
                 ruby,
                 async move { inner.clear_and_schedule(compact_time).await },
             )?
-            .map_err(|e| {
+            .map_err(|error| {
                 Error::new(
                     runtime_error(),
-                    format!("Failed to clear and schedule timer: {e}"),
+                    format!("Failed to clear and schedule timer: {error:#}"),
                 )
             })
     }
@@ -206,7 +211,12 @@ impl Context {
 
         this.bridge
             .wait_for(ruby, async move { inner.unschedule(compact_time).await })?
-            .map_err(|e| Error::new(runtime_error(), format!("Failed to unschedule timer: {e}")))
+            .map_err(|error| {
+                Error::new(
+                    runtime_error(),
+                    format!("Failed to unschedule timer: {error:#}"),
+                )
+            })
     }
 
     /// Clear all scheduled timers.
@@ -227,10 +237,10 @@ impl Context {
 
         this.bridge
             .wait_for(ruby, async move { inner.clear_scheduled().await })?
-            .map_err(|e| {
+            .map_err(|error| {
                 Error::new(
                     runtime_error(),
-                    format!("Failed to clear scheduled timers: {e}"),
+                    format!("Failed to clear scheduled timers: {error:#}"),
                 )
             })
     }

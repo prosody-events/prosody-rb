@@ -185,7 +185,7 @@ impl Client {
                     .instrument(span)
                     .await
             })?
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
     /// Subscribes to events using the provided Ruby handler.
@@ -273,7 +273,7 @@ impl Client {
 
         this.bridge
             .wait_for(ruby, async move { client.unsubscribe().await })?
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 }
 
