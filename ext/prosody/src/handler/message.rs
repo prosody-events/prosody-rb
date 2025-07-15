@@ -79,8 +79,11 @@ impl Message {
     fn timestamp(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         let epoch_micros = this.inner.timestamp().timestamp_micros();
         ruby.module_kernel()
-            .const_get::<_, RClass>(id!("Time"))?
-            .funcall(id!("at"), (epoch_micros, ruby.to_symbol("microsecond")))
+            .const_get::<_, RClass>(id!(ruby, "Time"))?
+            .funcall(
+                id!(ruby, "at"),
+                (epoch_micros, ruby.to_symbol("microsecond")),
+            )
     }
 
     /// Deserializes the message payload to a Ruby value.
@@ -128,14 +131,14 @@ impl From<ConsumerMessage> for Message {
 /// Returns an error if class or method definition fails.
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!("Message"), ruby.class_object())?;
+    let class = module.define_class(id!(ruby, "Message"), ruby.class_object())?;
 
-    class.define_method(id!("topic"), method!(Message::topic, 0))?;
-    class.define_method(id!("partition"), method!(Message::partition, 0))?;
-    class.define_method(id!("offset"), method!(Message::offset, 0))?;
-    class.define_method(id!("key"), method!(Message::key, 0))?;
-    class.define_method(id!("timestamp"), method!(Message::timestamp, 0))?;
-    class.define_method(id!("payload"), method!(Message::payload, 0))?;
+    class.define_method(id!(ruby, "topic"), method!(Message::topic, 0))?;
+    class.define_method(id!(ruby, "partition"), method!(Message::partition, 0))?;
+    class.define_method(id!(ruby, "offset"), method!(Message::offset, 0))?;
+    class.define_method(id!(ruby, "key"), method!(Message::key, 0))?;
+    class.define_method(id!(ruby, "timestamp"), method!(Message::timestamp, 0))?;
+    class.define_method(id!(ruby, "payload"), method!(Message::payload, 0))?;
 
     Ok(())
 }

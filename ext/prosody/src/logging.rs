@@ -76,8 +76,8 @@ impl Logger {
     pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, magnus::Error> {
         let (tx, rx) = unbounded_channel::<(Level, String)>();
 
-        let logger_class: RClass = ruby.module_kernel().const_get(id!("Logger"))?;
-        let stdout: Value = ruby.module_kernel().const_get(id!("STDOUT"))?;
+        let logger_class: RClass = ruby.module_kernel().const_get(id!(ruby, "Logger"))?;
+        let stdout: Value = ruby.module_kernel().const_get(id!(ruby, "STDOUT"))?;
         let logger = logger_class.new_instance((stdout,))?;
         let logger = Arc::new(ThreadSafeValue::new(logger));
 
@@ -107,10 +107,10 @@ async fn log_event(bridge: Bridge, logger: Arc<ThreadSafeValue>, (level, msg): (
     if let Err(error) = bridge
         .run(move |ruby| {
             let method = match level {
-                Level::ERROR => id!("error"),
-                Level::WARN => id!("warn"),
-                Level::INFO => id!("info"),
-                Level::DEBUG | Level::TRACE => id!("debug"),
+                Level::ERROR => id!(ruby, "error"),
+                Level::WARN => id!(ruby, "warn"),
+                Level::INFO => id!(ruby, "info"),
+                Level::DEBUG | Level::TRACE => id!(ruby, "debug"),
             };
 
             if let Err(error) = logger.get(ruby).funcall::<_, _, Value>(method, (msg,)) {

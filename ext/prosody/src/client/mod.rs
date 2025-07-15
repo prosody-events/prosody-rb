@@ -70,14 +70,16 @@ impl Client {
         let _guard = RUNTIME.enter();
 
         // Check if config is already a Configuration object, if not create one
-        let config_class: RClass = ruby.get_inner(&ROOT_MOD).const_get(id!("Configuration"))?;
+        let config_class: RClass = ruby
+            .get_inner(&ROOT_MOD)
+            .const_get(id!(ruby, "Configuration"))?;
         let config_obj = if config.is_kind_of(config_class) {
             config
         } else {
-            config_class.funcall(id!("new"), (config,))?
+            config_class.funcall(id!(ruby, "new"), (config,))?
         };
 
-        let native_config: NativeConfiguration = config_obj.funcall(id!("to_hash"), ())?;
+        let native_config: NativeConfiguration = config_obj.funcall(id!(ruby, "to_hash"), ())?;
         let config_ref = &native_config;
 
         let mode: Mode = config_ref
@@ -166,9 +168,9 @@ impl Client {
 
         // Extract OpenTelemetry context from Ruby for distributed tracing
         let carrier = RHash::new();
-        let otel_class: RModule = ruby.class_module().const_get(id!("OpenTelemetry"))?;
-        let propagator: Value = otel_class.funcall(id!("propagation"), ())?;
-        let _: Value = propagator.funcall(id!("inject"), (carrier,))?;
+        let otel_class: RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
+        let propagator: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
+        let _: Value = propagator.funcall(id!(ruby, "inject"), (carrier,))?;
 
         let carrier: HashMap<String, String> = carrier.to_hash_map()?;
         let context = this.propagator.extract(&carrier);
@@ -291,18 +293,21 @@ impl Client {
 /// Returns an error if Ruby class or method definition fails.
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!("Client"), ruby.class_object())?;
+    let class = module.define_class(id!(ruby, "Client"), ruby.class_object())?;
 
     class.define_singleton_method("new", function!(Client::new, 1))?;
-    class.define_method(id!("consumer_state"), method!(Client::consumer_state, 0))?;
-    class.define_method(id!("send_message"), method!(Client::send, 3))?;
-    class.define_method(id!("subscribe"), method!(Client::subscribe, 1))?;
     class.define_method(
-        id!("assigned_partitions"),
+        id!(ruby, "consumer_state"),
+        method!(Client::consumer_state, 0),
+    )?;
+    class.define_method(id!(ruby, "send_message"), method!(Client::send, 3))?;
+    class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
+    class.define_method(
+        id!(ruby, "assigned_partitions"),
         method!(Client::assigned_partitions, 0),
     )?;
-    class.define_method(id!("is_stalled?"), method!(Client::is_stalled, 0))?;
-    class.define_method(id!("unsubscribe"), method!(Client::unsubscribe, 0))?;
+    class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
+    class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
 
     Ok(())
 }
