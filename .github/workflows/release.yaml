@@ -37,17 +37,17 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          #          # Linux - glibc
-          #          - id: linux-x86_64
-          #            platform: x86_64-linux
-          #          - id: linux-aarch64
-          #            platform: aarch64-linux
-          #
-          #          # Linux - musl
-          #          - id: linux-musl-x86_64
-          #            platform: x86_64-linux-musl
-          #          - id: linux-musl-aarch64
-          #            platform: aarch64-linux-musl
+          # Linux - glibc
+          - id: linux-x86_64
+            platform: x86_64-linux
+          - id: linux-aarch64
+            platform: aarch64-linux
+
+          # Linux - musl
+          - id: linux-musl-x86_64
+            platform: x86_64-linux-musl
+          - id: linux-musl-aarch64
+            platform: aarch64-linux-musl
 
           # macOS
           - id: macos-x86_64
@@ -55,9 +55,9 @@ jobs:
           - id: macos-arm64
             platform: arm64-darwin
 
-    #          # Windows
-    #          - id: windows-x64
-    #            platform: x64-mingw-ucrt
+          # Windows
+          - id: windows-x64
+            platform: x64-mingw-ucrt
 
     name: Build ${{ matrix.target.id }}
     steps:
