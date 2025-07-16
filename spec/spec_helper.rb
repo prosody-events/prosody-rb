@@ -4,6 +4,9 @@ require "async"
 require 'async/rspec'
 require "prosody"
 
+# Load shared test configuration
+Dir[File.join(__dir__, "support", "*.rb")].each { |file| require file }
+
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
@@ -15,5 +18,3 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 end
-
-BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094") # Kafka connection string

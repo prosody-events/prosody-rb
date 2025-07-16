@@ -30,7 +30,7 @@ const POLL_BATCH_SIZE: usize = 16;
 #[allow(clippy::expect_used)]
 pub static THREAD_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
     ruby.class_object()
-        .const_get(id!("Thread"))
+        .const_get(id!(ruby, "Thread"))
         .expect("Failed to load Thread class")
 });
 
@@ -38,7 +38,7 @@ pub static THREAD_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
 #[allow(clippy::expect_used)]
 pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
     ruby.get_inner(&THREAD_CLASS)
-        .const_get(id!("Queue"))
+        .const_get(id!(ruby, "Queue"))
         .expect("Failed to load Queue class")
 });
 
@@ -163,7 +163,7 @@ impl Bridge {
         Fut::Output: Send,
     {
         // Create a Ruby Queue to receive the result
-        let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!("new"), ())?;
+        let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!(ruby, "new"), ())?;
         let callback = AsyncCallback::from_queue(queue);
         let tx = self.tx.clone();
 
@@ -184,7 +184,7 @@ impl Bridge {
 
         // Yield until the result is available, then extract and return it
         queue
-            .funcall::<_, _, &DynamicResult>(id!("pop"), ())?
+            .funcall::<_, _, &DynamicResult>(id!(ruby, "pop"), ())?
             .0
             .take()
             .ok_or_else(|| Error::new(ruby.exception_runtime_error(), "result already taken"))?

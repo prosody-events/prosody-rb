@@ -12,6 +12,7 @@ use prosody::consumer::failure::retry::RetryConfigurationBuilder;
 use prosody::consumer::failure::topic::FailureTopicConfigurationBuilder;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
+use prosody::timers::store::cassandra::CassandraConfigurationBuilder;
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
@@ -87,6 +88,28 @@ pub struct NativeConfiguration {
 
     /// Configuration for the health probe port
     probe_port: Option<ProbePort>,
+
+    /// List of Cassandra contact nodes (hostnames or IPs)
+    cassandra_nodes: Option<Vec<String>>,
+
+    /// Keyspace to use for storing timer data in Cassandra
+    cassandra_keyspace: Option<String>,
+
+    /// Preferred datacenter for Cassandra query routing
+    cassandra_datacenter: Option<String>,
+
+    /// Preferred rack identifier for Cassandra topology-aware routing
+    cassandra_rack: Option<String>,
+
+    /// Username for authenticating with Cassandra
+    cassandra_user: Option<String>,
+
+    /// Password for authenticating with Cassandra
+    cassandra_password: Option<String>,
+
+    /// Retention period for failed/unprocessed timer data in Cassandra (in
+    /// seconds)
+    cassandra_retention: Option<f32>,
 }
 
 /// Configuration for the health probe port.
@@ -376,5 +399,54 @@ impl<'a> TryFrom<&'a NativeConfiguration> for Mode {
             "best_effort" => Ok(Mode::BestEffort),
             string => Err(format!("unrecognized mode: {string}")),
         }
+    }
+}
+
+impl<'a> From<&'a NativeConfiguration> for CassandraConfigurationBuilder {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `CassandraConfigurationBuilder`.
+    ///
+    /// This takes the relevant Cassandra settings from the configuration and
+    /// sets them on a new `CassandraConfigurationBuilder` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `CassandraConfigurationBuilder`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::default();
+
+        if let Some(nodes) = &config.cassandra_nodes {
+            builder.nodes(nodes.clone());
+        }
+
+        if let Some(keyspace) = &config.cassandra_keyspace {
+            builder.keyspace(keyspace.clone());
+        }
+
+        if let Some(datacenter) = &config.cassandra_datacenter {
+            builder.datacenter(Some(datacenter.clone()));
+        }
+
+        if let Some(rack) = &config.cassandra_rack {
+            builder.rack(Some(rack.clone()));
+        }
+
+        if let Some(user) = &config.cassandra_user {
+            builder.user(Some(user.clone()));
+        }
+
+        if let Some(password) = &config.cassandra_password {
+            builder.password(Some(password.clone()));
+        }
+
+        if let Some(retention) = &config.cassandra_retention {
+            builder.retention(Duration::from_secs_f32(*retention));
+        }
+
+        builder
     }
 }

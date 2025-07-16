@@ -70,14 +70,16 @@ impl Client {
         let _guard = RUNTIME.enter();
 
         // Check if config is already a Configuration object, if not create one
-        let config_class: RClass = ruby.get_inner(&ROOT_MOD).const_get(id!("Configuration"))?;
+        let config_class: RClass = ruby
+            .get_inner(&ROOT_MOD)
+            .const_get(id!(ruby, "Configuration"))?;
         let config_obj = if config.is_kind_of(config_class) {
             config
         } else {
-            config_class.funcall(id!("new"), (config,))?
+            config_class.funcall(id!(ruby, "new"), (config,))?
         };
 
-        let native_config: NativeConfiguration = config_obj.funcall(id!("to_hash"), ())?;
+        let native_config: NativeConfiguration = config_obj.funcall(id!(ruby, "to_hash"), ())?;
         let config_ref = &native_config;
 
         let mode: Mode = config_ref
@@ -87,6 +89,7 @@ impl Client {
         let client = HighLevelClient::new(
             mode,
             &mut config_ref.into(),
+            &config_ref.into(),
             &config_ref.into(),
             &config_ref.into(),
             &config_ref.into(),
@@ -123,12 +126,17 @@ impl Client {
     /// # Returns
     ///
     /// A Ruby symbol representing the current consumer state.
-    pub fn consumer_state(ruby: &Ruby, this: &Self) -> StaticSymbol {
-        ruby.sym_new(match &*this.inner.consumer_state() {
-            ConsumerState::Unconfigured => id!("unconfigured"),
-            ConsumerState::Configured(_) => id!("configured"),
-            ConsumerState::Running { .. } => id!("running"),
-        })
+    pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+        let inner = this.inner.clone();
+        let state = this.bridge.wait_for(ruby, async move {
+            match *inner.consumer_state().await {
+                ConsumerState::Unconfigured => "unconfigured",
+                ConsumerState::Configured(_) => "configured",
+                ConsumerState::Running { .. } => "running",
+            }
+        })?;
+
+        Ok(ruby.sym_new(state))
     }
 
     /// Sends a message to the specified Kafka topic.
@@ -160,9 +168,9 @@ impl Client {
 
         // Extract OpenTelemetry context from Ruby for distributed tracing
         let carrier = RHash::new();
-        let otel_class: RModule = ruby.class_module().const_get(id!("OpenTelemetry"))?;
-        let propagator: Value = otel_class.funcall(id!("propagation"), ())?;
-        let _: Value = propagator.funcall(id!("inject"), (carrier,))?;
+        let otel_class: RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
+        let propagator: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
+        let _: Value = propagator.funcall(id!(ruby, "inject"), (carrier,))?;
 
         let carrier: HashMap<String, String> = carrier.to_hash_map()?;
         let context = this.propagator.extract(&carrier);
@@ -179,7 +187,7 @@ impl Client {
                     .instrument(span)
                     .await
             })?
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
     /// Subscribes to events using the provided Ruby handler.
@@ -201,8 +209,10 @@ impl Client {
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
         let _guard = RUNTIME.enter();
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
-        this.inner
-            .subscribe(wrapper)
+        let inner = this.inner.clone();
+
+        this.bridge
+            .wait_for(ruby, async move { inner.subscribe(wrapper).await })?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(())
@@ -221,8 +231,10 @@ impl Client {
     /// # Returns
     ///
     /// The number of assigned partitions as a u32.
-    pub fn assigned_partitions(&self) -> u32 {
-        self.inner.assigned_partition_count()
+    pub fn assigned_partitions(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
+        let inner = this.inner.clone();
+        this.bridge
+            .wait_for(ruby, async move { inner.assigned_partition_count().await })
     }
 
     /// Checks if the consumer is stalled.
@@ -238,8 +250,10 @@ impl Client {
     /// # Returns
     ///
     /// `true` if the consumer is stalled, `false` otherwise.
-    pub fn is_stalled(&self) -> bool {
-        self.inner.is_stalled()
+    pub fn is_stalled(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+        let inner = this.inner.clone();
+        this.bridge
+            .wait_for(ruby, async move { inner.is_stalled().await })
     }
 
     /// Unsubscribes from all topics, stopping message processing.
@@ -261,7 +275,7 @@ impl Client {
 
         this.bridge
             .wait_for(ruby, async move { client.unsubscribe().await })?
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), e.to_string()))
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 }
 
@@ -279,18 +293,21 @@ impl Client {
 /// Returns an error if Ruby class or method definition fails.
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!("Client"), ruby.class_object())?;
+    let class = module.define_class(id!(ruby, "Client"), ruby.class_object())?;
 
     class.define_singleton_method("new", function!(Client::new, 1))?;
-    class.define_method(id!("consumer_state"), method!(Client::consumer_state, 0))?;
-    class.define_method(id!("send_message"), method!(Client::send, 3))?;
-    class.define_method(id!("subscribe"), method!(Client::subscribe, 1))?;
     class.define_method(
-        id!("assigned_partitions"),
+        id!(ruby, "consumer_state"),
+        method!(Client::consumer_state, 0),
+    )?;
+    class.define_method(id!(ruby, "send_message"), method!(Client::send, 3))?;
+    class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
+    class.define_method(
+        id!(ruby, "assigned_partitions"),
         method!(Client::assigned_partitions, 0),
     )?;
-    class.define_method(id!("is_stalled?"), method!(Client::is_stalled, 0))?;
-    class.define_method(id!("unsubscribe"), method!(Client::unsubscribe, 0))?;
+    class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
+    class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
 
     Ok(())
 }

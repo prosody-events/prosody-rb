@@ -126,8 +126,9 @@ module Prosody
   # 3) Base EventHandler that users will subclass
   # --------------------------------------------------------------------------
 
-  # Abstract base class for handling incoming messages from Prosody.
+  # Abstract base class for handling incoming messages and timers from Prosody.
   # Subclasses **must** implement `#on_message` to process received messages.
+  # Subclasses **may** implement `#on_timer` to process timer events.
   # They may also use `permanent` or `transient` decorators to control retry logic.
   #
   # @example
@@ -136,9 +137,15 @@ module Prosody
   #
   #     permanent :on_message, ArgumentError
   #     transient :on_message, RuntimeError
+  #     permanent :on_timer, ArgumentError
+  #     transient :on_timer, RuntimeError
   #
   #     def on_message(context, message)
   #       # Process message...
+  #     end
+  #
+  #     def on_timer(context, trigger)
+  #       # Process timer event...
   #     end
   #   end
   class EventHandler
@@ -154,6 +161,17 @@ module Prosody
     # @return [void]
     def on_message(context, message)
       raise NotImplementedError, "Subclasses must implement #on_message"
+    end
+
+    # Process a timer event when it fires.
+    # This method must be implemented by subclasses to handle
+    # scheduled timer events if they can fire.
+    #
+    # @param [Context] context the event context
+    # @param [Timer] timer the timer containing key, time, and span
+    # @return [void]
+    def on_timer(context, timer)
+      raise NotImplementedError, "Subclasses must implement #on_timer"
     end
   end
 end

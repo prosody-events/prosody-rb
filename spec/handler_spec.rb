@@ -197,14 +197,23 @@ RSpec.describe Prosody::EventHandler do
     }.to raise_error(NotImplementedError, /must implement #on_message/)
   end
 
+  it "requires #on_timer to be implemented" do
+    handler = described_class.new
+    expect {
+      handler.on_timer(nil, nil)
+    }.to raise_error(NotImplementedError, /must implement #on_timer/)
+  end
+
   context "with a concrete implementation" do
     let(:test_handler_class) do
       Class.new(Prosody::EventHandler) do
-        attr_reader :message_received
+        attr_reader :message_received, :timer_received
 
-        # Demonstrate both error classification decorators in a real handler
+        # Demonstrate both error classification decorators for both message and timer handlers
         permanent :on_message, ArgumentError
         transient :on_message, RuntimeError
+        permanent :on_timer, ArgumentError
+        transient :on_timer, RuntimeError
 
         def on_message(context, message)
           @message_received = message
@@ -214,6 +223,17 @@ RSpec.describe Prosody::EventHandler do
             raise ArgumentError, "Bad argument"
           elsif message == "cause_runtime_error"
             raise "Runtime issue"
+          end
+        end
+
+        def on_timer(context, timer)
+          @timer_received = timer
+
+          # Test cases for different error handling scenarios
+          if timer&.key == "cause_argument_error"
+            raise ArgumentError, "Bad timer argument"
+          elsif timer&.key == "cause_runtime_error"
+            raise "Timer runtime issue"
           end
         end
       end
@@ -237,6 +257,29 @@ RSpec.describe Prosody::EventHandler do
       expect {
         handler.on_message(context, "cause_runtime_error")
       }.to raise_error(Prosody::TransientError)
+    end
+
+    describe "#on_timer" do
+      let(:trigger) { double("Trigger", key: "test-timer-key") }
+
+      it "processes timer events correctly" do
+        handler.on_timer(context, trigger)
+        expect(handler.timer_received).to eq(trigger)
+      end
+
+      it "wraps ArgumentError as PermanentError" do
+        error_trigger = double("Trigger", key: "cause_argument_error")
+        expect {
+          handler.on_timer(context, error_trigger)
+        }.to raise_error(Prosody::PermanentError)
+      end
+
+      it "wraps RuntimeError as TransientError" do
+        error_trigger = double("Trigger", key: "cause_runtime_error")
+        expect {
+          handler.on_timer(context, error_trigger)
+        }.to raise_error(Prosody::TransientError)
+      end
     end
   end
 end

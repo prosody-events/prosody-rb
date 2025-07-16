@@ -13,16 +13,20 @@ use magnus::{Ruby, Value};
 /// literal. Using this macro for frequently accessed Ruby method names or
 /// symbols avoids repeatedly converting strings to Ruby symbols at runtime.
 ///
+/// This macro requires a `ruby: &Ruby` parameter to enforce that it can only
+/// be used within a Ruby thread context, ensuring thread safety.
+///
 /// # Examples
 ///
 /// ```
-/// let method_name = id!("to_s");
+/// let method_name = id!(ruby, "to_s");
 /// // Use method_name with Ruby function calls
 /// ```
 #[macro_export]
 macro_rules! id {
-    ($str:expr) => {{
+    ($ruby:expr, $str:expr) => {{
         static VAL: magnus::value::LazyId = magnus::value::LazyId::new($str);
+        let _ruby: &magnus::Ruby = $ruby; // Enforce that ruby is &Ruby type
         *VAL
     }};
 }

@@ -14,6 +14,33 @@ module Prosody
   class Context
     # This class is instantiated internally by the client.
 
+    # Checks if shutdown has been requested.
+    # @return [bool] true if shutdown has been requested, false otherwise
+    def should_shutdown?: () -> bool
+
+    # Schedules a timer to fire at the specified time.
+    # @param time [Time] When the timer should fire
+    # @return [void]
+    def schedule: (Time time) -> void
+
+    # Clears all scheduled timers and schedules a new one at the specified time.
+    # @param time [Time] When the new timer should fire
+    # @return [void]
+    def clear_and_schedule: (Time time) -> void
+
+    # Unschedules a timer that was scheduled for the specified time.
+    # @param time [Time] The time for which to unschedule the timer
+    # @return [void]
+    def unschedule: (Time time) -> void
+
+    # Clears all scheduled timers.
+    # @return [void]
+    def clear_scheduled: () -> void
+
+    # Returns all currently scheduled timer times.
+    # @return [Array<Time>] Array of scheduled timer times
+    def scheduled: () -> Array[Time]
+
     private
 
     def initialize: (untyped) -> void
@@ -45,6 +72,23 @@ module Prosody
     # Returns the deserialized message payload.
     # @return [untyped] The message content
     def payload: () -> untyped
+  end
+
+  # Represents a timer that was scheduled to fire at a specific time.
+  # Timer instances are passed to EventHandler's on_timer method when timers fire.
+  class Timer
+    # Returns the entity key identifying what this timer belongs to.
+    # @return [String] The entity key
+    def key: () -> String
+
+    # Returns the time when this timer was scheduled to fire.
+    # @return [Time] The scheduled execution time
+    def time: () -> Time
+
+
+    private
+
+    def initialize: (untyped) -> void
   end
 
   # Main client for interacting with the Prosody messaging system.

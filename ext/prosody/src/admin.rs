@@ -128,15 +128,21 @@ impl AdminClient {
 /// Returns a `Magnus::Error` if class or method definition fails
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
-    let class_id = id!("AdminClient");
+    let class_id = id!(ruby, "AdminClient");
     let class = module.define_class(class_id, ruby.class_object())?;
 
     class.define_singleton_method("new", function!(AdminClient::new, 1))?;
-    class.define_method(id!("create_topic"), method!(AdminClient::create_topic, 3))?;
-    class.define_method(id!("delete_topic"), method!(AdminClient::delete_topic, 1))?;
+    class.define_method(
+        id!(ruby, "create_topic"),
+        method!(AdminClient::create_topic, 3),
+    )?;
+    class.define_method(
+        id!(ruby, "delete_topic"),
+        method!(AdminClient::delete_topic, 1),
+    )?;
 
     // Make the admin client class private
-    let _: Value = module.funcall(id!("private_constant"), (class_id,))?;
+    let _: Value = module.funcall(id!(ruby, "private_constant"), (class_id,))?;
 
     Ok(())
 }
