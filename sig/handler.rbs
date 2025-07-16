@@ -65,5 +65,15 @@ module Prosody
     # @param message the message content with payload and metadata
     # @raise [NotImplementedError] if not overridden by subclass
     def on_message: (Context context, Message message) -> void
+
+    # Process a timer that has fired.
+    # This method is called when a previously scheduled timer fires.
+    # This method must be implemented by subclasses to define
+    # custom timer handling logic.
+    #
+    # @param context the timer context containing metadata and control capabilities
+    # @param timer the timer object with key and time information
+    # @raise [NotImplementedError] if not overridden by subclass
+    def on_timer: (Context context, Timer timer) -> void
   end
 end

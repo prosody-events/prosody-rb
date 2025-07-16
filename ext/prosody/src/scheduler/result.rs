@@ -64,8 +64,7 @@ impl ResultSender {
     ///
     /// # Arguments
     ///
-    /// * `_ruby` - Reference to the Ruby VM (unused but required by the
-    ///   signature)
+    /// * `ruby` - Reference to the Ruby VM
     /// * `is_success` - Boolean indicating if the operation succeeded
     /// * `result` - For successes, the return value; for failures, the Ruby
     ///   exception
@@ -74,7 +73,7 @@ impl ResultSender {
     ///
     /// `true` if the result was sent successfully, `false` if the result had
     /// already been sent or the receiver was dropped.
-    pub fn send(&self, _ruby: &Ruby, is_success: bool, result: Value) -> bool {
+    pub fn send(&self, ruby: &Ruby, is_success: bool, result: Value) -> bool {
         let Some(result_tx) = self.result_tx.take() else {
             debug!("result was already sent");
             return false;
@@ -90,12 +89,12 @@ impl ResultSender {
 
         // For error results, determine if the error is permanent by calling
         // the `permanent?` method on the Ruby exception
-        let is_permanent = result.funcall(id!("permanent?"), ()).unwrap_or(false);
+        let is_permanent = result.funcall(id!(ruby, "permanent?"), ()).unwrap_or(false);
 
         // Extract a detailed error message from the Ruby exception
         let error_string: String = result
-            .funcall(id!("full_message"), (kwargs!("highlight" => false),))
-            .or_else(|_| result.funcall(id!("inspect"), ()))
+            .funcall(id!(ruby, "full_message"), (kwargs!("highlight" => false),))
+            .or_else(|_| result.funcall(id!(ruby, "inspect"), ()))
             .unwrap_or_else(|_| result.to_string());
 
         let error = if is_permanent {

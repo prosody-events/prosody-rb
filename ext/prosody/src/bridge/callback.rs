@@ -51,7 +51,7 @@ impl AsyncCallback {
     {
         self.queue
             .get(ruby)
-            .funcall(id!("push"), (value.into_value_with(ruby),))
+            .funcall(id!(ruby, "push"), (value.into_value_with(ruby),))
             .map(|_: Value| ())
     }
 }

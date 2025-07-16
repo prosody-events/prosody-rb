@@ -56,10 +56,10 @@ impl RubyProcessor {
     pub fn new(ruby: &Ruby) -> Result<Self, Error> {
         let class: RClass = ruby
             .get_inner(&ROOT_MOD)
-            .const_get(id!("AsyncTaskProcessor"))?;
+            .const_get(id!(ruby, "AsyncTaskProcessor"))?;
 
         let instance: Value = class.new_instance(())?; // todo: pass in logger
-        let _: Value = instance.funcall(id!("start"), ())?;
+        let _: Value = instance.funcall(id!(ruby, "start"), ())?;
         Ok(Self {
             processor: Arc::new(ThreadSafeValue::new(instance)),
             is_shutdown: Arc::default(),
@@ -125,7 +125,7 @@ impl RubyProcessor {
 
         // Call the Ruby method: def submit(task_id, callback, &task_block)
         let token = CancellationToken::new(self.processor.get(ruby).funcall_with_block(
-            id!("submit"),
+            id!(ruby, "submit"),
             (task_id, carrier, callback),
             block,
         )?);
@@ -147,7 +147,7 @@ impl RubyProcessor {
     /// Returns a Magnus error if the stop operation fails in Ruby
     pub fn stop(&self, ruby: &Ruby) -> Result<(), Error> {
         if !self.is_shutdown.fetch_or(true, Relaxed) {
-            let _: Value = self.processor.get(ruby).funcall(id!("stop"), ())?;
+            let _: Value = self.processor.get(ruby).funcall(id!(ruby, "stop"), ())?;
         }
 
         Ok(())
