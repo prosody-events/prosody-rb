@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/cincpro/prosody-rb/compare/v0.3.0...v1.0.0) (2025-07-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* add timer scheduling support with Cassandra persistence ([#13](https://github.com/cincpro/prosody-rb/issues/13))
+
+### Features
+
+* add timer scheduling support with Cassandra persistence ([#13](https://github.com/cincpro/prosody-rb/issues/13)) ([bedcaba](https://github.com/cincpro/prosody-rb/commit/bedcaba5ddd055097c345a8f2ba2e5f96b74808d))
+
 ## [0.3.0](https://github.com/cincpro/prosody-rb/compare/v0.2.1...v0.3.0) (2025-06-11)
 
 
