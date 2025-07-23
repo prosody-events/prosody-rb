@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/cincpro/prosody-rb/compare/v1.0.0...v1.0.1) (2025-07-23)
+
+
+### Bug Fixes
+
+* don’t execute timer commands while shutting down the partition ([#15](https://github.com/cincpro/prosody-rb/issues/15)) ([474fa24](https://github.com/cincpro/prosody-rb/commit/474fa2406bb253e2a5a488012ba6c89914603425))
+
 ## [1.0.0](https://github.com/cincpro/prosody-rb/compare/v0.3.0...v1.0.0) (2025-07-16)
 
 
