@@ -44,7 +44,7 @@ Gem::Specification.new do |spec|
   # Runtime dependencies
   spec.add_dependency "async", "~> 2.23"
   spec.add_dependency "opentelemetry-api", "~> 1.5"
-  spec.add_dependency "rb_sys", "~> 0.9.111"
+  spec.add_dependency "rb_sys", "~> 0.9.117"
 
   # Development dependencies
   spec.add_development_dependency "async-rspec", "~> 1.17.0"
