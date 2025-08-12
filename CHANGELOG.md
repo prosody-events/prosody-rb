@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/cincpro/prosody-rb/compare/v1.0.2...v1.0.3) (2025-08-12)
+
+
+### Bug Fixes
+
+* update rb_sys ([#19](https://github.com/cincpro/prosody-rb/issues/19)) ([d1a7973](https://github.com/cincpro/prosody-rb/commit/d1a79732cbfb28f3efa283c34355f7cd7d310212))
+
 ## [1.0.2](https://github.com/cincpro/prosody-rb/compare/v1.0.1...v1.0.2) (2025-08-12)
 
 
