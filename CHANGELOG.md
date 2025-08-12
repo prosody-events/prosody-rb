@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/cincpro/prosody-rb/compare/v1.0.1...v1.0.2) (2025-08-12)
+
+
+### Bug Fixes
+
+* bump prosody to pick up OTEL updates ([#17](https://github.com/cincpro/prosody-rb/issues/17)) ([65046c6](https://github.com/cincpro/prosody-rb/commit/65046c694616ac248863c34bb9363cb580196204))
+
 ## [1.0.1](https://github.com/cincpro/prosody-rb/compare/v1.0.0...v1.0.1) (2025-07-23)
 
 
