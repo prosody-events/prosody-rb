@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/cincpro/prosody-rb/compare/v1.0.3...v1.0.4) (2025-08-22)
+
+
+### Bug Fixes
+
+* add migration locks and jitter to timer slab loads ([9377fe9](https://github.com/cincpro/prosody-rb/commit/9377fe914a7153392f5443114b685b50121cdf88))
+
 ## [1.0.3](https://github.com/cincpro/prosody-rb/compare/v1.0.2...v1.0.3) (2025-08-12)
 
 
