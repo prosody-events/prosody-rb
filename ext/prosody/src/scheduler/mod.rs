@@ -48,16 +48,6 @@ pub struct Scheduler {
     propagator: TextMapCompositePropagator,
 }
 
-impl Clone for Scheduler {
-    fn clone(&self) -> Self {
-        Self {
-            bridge: self.bridge.clone(),
-            processor: self.processor.clone(),
-            propagator: new_propagator(),
-        }
-    }
-}
-
 impl Scheduler {
     /// Creates a new `Scheduler` instance.
     ///
