@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/cincpro/prosody-rb/compare/v1.0.4...v1.0.5) (2025-09-04)
+
+
+### Bug Fixes
+
+* prevent premature AsyncTaskProcessor shutdown during partition rebalancing ([#22](https://github.com/cincpro/prosody-rb/issues/22)) ([170b557](https://github.com/cincpro/prosody-rb/commit/170b5572cd9fa58523adc2ef854f2928ddaf3523))
+
 ## [1.0.4](https://github.com/cincpro/prosody-rb/compare/v1.0.3...v1.0.4) (2025-08-22)
 
 
