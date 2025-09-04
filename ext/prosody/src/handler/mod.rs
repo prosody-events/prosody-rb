@@ -45,7 +45,7 @@ pub struct RubyHandler {
     bridge: Bridge,
 
     /// Scheduler for running Ruby code in the Ruby runtime
-    scheduler: Scheduler,
+    scheduler: Arc<Scheduler>,
 
     /// Thread-safe reference to the Ruby handler instance
     handler: Arc<ThreadSafeValue>,
@@ -67,7 +67,7 @@ impl RubyHandler {
     pub fn new(bridge: Bridge, ruby: &Ruby, handler_instance: Value) -> Result<Self, Error> {
         Ok(Self {
             bridge: bridge.clone(),
-            scheduler: Scheduler::new(ruby, bridge)?,
+            scheduler: Arc::new(Scheduler::new(ruby, bridge)?),
             handler: Arc::new(ThreadSafeValue::new(handler_instance)),
         })
     }
