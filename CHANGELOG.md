@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/cincpro/prosody-rb/compare/v1.0.5...v1.0.6) (2025-09-12)
+
+
+### Performance Improvements
+
+* bound message buffering ([#25](https://github.com/cincpro/prosody-rb/issues/25)) ([3acf90b](https://github.com/cincpro/prosody-rb/commit/3acf90b15644fb180c4e6092ef9653db56673ea7))
+
 ## [1.0.5](https://github.com/cincpro/prosody-rb/compare/v1.0.4...v1.0.5) (2025-09-04)
 
 
