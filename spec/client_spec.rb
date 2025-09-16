@@ -232,6 +232,14 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  # Verify source system identifier is accessible
+  it "exposes source system identifier" do
+    tracer.in_span("test.source_system") do |span|
+      expect(client.source_system).to eq(TestConfig::SOURCE_NAME)
+      expect(client.source_system).to be_a(String)
+    end
+  end
+
   # Verify basic subscription and unsubscription functionality
   it "subscribes and unsubscribes" do
     tracer.in_span("test.subscribe_unsubscribe") do |span|
