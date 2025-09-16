@@ -277,6 +277,22 @@ impl Client {
             .wait_for(ruby, async move { client.unsubscribe().await })?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
+
+    /// Returns the configured source system identifier.
+    ///
+    /// The source system is used to identify the originating service or
+    /// component in produced messages, enabling loop detection.
+    ///
+    /// # Arguments
+    ///
+    /// * `this` - The client instance
+    ///
+    /// # Returns
+    ///
+    /// The source system identifier.
+    fn source_system(this: &Self) -> &str {
+        this.inner.source_system()
+    }
 }
 
 /// Initializes the client module in Ruby.
@@ -308,6 +324,10 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
     class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
+    class.define_method(
+        id!(ruby, "source_system"),
+        method!(Client::source_system, 0),
+    )?;
 
     Ok(())
 }

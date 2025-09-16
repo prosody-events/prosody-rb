@@ -142,5 +142,13 @@ module Prosody
     # @return [void]
     # @raise [RuntimeError] If unsubscription fails
     def unsubscribe: () -> void
+
+    # Returns the configured source system identifier.
+    #
+    # The source system is used to identify the originating service or
+    # component in produced messages, enabling loop detection.
+    #
+    # @return [String] The source system identifier
+    def source_system: () -> String
   end
 end
