@@ -557,6 +557,7 @@ The main client for interacting with Kafka:
 - `send_message(topic, key, payload)`: Send a message to a specified topic.
 - `subscribe(handler)`: Subscribe to messages using the provided handler.
 - `unsubscribe()`: Unsubscribe from messages and shut down the consumer.
+- `source_system()`: Returns the configured source system identifier used for loop detection.
 
 ### Prosody::Configuration
 

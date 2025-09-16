@@ -344,6 +344,19 @@ module Prosody
     def unsubscribe
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
+
+    # Returns the configured source system identifier.
+    #
+    # The source system is used to identify the originating service or
+    # component in produced messages, enabling loop detection.
+    #
+    # @return [String] The source system identifier
+    #
+    # @example Getting the source system
+    #   puts client.source_system  # => "my-service"
+    def source_system
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
   end
 
   # Internal processor for executing tasks asynchronously.
