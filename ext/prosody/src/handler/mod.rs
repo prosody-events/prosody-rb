@@ -21,6 +21,7 @@ use futures::pin_mut;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use prosody::consumer::Keyed;
 use prosody::consumer::event_context::EventContext;
 use prosody::consumer::failure::{ClassifyError, ErrorCategory, FallibleHandler};
 use prosody::consumer::message::ConsumerMessage;
@@ -29,6 +30,7 @@ use prosody::timers::Trigger as ProsodyTrigger;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
+use tracing::{Instrument, info_span};
 
 mod context;
 mod message;
@@ -106,8 +108,16 @@ impl FallibleHandler for RubyHandler {
     where
         C: EventContext,
     {
-        // Capture the tracing span for propagation to Ruby
-        let span = message.span().clone();
+        // Create a new span for the on_message operation as a child of the message's
+        // span
+        let on_message_span = info_span!(
+            parent: message.span(),
+            "on_message",
+            topic = %message.topic(),
+            partition = message.partition(),
+            offset = message.offset(),
+            key = %message.key()
+        );
 
         // Get a future that completes when the consumer is shutdown
         let cloned_context = context.clone();
@@ -132,43 +142,54 @@ impl FallibleHandler for RubyHandler {
         );
         let message: Message = message.into();
 
-        // Schedule the task to run in Ruby
-        let task_handle = self
-            .scheduler
-            .schedule(task_id, &span, move |ruby| {
-                let _: Value = handler
-                    .get(ruby)
-                    .funcall(id!(ruby, "on_message"), (context, message))?;
+        // Execute the entire message handling operation within the span
+        let span_for_instrument = on_message_span.clone();
+        async move {
+            // Schedule the task to run in Ruby
+            let task_handle = self
+                .scheduler
+                .schedule(task_id, &on_message_span, move |ruby| {
+                    let _: Value = handler
+                        .get(ruby)
+                        .funcall(id!(ruby, "on_message"), (context, message))?;
 
-                Ok(())
-            })
-            .await?;
+                    Ok(())
+                })
+                .await?;
 
-        // Get the future that will complete when the task is done
-        let result_future = task_handle.result.receive();
-        pin_mut!(result_future);
+            // Get the future that will complete when the task is done
+            let result_future = task_handle.result.receive();
+            pin_mut!(result_future);
 
-        // Wait for either task completion or shutdown signal
-        select! {
-            result = &mut result_future => {
-                result?;
+            // Wait for either task completion or shutdown signal
+            select! {
+                result = &mut result_future => {
+                    result?;
+                }
+                () = shutdown_future => {
+                    // If shutdown requested, cancel the task and wait for it to complete
+                    task_handle.cancellation_token.cancel(&self.bridge).await?;
+                    result_future.await?;
+                }
             }
-            () = shutdown_future => {
-                // If shutdown requested, cancel the task and wait for it to complete
-                task_handle.cancellation_token.cancel(&self.bridge).await?;
-                result_future.await?;
-            }
+
+            Ok(())
         }
-
-        Ok(())
+        .instrument(span_for_instrument)
+        .await
     }
 
     async fn on_timer<C>(&self, context: C, trigger: ProsodyTrigger) -> Result<(), Self::Error>
     where
         C: EventContext,
     {
-        // Capture the tracing span for propagation to Ruby
-        let span = trigger.span.clone();
+        // Create a new span for the on_timer operation as a child of the trigger's span
+        let on_timer_span = info_span!(
+            parent: &trigger.span,
+            "on_timer",
+            key = %trigger.key,
+            time = %trigger.time
+        );
 
         // Get a future that completes when the consumer is shutdown
         let cloned_context = context.clone();
@@ -188,35 +209,41 @@ impl FallibleHandler for RubyHandler {
         );
         let timer: Timer = trigger.into();
 
-        // Schedule the task to run in Ruby
-        let task_handle = self
-            .scheduler
-            .schedule(task_id, &span, move |ruby| {
-                let _: Value = handler
-                    .get(ruby)
-                    .funcall(id!(ruby, "on_timer"), (context, timer))?;
+        // Execute the entire timer handling operation within the span
+        let span_for_instrument = on_timer_span.clone();
+        async move {
+            // Schedule the task to run in Ruby
+            let task_handle = self
+                .scheduler
+                .schedule(task_id, &on_timer_span, move |ruby| {
+                    let _: Value = handler
+                        .get(ruby)
+                        .funcall(id!(ruby, "on_timer"), (context, timer))?;
 
-                Ok(())
-            })
-            .await?;
+                    Ok(())
+                })
+                .await?;
 
-        // Get the future that will complete when the task is done
-        let result_future = task_handle.result.receive();
-        pin_mut!(result_future);
+            // Get the future that will complete when the task is done
+            let result_future = task_handle.result.receive();
+            pin_mut!(result_future);
 
-        // Wait for either task completion or shutdown signal
-        select! {
-            result = &mut result_future => {
-                result?;
+            // Wait for either task completion or shutdown signal
+            select! {
+                result = &mut result_future => {
+                    result?;
+                }
+                () = shutdown_future => {
+                    // If shutdown requested, cancel the task and wait for it to complete
+                    task_handle.cancellation_token.cancel(&self.bridge).await?;
+                    result_future.await?;
+                }
             }
-            () = shutdown_future => {
-                // If shutdown requested, cancel the task and wait for it to complete
-                task_handle.cancellation_token.cancel(&self.bridge).await?;
-                result_future.await?;
-            }
+
+            Ok(())
         }
-
-        Ok(())
+        .instrument(span_for_instrument)
+        .await
     }
 }
 
