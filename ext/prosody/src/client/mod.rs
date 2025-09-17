@@ -181,12 +181,11 @@ impl Client {
 
         // Wait for the async send operation to complete
         this.bridge
-            .wait_for(ruby, async move {
-                client
-                    .send(topic.as_str().into(), &key, &value)
-                    .instrument(span)
-                    .await
-            })?
+            .wait_for(
+                ruby,
+                async move { client.send(topic.as_str().into(), &key, &value).await }
+                    .instrument(span),
+            )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
