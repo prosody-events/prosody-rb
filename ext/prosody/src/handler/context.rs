@@ -386,7 +386,6 @@ fn extract_opentelemetry_context(
     ruby: &Ruby,
     propagator: &TextMapCompositePropagator,
 ) -> Result<opentelemetry::Context, Error> {
-    // Extract OpenTelemetry context from Ruby for distributed tracing
     let carrier = RHash::new();
     let otel_class: magnus::RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
     let propagator_obj: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
