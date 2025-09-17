@@ -20,9 +20,11 @@ use crate::util::ThreadSafeValue;
 use futures::pin_mut;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, Value};
+use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::consumer::event_context::EventContext;
 use prosody::consumer::failure::{ClassifyError, ErrorCategory, FallibleHandler};
 use prosody::consumer::message::ConsumerMessage;
+use prosody::propagator::new_propagator;
 use prosody::timers::Trigger as ProsodyTrigger;
 use std::sync::Arc;
 use thiserror::Error;
@@ -49,6 +51,9 @@ pub struct RubyHandler {
 
     /// Thread-safe reference to the Ruby handler instance
     handler: Arc<ThreadSafeValue>,
+
+    /// OpenTelemetry propagator shared across contexts
+    propagator: Arc<TextMapCompositePropagator>,
 }
 
 impl RubyHandler {
@@ -69,6 +74,7 @@ impl RubyHandler {
             bridge: bridge.clone(),
             scheduler: Arc::new(Scheduler::new(ruby, bridge)?),
             handler: Arc::new(ThreadSafeValue::new(handler_instance)),
+            propagator: Arc::new(new_propagator()),
         })
     }
 }
@@ -119,7 +125,11 @@ impl FallibleHandler for RubyHandler {
         );
 
         // Convert the Kafka message and context to Ruby-compatible types
-        let context = Context::new(context.boxed(), self.bridge.clone());
+        let context = Context::new(
+            context.boxed(),
+            self.bridge.clone(),
+            self.propagator.clone(),
+        );
         let message: Message = message.into();
 
         // Schedule the task to run in Ruby
@@ -171,7 +181,11 @@ impl FallibleHandler for RubyHandler {
         let task_id = format!("timer/{}/{}", trigger.key, trigger.time);
 
         // Convert the timer trigger and context to Ruby-compatible types
-        let context = Context::new(context.boxed(), self.bridge.clone());
+        let context = Context::new(
+            context.boxed(),
+            self.bridge.clone(),
+            self.propagator.clone(),
+        );
         let timer: Timer = trigger.into();
 
         // Schedule the task to run in Ruby

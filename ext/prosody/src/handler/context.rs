@@ -10,9 +10,14 @@ use educe::Educe;
 use futures::TryStreamExt;
 use magnus::exception::{arg_error, runtime_error};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, RClass, Ruby, Value, method};
+use magnus::{Error, Module, RClass, RHash, Ruby, Value, method};
+use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::{Instrument, info_span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
 /// At 0.5 seconds, times round up; below 0.5 seconds, they round down.
@@ -38,6 +43,10 @@ pub struct Context {
     /// Bridge for handling async operations
     #[educe(Debug(ignore))]
     bridge: Bridge,
+
+    /// OpenTelemetry propagator for distributed tracing
+    #[educe(Debug(ignore))]
+    propagator: Arc<TextMapCompositePropagator>,
 }
 
 impl Context {
@@ -47,8 +56,17 @@ impl Context {
     ///
     /// * `inner` - The Prosody event context to wrap
     /// * `bridge` - The bridge for handling async operations
-    pub fn new(inner: BoxEventContext, bridge: Bridge) -> Self {
-        Self { inner, bridge }
+    /// * `propagator` - Shared OpenTelemetry propagator for distributed tracing
+    pub fn new(
+        inner: BoxEventContext,
+        bridge: Bridge,
+        propagator: Arc<TextMapCompositePropagator>,
+    ) -> Self {
+        Self {
+            inner,
+            bridge,
+            propagator,
+        }
     }
 
     /// Check if shutdown has been requested.
@@ -78,8 +96,18 @@ impl Context {
         let compact_time = time_to_compact_datetime(ruby, ruby_time)?;
         let inner = this.inner.clone();
 
+        // Extract OpenTelemetry context from Ruby for distributed tracing
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+
+        // Create span for tracing and set parent context
+        let span = info_span!("schedule", time = %compact_time);
+        span.set_parent(context);
+
         this.bridge
-            .wait_for(ruby, async move { inner.schedule(compact_time).await })?
+            .wait_for(
+                ruby,
+                async move { inner.schedule(compact_time).await }.instrument(span),
+            )?
             .map_err(|error| {
                 Error::new(
                     runtime_error(),
@@ -107,10 +135,17 @@ impl Context {
         let compact_time = time_to_compact_datetime(ruby, ruby_time)?;
         let inner = this.inner.clone();
 
+        // Extract OpenTelemetry context from Ruby for distributed tracing
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+
+        // Create span for tracing and set parent context
+        let span = info_span!("clear_and_schedule", time = %compact_time);
+        span.set_parent(context);
+
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.clear_and_schedule(compact_time).await },
+                async move { inner.clear_and_schedule(compact_time).await }.instrument(span),
             )?
             .map_err(|error| {
                 Error::new(
@@ -138,8 +173,18 @@ impl Context {
         let compact_time = time_to_compact_datetime(ruby, ruby_time)?;
         let inner = this.inner.clone();
 
+        // Extract OpenTelemetry context from Ruby for distributed tracing
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+
+        // Create span for tracing and set parent context
+        let span = info_span!("unschedule", time = %compact_time);
+        span.set_parent(context);
+
         this.bridge
-            .wait_for(ruby, async move { inner.unschedule(compact_time).await })?
+            .wait_for(
+                ruby,
+                async move { inner.unschedule(compact_time).await }.instrument(span),
+            )?
             .map_err(|error| {
                 Error::new(
                     runtime_error(),
@@ -164,8 +209,18 @@ impl Context {
     fn clear_scheduled(ruby: &Ruby, this: &Self) -> Result<(), Error> {
         let inner = this.inner.clone();
 
+        // Extract OpenTelemetry context from Ruby for distributed tracing
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+
+        // Create span for tracing and set parent context
+        let span = info_span!("clear_scheduled");
+        span.set_parent(context);
+
         this.bridge
-            .wait_for(ruby, async move { inner.clear_scheduled().await })?
+            .wait_for(
+                ruby,
+                async move { inner.clear_scheduled().await }.instrument(span),
+            )?
             .map_err(|error| {
                 Error::new(
                     runtime_error(),
@@ -191,12 +246,20 @@ impl Context {
     fn scheduled(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         let inner = this.inner.clone();
 
+        // Extract OpenTelemetry context from Ruby for distributed tracing
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+
+        // Create span for tracing and set parent context
+        let span = info_span!("scheduled");
+        span.set_parent(context);
+
         // Collect the scheduled times stream into a Vec
         let scheduled_times = this
             .bridge
-            .wait_for(ruby, async move {
-                inner.scheduled().try_collect::<Vec<_>>().await
-            })?
+            .wait_for(
+                ruby,
+                async move { inner.scheduled().try_collect::<Vec<_>>().await }.instrument(span),
+            )?
             .map_err(|e| {
                 Error::new(
                     runtime_error(),
@@ -299,6 +362,40 @@ fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDate
     };
 
     Ok(CompactDateTime::from(final_seconds))
+}
+
+/// Extracts OpenTelemetry context from Ruby's current tracing environment.
+///
+/// This function follows the same pattern as the Client's send method to
+/// extract the current OpenTelemetry context from Ruby and convert it to a Rust
+/// context.
+///
+/// # Arguments
+///
+/// * `ruby` - Reference to the Ruby VM
+/// * `propagator` - The OpenTelemetry propagator to use for context extraction
+///
+/// # Returns
+///
+/// The extracted OpenTelemetry context.
+///
+/// # Errors
+///
+/// Returns an error if OpenTelemetry context extraction fails.
+fn extract_opentelemetry_context(
+    ruby: &Ruby,
+    propagator: &TextMapCompositePropagator,
+) -> Result<opentelemetry::Context, Error> {
+    // Extract OpenTelemetry context from Ruby for distributed tracing
+    let carrier = RHash::new();
+    let otel_class: magnus::RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
+    let propagator_obj: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
+    let _: Value = propagator_obj.funcall(id!(ruby, "inject"), (carrier,))?;
+
+    let carrier: HashMap<String, String> = carrier.to_hash_map()?;
+    let context = propagator.extract(&carrier);
+
+    Ok(context)
 }
 
 /// Converts a `CompactDateTime` to a Ruby Time object.
