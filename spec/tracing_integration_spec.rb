@@ -43,6 +43,7 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
         # Schedule a timer to fire in 2 seconds
         timer_time = Time.now + 2
         @logger.info "⏰ Handler: Scheduling timer for #{timer_time}"
+
         context.schedule(timer_time)
 
         span.add_event("timer_scheduled", attributes: { "timer.time" => timer_time.to_f })
@@ -77,7 +78,7 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
     # Set OTLP endpoint if not already set
     ENV["OTEL_EXPORTER_OTLP_ENDPOINT"] ||= "http://localhost:4318"
 
-    # Configure OpenTelemetry SDK - let it auto-configure OTLP exporter
+    # Configure OpenTelemetry SDK with both OTLP and console exporters
     OpenTelemetry::SDK.configure do |c|
       c.service_name = ENV["OTEL_SERVICE_NAME"]
       c.service_version = ENV["OTEL_SERVICE_VERSION"]
@@ -88,16 +89,20 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
         "test.suite" => "tracing_integration"
       })
 
-      # OTLP exporter will be auto-configured from environment variables
-    end
-  end
+      # Add OTLP exporter
+      c.add_span_processor(
+        OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(
+          OpenTelemetry::Exporter::OTLP::Exporter.new
+        )
+      )
 
-  after(:all) do
-    # Properly shutdown the OpenTelemetry SDK to flush all spans
-    logger = Logger.new($stdout)
-    logger.info "Shutting down OpenTelemetry SDK to flush spans..."
-    # Sleep to allow natural span flushing
-    sleep 6
+#       # Add console exporter for debugging
+#       c.add_span_processor(
+#         OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor.new(
+#           OpenTelemetry::SDK::Trace::Export::ConsoleSpanExporter.new
+#         )
+#       )
+    end
   end
 
   before do
@@ -107,12 +112,15 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
 
   after do
     begin
+      # Properly shutdown the OpenTelemetry SDK to flush all spans
+      logger = Logger.new($stdout)
+      logger.info "Shutting down OpenTelemetry SDK to flush spans..."
+      # Sleep to allow natural span flushing
+      sleep 5
+      logger.info "Unsubscribing"
       client.unsubscribe if client.consumer_state == :running
-    rescue
-      # Ignore errors during cleanup
-    end
 
-    begin
+      logger.info "Deleting topic"
       admin.delete_topic(topic)
     rescue
       # Ignore errors during cleanup
@@ -180,12 +188,5 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
     # Verify both events occurred (latches should be empty after popping)
     expect(handler.message_received?).to be false # Queue should be empty after pop
     expect(handler.timer_fired?).to be false # Queue should be empty after pop
-
-    logger.info "Test completed successfully. Waiting for spans to flush..."
-
-    # Wait for Rust exporter to flush (Rust side uses different timing)
-    sleep 15
-
-    logger.info "Completed waiting period for span export."
   end
 end

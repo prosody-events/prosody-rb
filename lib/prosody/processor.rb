@@ -215,7 +215,7 @@ module Prosody
       # Execute within the extracted OpenTelemetry context
       OpenTelemetry::Context.with_current(parent_ctx) do
         # Create execute span as child of the extracted context
-        execute_span = @tracer.start_span("execute", kind: :consumer)
+        execute_span = @tracer.start_span("async_dispatch", kind: :consumer)
         OpenTelemetry::Trace.with_span(execute_span) do
           @logger.debug("Executing task #{task_id}")
 
