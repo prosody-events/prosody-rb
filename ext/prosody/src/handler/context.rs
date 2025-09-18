@@ -16,7 +16,7 @@ use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{Instrument, info_span};
+use tracing::info_span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
@@ -106,7 +106,8 @@ impl Context {
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.schedule(compact_time).await }.instrument(span),
+                async move { inner.schedule(compact_time).await },
+                span,
             )?
             .map_err(|error| {
                 Error::new(
@@ -145,7 +146,8 @@ impl Context {
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.clear_and_schedule(compact_time).await }.instrument(span),
+                async move { inner.clear_and_schedule(compact_time).await },
+                span,
             )?
             .map_err(|error| {
                 Error::new(
@@ -183,7 +185,8 @@ impl Context {
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.unschedule(compact_time).await }.instrument(span),
+                async move { inner.unschedule(compact_time).await },
+                span,
             )?
             .map_err(|error| {
                 Error::new(
@@ -217,10 +220,7 @@ impl Context {
         span.set_parent(context);
 
         this.bridge
-            .wait_for(
-                ruby,
-                async move { inner.clear_scheduled().await }.instrument(span),
-            )?
+            .wait_for(ruby, async move { inner.clear_scheduled().await }, span)?
             .map_err(|error| {
                 Error::new(
                     runtime_error(),
@@ -258,7 +258,8 @@ impl Context {
             .bridge
             .wait_for(
                 ruby,
-                async move { inner.scheduled().try_collect::<Vec<_>>().await }.instrument(span),
+                async move { inner.scheduled().try_collect::<Vec<_>>().await },
+                span,
             )?
             .map_err(|e| {
                 Error::new(

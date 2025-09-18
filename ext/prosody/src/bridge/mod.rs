@@ -18,7 +18,7 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 use tokio::sync::oneshot;
-use tracing::{debug, error, warn};
+use tracing::{Instrument, Span, debug, error, warn};
 
 /// Helper module for handling callbacks from async Rust code to Ruby.
 mod callback;
@@ -49,7 +49,12 @@ type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
 ///
 /// Uses `AtomicTake` to ensure the value can only be extracted once.
 #[derive(Debug)]
-#[magnus::wrap(class = "Prosody::DynamicResult", free_immediately)]
+#[magnus::wrap(
+    class = "Prosody::DynamicResult",
+    free_immediately,
+    frozen_shareable,
+    size
+)]
 struct DynamicResult(AtomicTake<Box<dyn Any + Send>>);
 
 /// Bridge between Ruby and Rust for async operations.
@@ -157,30 +162,36 @@ impl Bridge {
     ///
     /// Returns a Magnus error if there's an issue with the Ruby interaction or
     /// type conversion.
-    pub fn wait_for<Fut>(&self, ruby: &Ruby, future: Fut) -> Result<Fut::Output, Error>
+    pub fn wait_for<Fut>(&self, ruby: &Ruby, future: Fut, span: Span) -> Result<Fut::Output, Error>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send,
     {
+        let cloned_span = span.clone();
+        let _enter = cloned_span.enter();
+
         // Create a Ruby Queue to receive the result
         let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!(ruby, "new"), ())?;
         let callback = AsyncCallback::from_queue(queue);
         let tx = self.tx.clone();
 
         // Spawn a task to await the future and send the result back to Ruby
-        RUNTIME.spawn(async move {
-            let result = future.await;
-            let function = move |ruby: &Ruby| {
-                let value = DynamicResult(AtomicTake::new(Box::new(result)));
-                if let Err(error) = callback.complete(ruby, value) {
-                    error!("failed to complete Ruby callback: {error:#}");
-                }
-            };
+        RUNTIME.spawn(
+            async move {
+                let result = future.await;
+                let function = move |ruby: &Ruby| {
+                    let value = DynamicResult(AtomicTake::new(Box::new(result)));
+                    if let Err(error) = callback.complete(ruby, value) {
+                        error!("failed to complete Ruby callback: {error:#}");
+                    }
+                };
 
-            if let Err(error) = tx.send(Box::new(function)).await {
-                error!("failed to send callback to Ruby: {error:#}");
+                if let Err(error) = tx.send(Box::new(function)).await {
+                    error!("failed to send callback to Ruby: {error:#}");
+                }
             }
-        });
+            .instrument(span),
+        );
 
         // Yield until the result is available, then extract and return it
         queue

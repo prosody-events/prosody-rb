@@ -9,6 +9,7 @@ use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::admin::ProsodyAdminClient;
 use std::sync::Arc;
+use tracing::Span;
 
 /// Ruby wrapper for the Prosody admin client.
 ///
@@ -89,7 +90,7 @@ impl AdminClient {
         };
 
         this.bridge
-            .wait_for(ruby, future)?
+            .wait_for(ruby, future, Span::current())?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
     }
 
@@ -111,7 +112,7 @@ impl AdminClient {
         let future = async move { client.delete_topic(&name).await };
 
         this.bridge
-            .wait_for(ruby, future)?
+            .wait_for(ruby, future, Span::current())?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
     }
 }

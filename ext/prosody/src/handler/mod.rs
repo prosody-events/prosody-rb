@@ -110,8 +110,8 @@ impl FallibleHandler for RubyHandler {
     {
         // Create a new span for the on_message operation as a child of the message's
         // span
-        let on_message_span = info_span!(
-            parent: message.span(),
+        let span = info_span!(
+            parent: message.span().as_ref(),
             "on_message",
             topic = %message.topic(),
             partition = message.partition(),
@@ -143,12 +143,12 @@ impl FallibleHandler for RubyHandler {
         let message: Message = message.into();
 
         // Execute the entire message handling operation within the span
-        let span_for_instrument = on_message_span.clone();
+        let cloned_span = span.clone();
         async move {
             // Schedule the task to run in Ruby
             let task_handle = self
                 .scheduler
-                .schedule(task_id, &on_message_span, move |ruby| {
+                .schedule(task_id, &cloned_span, move |ruby| {
                     let _: Value = handler
                         .get(ruby)
                         .funcall(id!(ruby, "on_message"), (context, message))?;
@@ -175,7 +175,7 @@ impl FallibleHandler for RubyHandler {
 
             Ok(())
         }
-        .instrument(span_for_instrument)
+        .instrument(span)
         .await
     }
 
@@ -184,8 +184,8 @@ impl FallibleHandler for RubyHandler {
         C: EventContext,
     {
         // Create a new span for the on_timer operation as a child of the trigger's span
-        let on_timer_span = info_span!(
-            parent: &trigger.span,
+        let span = info_span!(
+            parent: trigger.span().as_ref(),
             "on_timer",
             key = %trigger.key,
             time = %trigger.time
@@ -210,12 +210,12 @@ impl FallibleHandler for RubyHandler {
         let timer: Timer = trigger.into();
 
         // Execute the entire timer handling operation within the span
-        let span_for_instrument = on_timer_span.clone();
+        let cloned_span = span.clone();
         async move {
             // Schedule the task to run in Ruby
             let task_handle = self
                 .scheduler
-                .schedule(task_id, &on_timer_span, move |ruby| {
+                .schedule(task_id, &cloned_span, move |ruby| {
                     let _: Value = handler
                         .get(ruby)
                         .funcall(id!(ruby, "on_timer"), (context, timer))?;
@@ -242,7 +242,7 @@ impl FallibleHandler for RubyHandler {
 
             Ok(())
         }
-        .instrument(span_for_instrument)
+        .instrument(span)
         .await
     }
 }
