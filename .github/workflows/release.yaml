@@ -200,8 +200,8 @@ jobs:
                      apt-get update && \
                      apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
-                     rspec /tmp/spec"
+                     gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
+                     rspec /tmp/spec --tag ~tracing"
 
   test-linux-musl-x86_64:
     name: Test x86_64-linux-musl
@@ -265,8 +265,8 @@ jobs:
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
-                   gem install rspec async-rspec && \
-                   rspec /tmp/spec"
+                   gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
+                   rspec /tmp/spec --tag ~tracing"
 
   test-linux-aarch64:
     name: Test aarch64-linux
@@ -338,8 +338,8 @@ jobs:
                      apt-get update && \
                      apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
-                     rspec /tmp/spec"
+                     gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
+                     rspec /tmp/spec --tag ~tracing"
 
   test-linux-musl-aarch64:
     name: Test aarch64-linux-musl
@@ -409,8 +409,8 @@ jobs:
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
-                   gem install rspec async-rspec && \
-                   rspec /tmp/spec"
+                   gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
+                   rspec /tmp/spec --tag ~tracing"
 
   release:
     name: Release

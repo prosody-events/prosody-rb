@@ -16,7 +16,7 @@ use tracing::Span;
 /// This struct provides administrative operations for Kafka topics, such as
 /// creating and deleting topics. It wraps the Rust `ProsodyAdminClient` and
 /// uses the bridge mechanism to handle asynchronous operations from Ruby.
-#[magnus::wrap(class = "Prosody::AdminClient", frozen_shareable)]
+#[magnus::wrap(class = "Prosody::AdminClient")]
 pub struct AdminClient {
     /// The underlying Prosody admin client
     client: Arc<ProsodyAdminClient>,
