@@ -30,7 +30,7 @@ const NANOSECOND_ROUNDING_THRESHOLD: u32 = 500_000_000;
 /// control capabilities related to the processing of a Kafka message.
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-#[magnus::wrap(class = "Prosody::Context", frozen_shareable)]
+#[magnus::wrap(class = "Prosody::Context")]
 pub struct Context {
     /// The underlying Prosody message context.
     ///

@@ -36,7 +36,7 @@ mod config;
 /// providing methods for sending messages to Kafka topics and subscribing to
 /// events with Ruby handlers.
 #[derive(Debug)]
-#[magnus::wrap(class = "Prosody::Client", frozen_shareable)]
+#[magnus::wrap(class = "Prosody::Client")]
 pub struct Client {
     /// The underlying Prosody client
     inner: Arc<HighLevelClient<RubyHandler>>,
