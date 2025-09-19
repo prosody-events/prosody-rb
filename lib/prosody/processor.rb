@@ -209,20 +209,22 @@ module Prosody
       task_block = command.block
 
       # Extract parent context from the incoming carrier for distributed tracing
-      parent_ctx = OpenTelemetry.propagation.extract(
-        carrier,
-        getter: OpenTelemetry::Context::Propagation.text_map_getter
-      )
+
+      parent_ctx = OpenTelemetry.propagation.extract(carrier)
 
       # Execute within the extracted OpenTelemetry context
       OpenTelemetry::Context.with_current(parent_ctx) do
-        @tracer.in_span("ruby-receive", kind: :consumer) do |span, _|
+        # Create execute span as child of the extracted context
+        execute_span = @tracer.start_span("async_dispatch", kind: :consumer)
+        OpenTelemetry::Trace.with_span(execute_span) do
           @logger.debug("Executing task #{task_id}")
 
           barrier.async do
-            start_cancellation_watcher(task_id, token, callback, span)
-            start_worker(task_id, token, task_block, callback, span)
+            start_cancellation_watcher(task_id, token, callback, execute_span)
+            start_worker(task_id, token, task_block, callback, execute_span)
           end
+        ensure
+          execute_span.finish
         end
       end
     end
@@ -239,16 +241,21 @@ module Prosody
     def start_cancellation_watcher(task_id, token, callback, span)
       Async do |task|
         task.annotate("Cancellation watcher for task #{task_id}")
-        begin
-          token.wait
 
-          if callback.call(false, RuntimeError.new("Task cancelled"))
-            @logger.debug("Cancellation received for task #{task_id}")
+        # Ensure the span context is active for cancellation operations
+        # This maintains the OpenTelemetry context across the fiber boundary
+        OpenTelemetry::Trace.with_span(span) do
+          begin
+            token.wait
+
+            if callback.call(false, RuntimeError.new("Task cancelled"))
+              @logger.debug("Cancellation received for task #{task_id}")
+            end
+          rescue => e
+            @logger.debug("Cancellation watcher error: #{e.message}")
+            span.record_exception(e)
+            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
           end
-        rescue => e
-          @logger.debug("Cancellation watcher error: #{e.message}")
-          span.record_exception(e)
-          span.status = OpenTelemetry::Trace::Status.error(e.to_s)
         end
       end
     end
@@ -266,20 +273,25 @@ module Prosody
     def start_worker(task_id, token, task_block, callback, span)
       Async do |task|
         task.annotate("Worker for task #{task_id}")
-        begin
-          result = task_block.call
-          if callback.call(true, result)
-            @logger.debug("Task #{task_id} completed successfully")
+
+        # Ensure the span context is active for the user's task execution
+        # This maintains the OpenTelemetry context across the fiber boundary
+        OpenTelemetry::Trace.with_span(span) do
+          begin
+            result = task_block.call
+            if callback.call(true, result)
+              @logger.debug("Task #{task_id} completed successfully")
+            end
+          rescue => e
+            if callback.call(false, e)
+              @logger.error("Error executing task #{task_id}: #{e.message}")
+              span.record_exception(e)
+              span.status = OpenTelemetry::Trace::Status.error(e.to_s)
+            end
+          ensure
+            # Always cancel the token to notify the cancellation watcher
+            token.cancel
           end
-        rescue => e
-          if callback.call(false, e)
-            @logger.error("Error executing task #{task_id}: #{e.message}")
-            span.record_exception(e)
-            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-          end
-        ensure
-          # Always cancel the token to notify the cancellation watcher
-          token.cancel
         end
       end
     end
