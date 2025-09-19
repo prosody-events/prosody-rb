@@ -15,7 +15,7 @@ use prosody::timers::Trigger;
 /// execution time, and tracing span information.
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-#[magnus::wrap(class = "Prosody::Timer", free_immediately, frozen_shareable, size)]
+#[magnus::wrap(class = "Prosody::Timer", frozen_shareable)]
 pub struct Timer {
     /// The wrapped Prosody timer trigger
     #[educe(Debug(ignore))]

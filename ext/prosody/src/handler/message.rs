@@ -17,7 +17,7 @@ use serde_magnus::serialize;
 /// partition, offset, key, timestamp, and payload.
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-#[magnus::wrap(class = "Prosody::Message", free_immediately, frozen_shareable, size)]
+#[magnus::wrap(class = "Prosody::Message", frozen_shareable)]
 pub struct Message {
     /// The wrapped Prosody consumer message
     #[educe(Debug(ignore))]
