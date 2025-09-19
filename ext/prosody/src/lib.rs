@@ -25,6 +25,7 @@ mod gvl;
 mod handler;
 mod logging;
 mod scheduler;
+mod tracing_util;
 mod util;
 
 /// Buffer size for the communication channel between Ruby and Rust.
