@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/cincpro/prosody-rb/compare/v1.1.0...v1.1.1) (2025-09-19)
+
+
+### Bug Fixes
+
+* remove unsafe usages of frozen sharable and fix tests ([#30](https://github.com/cincpro/prosody-rb/issues/30)) ([84ed9b1](https://github.com/cincpro/prosody-rb/commit/84ed9b16437bcc4ae688acb0a4e77bc620d7a9c7))
+
 ## [1.1.0](https://github.com/cincpro/prosody-rb/compare/v1.0.6...v1.1.0) (2025-09-19)
 
 
