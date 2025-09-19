@@ -5,16 +5,16 @@
 //! information from Kafka messages and schedule timer events.
 
 use crate::bridge::Bridge;
+use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
 use futures::TryStreamExt;
 use magnus::exception::{arg_error, runtime_error};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, RClass, RHash, Ruby, Value, method};
-use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
+use magnus::{Error, Module, RClass, Ruby, Value, method};
+use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::datetime::CompactDateTime;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info_span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -363,39 +363,6 @@ fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDate
     };
 
     Ok(CompactDateTime::from(final_seconds))
-}
-
-/// Extracts OpenTelemetry context from Ruby's current tracing environment.
-///
-/// This function follows the same pattern as the Client's send method to
-/// extract the current OpenTelemetry context from Ruby and convert it to a Rust
-/// context.
-///
-/// # Arguments
-///
-/// * `ruby` - Reference to the Ruby VM
-/// * `propagator` - The OpenTelemetry propagator to use for context extraction
-///
-/// # Returns
-///
-/// The extracted OpenTelemetry context.
-///
-/// # Errors
-///
-/// Returns an error if OpenTelemetry context extraction fails.
-fn extract_opentelemetry_context(
-    ruby: &Ruby,
-    propagator: &TextMapCompositePropagator,
-) -> Result<opentelemetry::Context, Error> {
-    let carrier = RHash::new();
-    let otel_class: magnus::RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
-    let propagator_obj: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
-    let _: Value = propagator_obj.funcall(id!(ruby, "inject"), (carrier,))?;
-
-    let carrier: HashMap<String, String> = carrier.to_hash_map()?;
-    let context = propagator.extract(&carrier);
-
-    Ok(context)
 }
 
 /// Converts a `CompactDateTime` to a Ruby Time object.

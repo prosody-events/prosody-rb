@@ -13,19 +13,16 @@
 use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
+use crate::tracing_util::extract_opentelemetry_context;
 use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
 use magnus::value::ReprValue;
-use magnus::{
-    Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value, function, method,
-};
-use opentelemetry::Context;
-use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
+use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
+use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
 use prosody::high_level::state::ConsumerState;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{Span, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -170,7 +167,7 @@ impl Client {
         let _guard = RUNTIME.enter();
         let client = this.inner.clone();
         let value = deserialize(payload)?;
-        let context = extract_context(ruby, this)?;
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
 
         // Create span for tracing and set parent context
         let span = info_span!("ruby-send", %topic, %key);
@@ -303,18 +300,6 @@ impl Client {
     fn source_system(this: &Self) -> &str {
         this.inner.source_system()
     }
-}
-
-fn extract_context(ruby: &Ruby, this: &Client) -> Result<Context, Error> {
-    // Extract OpenTelemetry context from Ruby for distributed tracing
-    let carrier = RHash::new();
-    let otel_class: RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
-    let propagator: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
-    let _: Value = propagator.funcall(id!(ruby, "inject"), (carrier,))?;
-
-    let carrier: HashMap<String, String> = carrier.to_hash_map()?;
-    let context = this.propagator.extract(&carrier);
-    Ok(context)
 }
 
 /// Initializes the client module in Ruby.
