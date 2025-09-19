@@ -200,7 +200,7 @@ jobs:
                      apt-get update && \
                      apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
+                     gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
                      rspec /tmp/spec"
 
   test-linux-musl-x86_64:
@@ -265,7 +265,7 @@ jobs:
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
-                   gem install rspec async-rspec && \
+                   gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
                    rspec /tmp/spec"
 
   test-linux-aarch64:
@@ -338,7 +338,7 @@ jobs:
                      apt-get update && \
                      apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
-                     gem install rspec async-rspec && \
+                     gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
                      rspec /tmp/spec"
 
   test-linux-musl-aarch64:
@@ -409,7 +409,7 @@ jobs:
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
-                   gem install rspec async-rspec && \
+                   gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
                    rspec /tmp/spec"
 
   release:
