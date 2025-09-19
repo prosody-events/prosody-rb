@@ -1,7 +1,7 @@
-/// OpenTelemetry tracing utilities for Ruby-Rust integration.
-///
-/// This module provides shared utilities for extracting and propagating
-/// OpenTelemetry context across the Ruby-Rust boundary for distributed tracing.
+//! OpenTelemetry tracing utilities for Ruby-Rust integration.
+//!
+//! This module provides shared utilities for extracting and propagating
+//! OpenTelemetry context across the Ruby-Rust boundary for distributed tracing.
 use crate::id;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, RHash, RModule, Ruby, Value};
