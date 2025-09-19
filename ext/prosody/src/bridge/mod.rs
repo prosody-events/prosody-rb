@@ -49,12 +49,7 @@ type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
 ///
 /// Uses `AtomicTake` to ensure the value can only be extracted once.
 #[derive(Debug)]
-#[magnus::wrap(
-    class = "Prosody::DynamicResult",
-    free_immediately,
-    frozen_shareable,
-    size
-)]
+#[magnus::wrap(class = "Prosody::DynamicResult", free_immediately)]
 struct DynamicResult(AtomicTake<Box<dyn Any + Send>>);
 
 /// Bridge between Ruby and Rust for async operations.
