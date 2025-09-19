@@ -18,6 +18,7 @@ use magnus::value::ReprValue;
 use magnus::{
     Error, Module, Object, RClass, RHash, RModule, Ruby, StaticSymbol, Value, function, method,
 };
+use opentelemetry::Context;
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
@@ -26,7 +27,7 @@ use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{Instrument, info_span};
+use tracing::{Span, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
@@ -38,7 +39,7 @@ mod config;
 /// providing methods for sending messages to Kafka topics and subscribing to
 /// events with Ruby handlers.
 #[derive(Debug)]
-#[magnus::wrap(class = "Prosody::Client", free_immediately, frozen_shareable, size)]
+#[magnus::wrap(class = "Prosody::Client", frozen_shareable)]
 pub struct Client {
     /// The underlying Prosody client
     inner: Arc<HighLevelClient<RubyHandler>>,
@@ -128,13 +129,17 @@ impl Client {
     /// A Ruby symbol representing the current consumer state.
     pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
         let inner = this.inner.clone();
-        let state = this.bridge.wait_for(ruby, async move {
-            match *inner.consumer_state().await {
-                ConsumerState::Unconfigured => "unconfigured",
-                ConsumerState::Configured(_) => "configured",
-                ConsumerState::Running { .. } => "running",
-            }
-        })?;
+        let state = this.bridge.wait_for(
+            ruby,
+            async move {
+                match *inner.consumer_state().await {
+                    ConsumerState::Unconfigured => "unconfigured",
+                    ConsumerState::Configured(_) => "configured",
+                    ConsumerState::Running { .. } => "running",
+                }
+            },
+            Span::current(),
+        )?;
 
         Ok(ruby.sym_new(state))
     }
@@ -165,15 +170,7 @@ impl Client {
         let _guard = RUNTIME.enter();
         let client = this.inner.clone();
         let value = deserialize(payload)?;
-
-        // Extract OpenTelemetry context from Ruby for distributed tracing
-        let carrier = RHash::new();
-        let otel_class: RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
-        let propagator: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
-        let _: Value = propagator.funcall(id!(ruby, "inject"), (carrier,))?;
-
-        let carrier: HashMap<String, String> = carrier.to_hash_map()?;
-        let context = this.propagator.extract(&carrier);
+        let context = extract_context(ruby, this)?;
 
         // Create span for tracing and set parent context
         let span = info_span!("ruby-send", %topic, %key);
@@ -181,12 +178,11 @@ impl Client {
 
         // Wait for the async send operation to complete
         this.bridge
-            .wait_for(ruby, async move {
-                client
-                    .send(topic.as_str().into(), &key, &value)
-                    .instrument(span)
-                    .await
-            })?
+            .wait_for(
+                ruby,
+                async move { client.send(topic.as_str().into(), &key, &value).await },
+                span,
+            )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
@@ -212,7 +208,11 @@ impl Client {
         let inner = this.inner.clone();
 
         this.bridge
-            .wait_for(ruby, async move { inner.subscribe(wrapper).await })?
+            .wait_for(
+                ruby,
+                async move { inner.subscribe(wrapper).await },
+                Span::current(),
+            )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(())
@@ -233,8 +233,11 @@ impl Client {
     /// The number of assigned partitions as a u32.
     pub fn assigned_partitions(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
         let inner = this.inner.clone();
-        this.bridge
-            .wait_for(ruby, async move { inner.assigned_partition_count().await })
+        this.bridge.wait_for(
+            ruby,
+            async move { inner.assigned_partition_count().await },
+            Span::current(),
+        )
     }
 
     /// Checks if the consumer is stalled.
@@ -252,8 +255,11 @@ impl Client {
     /// `true` if the consumer is stalled, `false` otherwise.
     pub fn is_stalled(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
         let inner = this.inner.clone();
-        this.bridge
-            .wait_for(ruby, async move { inner.is_stalled().await })
+        this.bridge.wait_for(
+            ruby,
+            async move { inner.is_stalled().await },
+            Span::current(),
+        )
     }
 
     /// Unsubscribes from all topics, stopping message processing.
@@ -274,7 +280,11 @@ impl Client {
         let client = this.inner.clone();
 
         this.bridge
-            .wait_for(ruby, async move { client.unsubscribe().await })?
+            .wait_for(
+                ruby,
+                async move { client.unsubscribe().await },
+                Span::current(),
+            )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
@@ -293,6 +303,18 @@ impl Client {
     fn source_system(this: &Self) -> &str {
         this.inner.source_system()
     }
+}
+
+fn extract_context(ruby: &Ruby, this: &Client) -> Result<Context, Error> {
+    // Extract OpenTelemetry context from Ruby for distributed tracing
+    let carrier = RHash::new();
+    let otel_class: RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
+    let propagator: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
+    let _: Value = propagator.funcall(id!(ruby, "inject"), (carrier,))?;
+
+    let carrier: HashMap<String, String> = carrier.to_hash_map()?;
+    let context = this.propagator.extract(&carrier);
+    Ok(context)
 }
 
 /// Initializes the client module in Ruby.

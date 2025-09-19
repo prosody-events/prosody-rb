@@ -9,18 +9,14 @@ use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::admin::ProsodyAdminClient;
 use std::sync::Arc;
+use tracing::Span;
 
 /// Ruby wrapper for the Prosody admin client.
 ///
 /// This struct provides administrative operations for Kafka topics, such as
 /// creating and deleting topics. It wraps the Rust `ProsodyAdminClient` and
 /// uses the bridge mechanism to handle asynchronous operations from Ruby.
-#[magnus::wrap(
-    class = "Prosody::AdminClient",
-    free_immediately,
-    frozen_shareable,
-    size
-)]
+#[magnus::wrap(class = "Prosody::AdminClient", frozen_shareable)]
 pub struct AdminClient {
     /// The underlying Prosody admin client
     client: Arc<ProsodyAdminClient>,
@@ -89,7 +85,7 @@ impl AdminClient {
         };
 
         this.bridge
-            .wait_for(ruby, future)?
+            .wait_for(ruby, future, Span::current())?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
     }
 
@@ -111,7 +107,7 @@ impl AdminClient {
         let future = async move { client.delete_topic(&name).await };
 
         this.bridge
-            .wait_for(ruby, future)?
+            .wait_for(ruby, future, Span::current())?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
     }
 }
