@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/cincpro/prosody-rb/compare/v1.0.6...v1.1.0) (2025-09-19)
+
+
+### Features
+
+* expose source system ([#27](https://github.com/cincpro/prosody-rb/issues/27)) ([e73f229](https://github.com/cincpro/prosody-rb/commit/e73f2297cc9941d0674cbce85e0dfc7a93ce43f0))
+
+
+### Bug Fixes
+
+* propagate trace context through timer methods ([#29](https://github.com/cincpro/prosody-rb/issues/29)) ([48f0b83](https://github.com/cincpro/prosody-rb/commit/48f0b838c8674c59b43eb4d75a58c1743873e198))
+
 ## [1.0.6](https://github.com/cincpro/prosody-rb/compare/v1.0.5...v1.0.6) (2025-09-12)
 
 
