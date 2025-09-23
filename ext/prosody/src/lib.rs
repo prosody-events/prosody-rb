@@ -8,10 +8,13 @@
 //! provides client functionality for interacting with message brokers,
 //! manages message handling, and includes logging and scheduling capabilities.
 
-#![allow(clippy::multiple_crate_versions, clippy::print_stderr, missing_docs)]
+// Temporarily removing allows to see what lints we have
+
+#![allow(clippy::multiple_crate_versions, missing_docs)]
 
 use crate::bridge::Bridge;
 use crate::logging::Logger;
+use crate::util::ensure_runtime_context;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use prosody::tracing::initialize_tracing;
@@ -74,7 +77,7 @@ pub static ROOT_MOD: Lazy<RModule> = Lazy::new(|ruby| {
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
     // Enter the Tokio runtime context to ensure async operations work properly
-    let _guard = RUNTIME.enter();
+    let _guard = ensure_runtime_context();
 
     // Initialize the different components of the extension
     admin::init(ruby)?;
@@ -86,6 +89,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
 
     // Initialize tracing for observability
+    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
     TRACING_INIT.get_or_init(|| {
         let maybe_logger = Logger::new(ruby, bridge.clone())
             .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
