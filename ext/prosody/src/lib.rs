@@ -10,6 +10,8 @@
 
 // Temporarily removing allows to see what lints we have
 
+#![allow(clippy::multiple_crate_versions, missing_docs)]
+
 use crate::bridge::Bridge;
 use crate::logging::Logger;
 use crate::util::ensure_runtime_context;
@@ -87,6 +89,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
 
     // Initialize tracing for observability
+    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
     TRACING_INIT.get_or_init(|| {
         let maybe_logger = Logger::new(ruby, bridge.clone())
             .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
