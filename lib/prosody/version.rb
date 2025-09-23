@@ -6,5 +6,5 @@ module Prosody
   # This version number follows semantic versioning and is used by the
   # gem system to identify the library version. It should be updated
   # according to semver guidelines when making releases.
-  VERSION = '1.1.1'
+  VERSION = '1.1.2'
 end
