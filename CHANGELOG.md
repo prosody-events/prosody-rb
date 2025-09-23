@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/cincpro/prosody-rb/compare/v1.1.1...v1.1.2) (2025-09-23)
+
+
+### Bug Fixes
+
+* only enter runtime if there is no current handle ([#32](https://github.com/cincpro/prosody-rb/issues/32)) ([4f88a0d](https://github.com/cincpro/prosody-rb/commit/4f88a0dd007b203d7ce101c4f4b0bc0ecc33dc0c))
+
 ## [1.1.1](https://github.com/cincpro/prosody-rb/compare/v1.1.0...v1.1.1) (2025-09-19)
 
 
