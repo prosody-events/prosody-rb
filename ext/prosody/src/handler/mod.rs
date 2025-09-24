@@ -111,7 +111,7 @@ impl FallibleHandler for RubyHandler {
         // Create a new span for the on_message operation as a child of the message's
         // span
         let span = info_span!(
-            parent: message.span().as_ref(),
+            parent: message.span(),
             "on_message",
             topic = %message.topic(),
             partition = message.partition(),
@@ -185,7 +185,7 @@ impl FallibleHandler for RubyHandler {
     {
         // Create a new span for the on_timer operation as a child of the trigger's span
         let span = info_span!(
-            parent: trigger.span().as_ref(),
+            parent: trigger.span(),
             "on_timer",
             key = %trigger.key,
             time = %trigger.time
