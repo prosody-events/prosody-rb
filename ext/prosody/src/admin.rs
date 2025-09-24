@@ -7,7 +7,7 @@ use crate::bridge::Bridge;
 use crate::{BRIDGE, ROOT_MOD, id};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, Ruby, Value, function, method};
-use prosody::admin::ProsodyAdminClient;
+use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
 use std::sync::Arc;
 use tracing::Span;
 
@@ -39,8 +39,11 @@ impl AdminClient {
     /// - The bridge is not initialized
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(ruby: &Ruby, bootstrap_servers: Vec<String>) -> Result<Self, Error> {
+        let admin_config = AdminConfiguration::new(bootstrap_servers)
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+
         let client = Arc::new(
-            ProsodyAdminClient::new(&bootstrap_servers)
+            ProsodyAdminClient::new(&admin_config)
                 .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?,
         );
 
@@ -77,12 +80,15 @@ impl AdminClient {
         partition_count: u16,
         replication_factor: u16,
     ) -> Result<(), Error> {
+        let topic_config = TopicConfiguration::builder()
+            .name(name)
+            .partition_count(partition_count)
+            .replication_factor(replication_factor)
+            .build()
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+
         let client = this.client.clone();
-        let future = async move {
-            client
-                .create_topic(&name, partition_count, replication_factor)
-                .await
-        };
+        let future = async move { client.create_topic(&topic_config).await };
 
         this.bridge
             .wait_for(ruby, future, Span::current())?
