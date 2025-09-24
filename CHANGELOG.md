@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/cincpro/prosody-rb/compare/v1.1.2...v1.1.3) (2025-09-24)
+
+
+### Bug Fixes
+
+* eagerly return semaphore permits ([#34](https://github.com/cincpro/prosody-rb/issues/34)) ([fa99a01](https://github.com/cincpro/prosody-rb/commit/fa99a013f4d91f14989c02c6075a95d337651484))
+
 ## [1.1.2](https://github.com/cincpro/prosody-rb/compare/v1.1.1...v1.1.2) (2025-09-23)
 
 
