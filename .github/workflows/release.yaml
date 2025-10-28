@@ -162,7 +162,7 @@ jobs:
             -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnami/kafka:3.7
+            docker.io/bitnamilegacy/kafka:3.7
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -228,7 +228,7 @@ jobs:
             -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnami/kafka:3.7
+            docker.io/bitnamilegacy/kafka:3.7
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -300,7 +300,7 @@ jobs:
             -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnami/kafka:3.7
+            docker.io/bitnamilegacy/kafka:3.7
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -372,7 +372,7 @@ jobs:
             -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
             -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
             -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnami/kafka:3.7
+            docker.io/bitnamilegacy/kafka:3.7
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
