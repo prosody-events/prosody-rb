@@ -66,7 +66,7 @@ impl Client {
     fn new(ruby: &Ruby, config: Value) -> Result<Self, Error> {
         ruby.require("opentelemetry-api")?;
 
-        let _guard = ensure_runtime_context();
+        let _guard = ensure_runtime_context(ruby);
 
         // Check if config is already a Configuration object, if not create one
         let config_class: RClass = ruby
@@ -165,7 +165,7 @@ impl Client {
         key: String,
         payload: Value,
     ) -> Result<(), Error> {
-        let _guard = ensure_runtime_context();
+        let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
         let value = deserialize(payload)?;
         let context = extract_opentelemetry_context(ruby, &this.propagator)?;
@@ -201,7 +201,7 @@ impl Client {
     /// - The handler cannot be wrapped
     /// - The client cannot subscribe with the handler
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
-        let _guard = ensure_runtime_context();
+        let _guard = ensure_runtime_context(ruby);
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
         let inner = this.inner.clone();
 
@@ -274,7 +274,7 @@ impl Client {
     ///
     /// Returns an error if the unsubscribe operation fails.
     fn unsubscribe(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        let _guard = ensure_runtime_context();
+        let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
 
         this.bridge

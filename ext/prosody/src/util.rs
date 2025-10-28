@@ -4,9 +4,12 @@
 //! Rust and Ruby, particularly focusing on thread-safety and efficient symbol
 //! handling.
 
-use crate::RUNTIME;
+use crate::bridge::Bridge;
+use crate::logging::Logger;
+use crate::{BRIDGE, BRIDGE_BUFFER_SIZE, RUNTIME, TRACING_INIT};
 use magnus::value::BoxValue;
 use magnus::{Ruby, Value};
+use prosody::tracing::initialize_tracing;
 use tokio::runtime::{EnterGuard, Handle};
 
 /// Creates a static Ruby identifier (symbol) for efficient reuse.
@@ -79,17 +82,44 @@ impl ThreadSafeValue {
 /// contexts that may already have an active runtime (such as from Ruby async
 /// processor threads).
 ///
+/// When entering a new runtime context, this function also initializes the
+/// bridge and tracing subsystems. If already in a runtime context, these
+/// subsystems are assumed to be initialized and initialization is skipped.
+///
+/// # Arguments
+///
+/// * `ruby` - Reference to the Ruby VM instance
+///
 /// # Returns
 ///
-/// An `Option<EnterGuard>` that holds the runtime guard if one was created,
-/// or `None` if we were already in a runtime context.
+/// - `Some(EnterGuard)` if a new runtime context was entered. The guard must be
+///   held for the duration of async operations. Bridge and tracing are
+///   initialized before returning.
+/// - `None` if already in a runtime context. No initialization is performed.
 ///
 /// # Examples
 ///
 /// ```rust
-/// let _guard = ensure_runtime_context();
+/// let _guard = ensure_runtime_context(ruby);
 /// // Now safe to perform async operations regardless of calling context
 /// ```
-pub fn ensure_runtime_context() -> Option<EnterGuard<'static>> {
-    Handle::try_current().is_err().then(|| RUNTIME.enter())
+pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
+    let guard = Handle::try_current().is_err().then(|| RUNTIME.enter())?;
+
+    // Set up the bridge for Ruby-Rust communication
+    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
+
+    // Initialize tracing for observability
+    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
+    TRACING_INIT.get_or_init(|| {
+        let maybe_logger = Logger::new(ruby, bridge.clone())
+            .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
+            .ok();
+
+        if let Err(error) = initialize_tracing(maybe_logger) {
+            eprintln!("failed to initialize tracing: {error:#}");
+        }
+    });
+
+    Some(guard)
 }
