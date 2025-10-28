@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/cincpro/prosody-rb/compare/v1.1.3...v1.1.4) (2025-10-28)
+
+
+### Bug Fixes
+
+* lazily load all module state when it’s used ([#36](https://github.com/cincpro/prosody-rb/issues/36)) ([cb1d396](https://github.com/cincpro/prosody-rb/commit/cb1d3967ab77e2a89b020f51ee18e168abc091b4))
+
 ## [1.1.3](https://github.com/cincpro/prosody-rb/compare/v1.1.2...v1.1.3) (2025-09-24)
 
 
