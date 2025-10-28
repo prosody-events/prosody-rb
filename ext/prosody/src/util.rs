@@ -104,7 +104,7 @@ impl ThreadSafeValue {
 /// // Now safe to perform async operations regardless of calling context
 /// ```
 pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
-    let guard = Handle::try_current().is_err().then(|| RUNTIME.enter())?;
+    let guard = Handle::try_current().is_err().then(|| RUNTIME.enter());
 
     // Set up the bridge for Ruby-Rust communication
     let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
@@ -121,5 +121,5 @@ pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
         }
     });
 
-    Some(guard)
+    guard
 }
