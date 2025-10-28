@@ -13,11 +13,8 @@
 #![allow(clippy::multiple_crate_versions, missing_docs)]
 
 use crate::bridge::Bridge;
-use crate::logging::Logger;
-use crate::util::ensure_runtime_context;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
-use prosody::tracing::initialize_tracing;
 use std::sync::{LazyLock, OnceLock};
 use tokio::runtime::Runtime;
 
@@ -63,8 +60,7 @@ pub static ROOT_MOD: Lazy<RModule> = Lazy::new(|ruby| {
 
 /// Initializes the Prosody Ruby extension.
 ///
-/// This function sets up the bridge between Ruby and Rust, initializes
-/// the various components of the extension, and configures tracing/logging.
+/// This function initializes the various components of the extension.
 ///
 /// # Arguments
 ///
@@ -76,29 +72,10 @@ pub static ROOT_MOD: Lazy<RModule> = Lazy::new(|ruby| {
 /// defining Ruby classes or configuring components.
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
-    // Enter the Tokio runtime context to ensure async operations work properly
-    let _guard = ensure_runtime_context();
-
-    // Initialize the different components of the extension
     admin::init(ruby)?;
     bridge::init(ruby)?;
     handler::init(ruby)?;
     client::init(ruby)?;
-
-    // Set up the bridge for Ruby-Rust communication
-    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
-
-    // Initialize tracing for observability
-    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
-    TRACING_INIT.get_or_init(|| {
-        let maybe_logger = Logger::new(ruby, bridge.clone())
-            .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
-            .ok();
-
-        if let Err(error) = initialize_tracing(maybe_logger) {
-            eprintln!("failed to initialize tracing: {error:#}");
-        }
-    });
 
     Ok(())
 }

@@ -4,9 +4,12 @@
 //! Rust and Ruby, particularly focusing on thread-safety and efficient symbol
 //! handling.
 
-use crate::RUNTIME;
+use crate::bridge::Bridge;
+use crate::logging::Logger;
+use crate::{BRIDGE, BRIDGE_BUFFER_SIZE, RUNTIME, TRACING_INIT};
 use magnus::value::BoxValue;
 use magnus::{Ruby, Value};
+use prosody::tracing::initialize_tracing;
 use tokio::runtime::{EnterGuard, Handle};
 
 /// Creates a static Ruby identifier (symbol) for efficient reuse.
@@ -71,25 +74,44 @@ impl ThreadSafeValue {
     }
 }
 
-/// Ensures we have a Tokio runtime context, entering one only if necessary.
+/// Ensures a Tokio runtime context exists, entering one if necessary.
 ///
-/// This function prevents `EnterGuard` ordering violations by only creating a
-/// new runtime guard when we're not already in a runtime context. This is
-/// essential for preventing panics when async operations are called from
-/// contexts that may already have an active runtime (such as from Ruby async
-/// processor threads).
+/// Only creates a runtime guard when not already in a runtime context, avoiding
+/// `EnterGuard` ordering violations that panic.
+///
+/// Lazily initializes the bridge and tracing subsystems on first call. This
+/// deferred initialization is critical for fork safety—each process gets its
+/// own bridge channels and tracing state rather than inheriting stale handles
+/// from the parent.
 ///
 /// # Returns
 ///
-/// An `Option<EnterGuard>` that holds the runtime guard if one was created,
-/// or `None` if we were already in a runtime context.
+/// `Some(EnterGuard)` if we entered a new runtime (hold the guard), or `None`
+/// if already in a runtime context.
 ///
 /// # Examples
 ///
 /// ```rust
-/// let _guard = ensure_runtime_context();
-/// // Now safe to perform async operations regardless of calling context
+/// let _guard = ensure_runtime_context(ruby);
+/// // Safe to perform async operations
 /// ```
-pub fn ensure_runtime_context() -> Option<EnterGuard<'static>> {
-    Handle::try_current().is_err().then(|| RUNTIME.enter())
+pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
+    let guard = Handle::try_current().is_err().then(|| RUNTIME.enter());
+
+    // Set up the bridge for Ruby-Rust communication
+    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
+
+    // Initialize tracing for observability
+    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
+    TRACING_INIT.get_or_init(|| {
+        let maybe_logger = Logger::new(ruby, bridge.clone())
+            .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
+            .ok();
+
+        if let Err(error) = initialize_tracing(maybe_logger) {
+            eprintln!("failed to initialize tracing: {error:#}");
+        }
+    });
+
+    guard
 }
