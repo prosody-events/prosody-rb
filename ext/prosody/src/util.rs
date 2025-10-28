@@ -74,34 +74,26 @@ impl ThreadSafeValue {
     }
 }
 
-/// Ensures we have a Tokio runtime context, entering one only if necessary.
+/// Ensures a Tokio runtime context exists, entering one if necessary.
 ///
-/// This function prevents `EnterGuard` ordering violations by only creating a
-/// new runtime guard when we're not already in a runtime context. This is
-/// essential for preventing panics when async operations are called from
-/// contexts that may already have an active runtime (such as from Ruby async
-/// processor threads).
+/// Only creates a runtime guard when not already in a runtime context, avoiding
+/// `EnterGuard` ordering violations that panic.
 ///
-/// When entering a new runtime context, this function also initializes the
-/// bridge and tracing subsystems. If already in a runtime context, these
-/// subsystems are assumed to be initialized and initialization is skipped.
-///
-/// # Arguments
-///
-/// * `ruby` - Reference to the Ruby VM instance
+/// Lazily initializes the bridge and tracing subsystems on first call. This
+/// deferred initialization is critical for fork safety—each process gets its
+/// own bridge channels and tracing state rather than inheriting stale handles
+/// from the parent.
 ///
 /// # Returns
 ///
-/// - `Some(EnterGuard)` if a new runtime context was entered. The guard must be
-///   held for the duration of async operations. Bridge and tracing are
-///   initialized before returning.
-/// - `None` if already in a runtime context. No initialization is performed.
+/// `Some(EnterGuard)` if we entered a new runtime (hold the guard), or `None`
+/// if already in a runtime context.
 ///
 /// # Examples
 ///
 /// ```rust
 /// let _guard = ensure_runtime_context(ruby);
-/// // Now safe to perform async operations regardless of calling context
+/// // Safe to perform async operations
 /// ```
 pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
     let guard = Handle::try_current().is_err().then(|| RUNTIME.enter());
