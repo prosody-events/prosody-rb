@@ -13,7 +13,7 @@ use educe::Educe;
 use magnus::block::Proc;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, TryConvert, Value, kwargs};
-use prosody::consumer::failure::{ClassifyError, ErrorCategory};
+use prosody::consumer::middleware::{ClassifyError, ErrorCategory};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::debug;

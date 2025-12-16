@@ -14,9 +14,17 @@ module Prosody
   class Context
     # This class is instantiated internally by the client.
 
-    # Checks if shutdown has been requested.
-    # @return [bool] true if shutdown has been requested, false otherwise
-    def should_shutdown?: () -> bool
+    # Checks if cancellation has been requested.
+    # Cancellation includes both message-level cancellation (e.g., timeout)
+    # and partition shutdown.
+    # @return [bool] true if cancellation has been requested, false otherwise
+    def should_cancel?: () -> bool
+
+    # Blocks until cancellation is signaled.
+    # Cancellation includes both message-level cancellation (e.g., timeout)
+    # and partition shutdown.
+    # @return [void]
+    def on_cancel: () -> void
 
     # Schedules a timer to fire at the specified time.
     # @param time [Time] When the timer should fire

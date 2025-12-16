@@ -25,7 +25,7 @@ use prosody::high_level::state::ConsumerState;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::sync::Arc;
-use tracing::{Span, info_span};
+use tracing::{Span, error, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
@@ -78,7 +78,8 @@ impl Client {
             config_class.funcall(id!(ruby, "new"), (config,))?
         };
 
-        let native_config: NativeConfiguration = config_obj.funcall(id!(ruby, "to_hash"), ())?;
+        let config_hash: Value = config_obj.funcall(id!(ruby, "to_hash"), ())?;
+        let native_config = NativeConfiguration::from_value(ruby, config_hash)?;
         let config_ref = &native_config;
 
         let mode: Mode = config_ref
@@ -88,8 +89,6 @@ impl Client {
         let client = HighLevelClient::new(
             mode,
             &mut config_ref.into(),
-            &config_ref.into(),
-            &config_ref.into(),
             &config_ref.into(),
             &config_ref.into(),
         )
@@ -167,12 +166,14 @@ impl Client {
     ) -> Result<(), Error> {
         let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
-        let value = deserialize(payload)?;
+        let value = deserialize(ruby, payload)?;
         let context = extract_opentelemetry_context(ruby, &this.propagator)?;
 
         // Create span for tracing and set parent context
         let span = info_span!("ruby-send", %topic, %key);
-        span.set_parent(context);
+        if let Err(err) = span.set_parent(context) {
+            error!("failed to set parent span: {err:#}");
+        }
 
         // Wait for the async send operation to complete
         this.bridge
