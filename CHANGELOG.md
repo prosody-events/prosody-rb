@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/cincpro/prosody-rb/compare/v1.1.4...v2.0.0) (2025-12-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* add QoS middleware and rename shutdown to cancel ([#38](https://github.com/cincpro/prosody-rb/issues/38))
+
+### Features
+
+* add QoS middleware and rename shutdown to cancel ([#38](https://github.com/cincpro/prosody-rb/issues/38)) ([622df55](https://github.com/cincpro/prosody-rb/commit/622df5502a7785b218eb341750527267bc05409b))
+
 ## [1.1.4](https://github.com/cincpro/prosody-rb/compare/v1.1.3...v1.1.4) (2025-10-28)
 
 
