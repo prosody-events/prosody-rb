@@ -100,8 +100,8 @@ impl Message {
     /// # Errors
     ///
     /// Returns an error if payload deserialization fails.
-    fn payload(_ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-        serialize(this.inner.payload())
+    fn payload(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+        serialize(ruby, this.inner.payload())
     }
 }
 

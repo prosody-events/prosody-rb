@@ -21,12 +21,12 @@ use futures::pin_mut;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use prosody::consumer::Keyed;
 use prosody::consumer::event_context::EventContext;
-use prosody::consumer::failure::{ClassifyError, ErrorCategory, FallibleHandler};
 use prosody::consumer::message::ConsumerMessage;
+use prosody::consumer::middleware::{ClassifyError, ErrorCategory, FallibleHandler};
+use prosody::consumer::{DemandType, Keyed};
 use prosody::propagator::new_propagator;
-use prosody::timers::Trigger as ProsodyTrigger;
+use prosody::timers::{TimerType, Trigger as ProsodyTrigger};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
@@ -104,7 +104,12 @@ impl FallibleHandler for RubyHandler {
     /// - Scheduling the task
     /// - Communication with the Ruby runtime
     /// - The Ruby handler throws an exception
-    async fn on_message<C>(&self, context: C, message: ConsumerMessage) -> Result<(), Self::Error>
+    async fn on_message<C>(
+        &self,
+        context: C,
+        message: ConsumerMessage,
+        _demand_type: DemandType,
+    ) -> Result<(), Self::Error>
     where
         C: EventContext,
     {
@@ -119,9 +124,9 @@ impl FallibleHandler for RubyHandler {
             key = %message.key()
         );
 
-        // Get a future that completes when the consumer is shutdown
+        // Get a future that completes when cancellation is signaled
         let cloned_context = context.clone();
-        let shutdown_future = cloned_context.on_shutdown();
+        let cancel_future = cloned_context.on_cancel();
 
         // Clone the handler reference for use in the closure
         let handler = self.handler.clone();
@@ -166,8 +171,8 @@ impl FallibleHandler for RubyHandler {
                 result = &mut result_future => {
                     result?;
                 }
-                () = shutdown_future => {
-                    // If shutdown requested, cancel the task and wait for it to complete
+                () = cancel_future => {
+                    // If cancellation requested, cancel the task and wait for it to complete
                     task_handle.cancellation_token.cancel(&self.bridge).await?;
                     result_future.await?;
                 }
@@ -179,10 +184,20 @@ impl FallibleHandler for RubyHandler {
         .await
     }
 
-    async fn on_timer<C>(&self, context: C, trigger: ProsodyTrigger) -> Result<(), Self::Error>
+    async fn on_timer<C>(
+        &self,
+        context: C,
+        trigger: ProsodyTrigger,
+        _demand_type: DemandType,
+    ) -> Result<(), Self::Error>
     where
         C: EventContext,
     {
+        // Only process application timers; internal timers are handled by middleware
+        if trigger.timer_type != TimerType::Application {
+            return Ok(());
+        }
+
         // Create a new span for the on_timer operation as a child of the trigger's span
         let span = info_span!(
             parent: trigger.span(),
@@ -191,9 +206,9 @@ impl FallibleHandler for RubyHandler {
             time = %trigger.time
         );
 
-        // Get a future that completes when the consumer is shutdown
+        // Get a future that completes when cancellation is signaled
         let cloned_context = context.clone();
-        let shutdown_future = cloned_context.on_shutdown();
+        let cancel_future = cloned_context.on_cancel();
 
         // Clone the handler reference for use in the closure
         let handler = self.handler.clone();
@@ -233,8 +248,8 @@ impl FallibleHandler for RubyHandler {
                 result = &mut result_future => {
                     result?;
                 }
-                () = shutdown_future => {
-                    // If shutdown requested, cancel the task and wait for it to complete
+                () = cancel_future => {
+                    // If cancellation requested, cancel the task and wait for it to complete
                     task_handle.cancellation_token.cancel(&self.bridge).await?;
                     result_future.await?;
                 }
@@ -244,6 +259,14 @@ impl FallibleHandler for RubyHandler {
         }
         .instrument(span)
         .await
+    }
+
+    /// Shuts down the handler.
+    ///
+    /// This is a no-op for the Ruby handler since resources are managed
+    /// by the Ruby runtime through garbage collection.
+    async fn shutdown(self) {
+        // No cleanup required - Ruby handles resource cleanup via GC
     }
 }
 
