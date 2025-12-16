@@ -186,6 +186,71 @@ module Prosody
     # Accepts duration objects or numeric values (in seconds).
     config_param :cassandra_retention, converter: ->(v) { duration_converter(v) }
 
+    # Timer slab partitioning duration in seconds.
+    # Controls how timers are grouped for storage and retrieval.
+    config_param :slab_size, converter: ->(v) { duration_converter(v) }
+
+    # Scheduler configuration
+    #
+    # Target proportion of execution time for failure/retry task processing (0.0 to 1.0).
+    # Controls bandwidth allocation between Normal and Failure task classes.
+    config_param :scheduler_failure_weight, converter: ->(v) { Float(v) }
+
+    # Wait duration at which urgency boost reaches maximum intensity (in seconds).
+    config_param :scheduler_max_wait, converter: ->(v) { duration_converter(v) }
+
+    # Maximum urgency boost (in seconds of virtual time) for waiting tasks.
+    config_param :scheduler_wait_weight, converter: ->(v) { Float(v) }
+
+    # Cache capacity for tracking per-key virtual time in the scheduler.
+    config_param :scheduler_cache_size, converter: ->(v) { Integer(v) }
+
+    # Monopolization configuration
+    #
+    # Whether monopolization detection is enabled.
+    config_param :monopolization_enabled, converter: ->(v) { v.nil? ? nil : !!v }
+
+    # Threshold for monopolization detection (0.0 to 1.0).
+    config_param :monopolization_threshold, converter: ->(v) { Float(v) }
+
+    # Rolling window duration (in seconds) for monopolization detection.
+    config_param :monopolization_window, converter: ->(v) { duration_converter(v) }
+
+    # Cache size for tracking key execution intervals.
+    config_param :monopolization_cache_size, converter: ->(v) { Integer(v) }
+
+    # Defer configuration
+    #
+    # Whether deferral is enabled for new messages.
+    config_param :defer_enabled, converter: ->(v) { v.nil? ? nil : !!v }
+
+    # Base exponential backoff delay for deferred retries (in seconds).
+    config_param :defer_base, converter: ->(v) { duration_converter(v) }
+
+    # Maximum delay between deferred retries (in seconds).
+    config_param :defer_max_delay, converter: ->(v) { duration_converter(v) }
+
+    # Failure rate threshold for enabling deferral (0.0 to 1.0).
+    config_param :defer_failure_threshold, converter: ->(v) { Float(v) }
+
+    # Sliding window duration (in seconds) for failure rate tracking.
+    config_param :defer_failure_window, converter: ->(v) { duration_converter(v) }
+
+    # Cache size for defer middleware.
+    config_param :defer_cache_size, converter: ->(v) { Integer(v) }
+
+    # Timeout for Kafka seek operations (in seconds).
+    config_param :defer_seek_timeout, converter: ->(v) { duration_converter(v) }
+
+    # Messages to read sequentially before seeking.
+    config_param :defer_discard_threshold, converter: ->(v) { Integer(v) }
+
+    # Timeout configuration
+    #
+    # Fixed timeout duration for handler execution (in seconds).
+    # If unset, defaults to 80% of stall_threshold.
+    config_param :timeout, converter: ->(v) { duration_converter(v) }
+
     # Operation mode of the client.
     #
     # Valid values:

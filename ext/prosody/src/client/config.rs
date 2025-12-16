@@ -6,13 +6,18 @@
 //! transform Ruby configuration values into appropriate Prosody configuration
 //! builders.
 
-use magnus::{Error, TryConvert, Value};
+use magnus::{Error, Ruby, Value};
+use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
-use prosody::consumer::failure::retry::RetryConfigurationBuilder;
-use prosody::consumer::failure::topic::FailureTopicConfigurationBuilder;
+use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
+use prosody::consumer::middleware::monopolization::MonopolizationConfigurationBuilder;
+use prosody::consumer::middleware::retry::RetryConfigurationBuilder;
+use prosody::consumer::middleware::scheduler::SchedulerConfigurationBuilder;
+use prosody::consumer::middleware::timeout::TimeoutConfigurationBuilder;
+use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
+use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
-use prosody::timers::store::cassandra::CassandraConfigurationBuilder;
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
@@ -110,6 +115,68 @@ pub struct NativeConfiguration {
     /// Retention period for failed/unprocessed timer data in Cassandra (in
     /// seconds)
     cassandra_retention: Option<f32>,
+
+    /// Timer slab partitioning duration in seconds.
+    /// Controls how timers are grouped for storage and retrieval.
+    slab_size: Option<f32>,
+
+    // Scheduler configuration
+    /// Target proportion of execution time for failure/retry task processing
+    /// (0.0 to 1.0). Controls bandwidth allocation between Normal and
+    /// Failure task classes.
+    scheduler_failure_weight: Option<f64>,
+
+    /// Wait duration (in seconds) at which urgency boost reaches maximum
+    /// intensity.
+    scheduler_max_wait: Option<f32>,
+
+    /// Maximum urgency boost (in seconds of virtual time) for waiting tasks.
+    scheduler_wait_weight: Option<f64>,
+
+    /// Cache capacity for tracking per-key virtual time in the scheduler.
+    scheduler_cache_size: Option<u32>,
+
+    // Monopolization configuration
+    /// Whether monopolization detection is enabled.
+    monopolization_enabled: Option<bool>,
+
+    /// Threshold for monopolization detection (0.0 to 1.0).
+    monopolization_threshold: Option<f64>,
+
+    /// Rolling window duration (in seconds) for monopolization detection.
+    monopolization_window: Option<f32>,
+
+    /// Cache size for tracking key execution intervals.
+    monopolization_cache_size: Option<u32>,
+
+    // Defer configuration
+    /// Whether deferral is enabled for new messages.
+    defer_enabled: Option<bool>,
+
+    /// Base exponential backoff delay for deferred retries (in seconds).
+    defer_base: Option<f32>,
+
+    /// Maximum delay between deferred retries (in seconds).
+    defer_max_delay: Option<f32>,
+
+    /// Failure rate threshold for enabling deferral (0.0 to 1.0).
+    defer_failure_threshold: Option<f64>,
+
+    /// Sliding window duration (in seconds) for failure rate tracking.
+    defer_failure_window: Option<f32>,
+
+    /// Cache size for defer middleware.
+    defer_cache_size: Option<u32>,
+
+    /// Timeout for Kafka seek operations (in seconds).
+    defer_seek_timeout: Option<f32>,
+
+    /// Messages to read sequentially before seeking.
+    defer_discard_threshold: Option<i64>,
+
+    // Timeout configuration
+    /// Fixed timeout duration for handler execution (in seconds).
+    timeout: Option<f32>,
 }
 
 /// Configuration for the health probe port.
@@ -165,11 +232,12 @@ impl<'de> Deserialize<'de> for ProbePort {
     }
 }
 
-impl TryConvert for NativeConfiguration {
-    /// Attempts to convert a Ruby Value into a `NativeConfiguration`.
+impl NativeConfiguration {
+    /// Converts a Ruby value into a `NativeConfiguration`.
     ///
     /// # Arguments
     ///
+    /// * `ruby` - Reference to the Ruby VM
     /// * `val` - The Ruby value to convert
     ///
     /// # Returns
@@ -179,8 +247,8 @@ impl TryConvert for NativeConfiguration {
     /// # Errors
     ///
     /// Returns a Magnus error if deserialization fails
-    fn try_convert(val: Value) -> Result<Self, Error> {
-        deserialize(val)
+    pub fn from_value(ruby: &Ruby, val: Value) -> Result<Self, Error> {
+        deserialize(ruby, val)
     }
 }
 
@@ -258,10 +326,6 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
             builder.allowed_events(allowed_events.clone());
         }
 
-        if let Some(max_concurrency) = &config.max_concurrency {
-            builder.max_concurrency(*max_concurrency as usize);
-        }
-
         if let Some(max_uncommitted) = &config.max_uncommitted {
             builder.max_uncommitted(*max_uncommitted as usize);
         }
@@ -304,6 +368,10 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
                     builder.probe_port(*port);
                 }
             }
+        }
+
+        if let Some(slab_size) = &config.slab_size {
+            builder.slab_size(Duration::from_secs_f32(*slab_size));
         }
 
         builder
@@ -448,5 +516,188 @@ impl<'a> From<&'a NativeConfiguration> for CassandraConfigurationBuilder {
         }
 
         builder
+    }
+}
+
+impl<'a> From<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `SchedulerConfigurationBuilder`.
+    ///
+    /// This takes the relevant scheduler settings from the configuration and
+    /// sets them on a new `SchedulerConfigurationBuilder` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `SchedulerConfigurationBuilder`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::default();
+
+        if let Some(max_concurrency) = &config.max_concurrency {
+            builder.max_concurrency(*max_concurrency as usize);
+        }
+
+        if let Some(failure_weight) = &config.scheduler_failure_weight {
+            builder.failure_weight(*failure_weight);
+        }
+
+        if let Some(max_wait) = &config.scheduler_max_wait {
+            builder.max_wait(Duration::from_secs_f32(*max_wait));
+        }
+
+        if let Some(wait_weight) = &config.scheduler_wait_weight {
+            builder.wait_weight(*wait_weight);
+        }
+
+        if let Some(cache_size) = &config.scheduler_cache_size {
+            builder.cache_size(*cache_size as usize);
+        }
+
+        builder
+    }
+}
+
+impl<'a> From<&'a NativeConfiguration> for MonopolizationConfigurationBuilder {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `MonopolizationConfigurationBuilder`.
+    ///
+    /// This takes the relevant monopolization settings from the configuration
+    /// and sets them on a new `MonopolizationConfigurationBuilder` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `MonopolizationConfigurationBuilder`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::default();
+
+        if let Some(enabled) = &config.monopolization_enabled {
+            builder.enabled(*enabled);
+        }
+
+        if let Some(threshold) = &config.monopolization_threshold {
+            builder.monopolization_threshold(*threshold);
+        }
+
+        if let Some(window) = &config.monopolization_window {
+            builder.window_duration(Duration::from_secs_f32(*window));
+        }
+
+        if let Some(cache_size) = &config.monopolization_cache_size {
+            builder.cache_size(*cache_size as usize);
+        }
+
+        builder
+    }
+}
+
+impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `DeferConfigurationBuilder`.
+    ///
+    /// This takes the relevant defer settings from the configuration and
+    /// sets them on a new `DeferConfigurationBuilder` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `DeferConfigurationBuilder`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::default();
+
+        if let Some(enabled) = &config.defer_enabled {
+            builder.enabled(*enabled);
+        }
+
+        if let Some(base) = &config.defer_base {
+            builder.base(Duration::from_secs_f32(*base));
+        }
+
+        if let Some(max_delay) = &config.defer_max_delay {
+            builder.max_delay(Duration::from_secs_f32(*max_delay));
+        }
+
+        if let Some(failure_threshold) = &config.defer_failure_threshold {
+            builder.failure_threshold(*failure_threshold);
+        }
+
+        if let Some(failure_window) = &config.defer_failure_window {
+            builder.failure_window(Duration::from_secs_f32(*failure_window));
+        }
+
+        if let Some(cache_size) = &config.defer_cache_size {
+            builder.cache_size(*cache_size as usize);
+        }
+
+        if let Some(seek_timeout) = &config.defer_seek_timeout {
+            builder.seek_timeout(Duration::from_secs_f32(*seek_timeout));
+        }
+
+        if let Some(discard_threshold) = &config.defer_discard_threshold {
+            builder.discard_threshold(*discard_threshold);
+        }
+
+        builder
+    }
+}
+
+impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `TimeoutConfigurationBuilder`.
+    ///
+    /// This takes the relevant timeout settings from the configuration and
+    /// sets them on a new `TimeoutConfigurationBuilder` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `TimeoutConfigurationBuilder`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::default();
+
+        if let Some(timeout) = &config.timeout {
+            builder.timeout(Some(Duration::from_secs_f32(*timeout)));
+        }
+
+        builder
+    }
+}
+
+impl<'a> From<&'a NativeConfiguration> for ConsumerBuilders {
+    /// Converts a `NativeConfiguration` reference into a `ConsumerBuilders`.
+    ///
+    /// This creates all the consumer-related configuration builders from
+    /// the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A `ConsumerBuilders` containing all consumer-related configuration
+    /// builders
+    fn from(config: &'a NativeConfiguration) -> Self {
+        Self {
+            consumer: config.into(),
+            retry: config.into(),
+            failure_topic: config.into(),
+            scheduler: config.into(),
+            monopolization: config.into(),
+            defer: config.into(),
+            timeout: config.into(),
+        }
     }
 }

@@ -4,7 +4,7 @@
 //! OpenTelemetry context across the Ruby-Rust boundary for distributed tracing.
 use crate::id;
 use magnus::value::ReprValue;
-use magnus::{Error, Module, RHash, RModule, Ruby, Value};
+use magnus::{Error, Module, RModule, Ruby, Value};
 use opentelemetry::Context;
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use std::collections::HashMap;
@@ -44,7 +44,7 @@ pub fn extract_opentelemetry_context(
     ruby: &Ruby,
     propagator: &TextMapCompositePropagator,
 ) -> Result<Context, Error> {
-    let carrier = RHash::new();
+    let carrier = ruby.hash_new();
     let otel_class: RModule = ruby.class_module().const_get(id!(ruby, "OpenTelemetry"))?;
     let propagator_obj: Value = otel_class.funcall(id!(ruby, "propagation"), ())?;
     let _: Value = propagator_obj.funcall(id!(ruby, "inject"), (carrier,))?;

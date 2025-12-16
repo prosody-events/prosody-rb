@@ -110,6 +110,106 @@ module Prosody
     def probe_port: () -> (Integer | false | nil)
     def probe_port=: (Integer | Symbol | String | false | nil) -> (Integer | false | nil)
 
+    # Cassandra nodes (hostnames or IPs)
+    def cassandra_nodes: () -> Array[String]?
+    def cassandra_nodes=: (String | _ToA[String]) -> Array[String]
+
+    # Cassandra keyspace name
+    def cassandra_keyspace: () -> String?
+    def cassandra_keyspace=: (_ToS) -> String
+
+    # Cassandra datacenter for query routing
+    def cassandra_datacenter: () -> String?
+    def cassandra_datacenter=: (_ToS) -> String
+
+    # Cassandra rack for topology-aware routing
+    def cassandra_rack: () -> String?
+    def cassandra_rack=: (_ToS) -> String
+
+    # Cassandra authentication user
+    def cassandra_user: () -> String?
+    def cassandra_user=: (_ToS) -> String
+
+    # Cassandra authentication password
+    def cassandra_password: () -> String?
+    def cassandra_password=: (_ToS) -> String
+
+    # Cassandra data retention period (seconds)
+    def cassandra_retention: () -> Float?
+    def cassandra_retention=: (Numeric) -> Float
+
+    # Timer slab partitioning duration (seconds)
+    def slab_size: () -> Float?
+    def slab_size=: (Numeric) -> Float
+
+    # Scheduler: failure/retry task weight (0.0 to 1.0)
+    def scheduler_failure_weight: () -> Float?
+    def scheduler_failure_weight=: (Numeric) -> Float
+
+    # Scheduler: max wait for urgency boost (seconds)
+    def scheduler_max_wait: () -> Float?
+    def scheduler_max_wait=: (Numeric) -> Float
+
+    # Scheduler: wait time priority weight
+    def scheduler_wait_weight: () -> Float?
+    def scheduler_wait_weight=: (Numeric) -> Float
+
+    # Scheduler: cache size for per-key virtual time
+    def scheduler_cache_size: () -> Integer?
+    def scheduler_cache_size=: (Integer | _ToInt) -> Integer
+
+    # Monopolization detection enabled
+    def monopolization_enabled: () -> bool?
+    def monopolization_enabled=: (untyped) -> bool
+
+    # Monopolization detection threshold (0.0 to 1.0)
+    def monopolization_threshold: () -> Float?
+    def monopolization_threshold=: (Numeric) -> Float
+
+    # Monopolization detection window (seconds)
+    def monopolization_window: () -> Float?
+    def monopolization_window=: (Numeric) -> Float
+
+    # Monopolization cache size
+    def monopolization_cache_size: () -> Integer?
+    def monopolization_cache_size=: (Integer | _ToInt) -> Integer
+
+    # Deferral enabled
+    def defer_enabled: () -> bool?
+    def defer_enabled=: (untyped) -> bool
+
+    # Defer base backoff delay (seconds)
+    def defer_base: () -> Float?
+    def defer_base=: (Numeric) -> Float
+
+    # Defer maximum delay (seconds)
+    def defer_max_delay: () -> Float?
+    def defer_max_delay=: (Numeric) -> Float
+
+    # Defer failure threshold (0.0 to 1.0)
+    def defer_failure_threshold: () -> Float?
+    def defer_failure_threshold=: (Numeric) -> Float
+
+    # Defer failure window (seconds)
+    def defer_failure_window: () -> Float?
+    def defer_failure_window=: (Numeric) -> Float
+
+    # Defer cache size
+    def defer_cache_size: () -> Integer?
+    def defer_cache_size=: (Integer | _ToInt) -> Integer
+
+    # Defer seek timeout (seconds)
+    def defer_seek_timeout: () -> Float?
+    def defer_seek_timeout=: (Numeric) -> Float
+
+    # Defer discard threshold (messages)
+    def defer_discard_threshold: () -> Integer?
+    def defer_discard_threshold=: (Integer | _ToInt) -> Integer
+
+    # Handler execution timeout (seconds)
+    def timeout: () -> Float?
+    def timeout=: (Numeric) -> Float
+
     # Convert configuration to a hash with non-nil values only
     def to_hash: () -> Hash[Symbol, untyped]
   end

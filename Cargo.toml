@@ -11,18 +11,18 @@ atomic-take = "1.1"
 bumpalo = "3.19"
 educe = "0.6"
 futures = "0.3"
-magnus = { version = "0.7", default-features = false }
-opentelemetry = "0.30"
-prosody = { git = "https://github.com/cincpro/prosody.git", rev = "8ad5a30fbb04f097aed55d1a5574b47d88a14a0e", default-features = false } # replace once we have a package manager
+magnus = { version = "0.8", default-features = false }
+opentelemetry = "0.31"
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "09d99597638cd40b72cfa5616a243a83d099d092", default-features = false } # replace once we have a package manager
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
-serde_magnus = "0.9"
+serde_magnus = "0.10"
 thiserror = "2.0"
 tokio = "1.46"
 tokio-stream = "0.1"
 tracing = "0.1"
-tracing-opentelemetry = "0.31"
+tracing-opentelemetry = "0.32"
 tracing-subscriber = "0.3"
 
 [profile.release]
@@ -66,7 +66,6 @@ self_named_module_files = "warn"
 semicolon_outside_block = "warn"
 str_to_string = "warn"
 string_lit_chars_any = "warn"
-string_to_string = "warn"
 todo = "warn"
 try_err = "warn"
 unimplemented = "warn"

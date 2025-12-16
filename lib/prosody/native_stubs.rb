@@ -38,13 +38,40 @@ module Prosody
       raise NotImplementedError, "This class is implemented natively in Rust"
     end
 
-    # Checks if shutdown has been requested.
+    # Checks if cancellation has been requested.
     #
     # This method can be called within message handlers to detect when the
-    # consumer is shutting down and handle graceful termination.
+    # handler should exit. Cancellation includes both message-level cancellation
+    # (e.g., handler timeout) and partition shutdown.
     #
-    # @return [Boolean] true if shutdown has been requested, false otherwise
-    def should_shutdown?
+    # @return [Boolean] true if cancellation has been requested, false otherwise
+    #
+    # @example Checking for cancellation in a loop
+    #   def on_message(context, message)
+    #     items = message.payload["items"]
+    #     items.each do |item|
+    #       return if context.should_cancel?
+    #       process_item(item)
+    #     end
+    #   end
+    def should_cancel?
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Blocks until cancellation is signaled.
+    #
+    # Cancellation includes both message-level cancellation (e.g., handler timeout)
+    # and partition shutdown. This method is useful for long-running handlers that
+    # need to wait for external events while remaining responsive to cancellation.
+    #
+    # @return [void]
+    #
+    # @example Waiting for cancellation
+    #   def on_message(context, message)
+    #     # Do some work, then wait for cancellation
+    #     context.on_cancel
+    #   end
+    def on_cancel
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
