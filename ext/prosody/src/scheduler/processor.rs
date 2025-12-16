@@ -10,9 +10,8 @@ use crate::scheduler::result::ResultSender;
 use crate::util::ThreadSafeValue;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
-use magnus::block::Proc;
 use magnus::value::ReprValue;
-use magnus::{Class, Error, Module, RClass, RHash, Ruby, Value};
+use magnus::{Class, Error, Module, RClass, Ruby, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -112,7 +111,7 @@ impl RubyProcessor {
 
         // Wrap the function in a Ruby block that can be executed later
         let mut maybe_function = Some(function);
-        let block = Proc::from_fn(move |ruby, _, _| {
+        let block = ruby.proc_from_fn(move |ruby, _, _| {
             if let Some(function) = maybe_function.take() {
                 function(ruby)
             } else {
@@ -121,7 +120,7 @@ impl RubyProcessor {
         });
 
         // Convert the tracing context carrier to a Ruby hash
-        let carrier: RHash = carrier.into_iter().collect();
+        let carrier = ruby.hash_from_iter(carrier);
 
         // Call the Ruby method: def submit(task_id, callback, &task_block)
         let token = CancellationToken::new(self.processor.get(ruby).funcall_with_block(

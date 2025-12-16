@@ -38,6 +38,25 @@ RSpec.describe Prosody::Configuration do
       expect(config.cassandra_user).to be_nil
       expect(config.cassandra_password).to be_nil
       expect(config.cassandra_retention).to be_nil
+      # New QoS configuration
+      expect(config.slab_size).to be_nil
+      expect(config.timeout).to be_nil
+      expect(config.scheduler_failure_weight).to be_nil
+      expect(config.scheduler_max_wait).to be_nil
+      expect(config.scheduler_wait_weight).to be_nil
+      expect(config.scheduler_cache_size).to be_nil
+      expect(config.monopolization_enabled).to be_nil
+      expect(config.monopolization_threshold).to be_nil
+      expect(config.monopolization_window).to be_nil
+      expect(config.monopolization_cache_size).to be_nil
+      expect(config.defer_enabled).to be_nil
+      expect(config.defer_base).to be_nil
+      expect(config.defer_max_delay).to be_nil
+      expect(config.defer_failure_threshold).to be_nil
+      expect(config.defer_failure_window).to be_nil
+      expect(config.defer_cache_size).to be_nil
+      expect(config.defer_seek_timeout).to be_nil
+      expect(config.defer_discard_threshold).to be_nil
     end
   end
 
@@ -87,7 +106,15 @@ RSpec.describe Prosody::Configuration do
         commit_interval: 5.0,
         retry_base: 0.1,
         max_retry_delay: 1.0,
-        cassandra_retention: 2_592_000.0
+        cassandra_retention: 2_592_000.0,
+        slab_size: 3600.0,
+        timeout: 30.0,
+        scheduler_max_wait: 120.0,
+        monopolization_window: 300.0,
+        defer_base: 1.0,
+        defer_max_delay: 86400.0,
+        defer_failure_window: 300.0,
+        defer_seek_timeout: 30.0
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
@@ -106,11 +133,49 @@ RSpec.describe Prosody::Configuration do
         max_concurrency: 3,
         max_uncommitted: 2,
         max_enqueued_per_key: 4,
-        max_retries: 3
+        max_retries: 3,
+        scheduler_cache_size: 8192,
+        monopolization_cache_size: 8192,
+        defer_cache_size: 1024,
+        defer_discard_threshold: 100
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
           expect(config.public_send(field)).to eq(value)
+
+          config.public_send(:"#{field}=", nil)
+          expect(config.public_send(field)).to be_nil
+        end
+      end
+    end
+
+    context "float fields" do
+      # Tests float configuration parameters (non-duration)
+      {
+        scheduler_failure_weight: 0.3,
+        scheduler_wait_weight: 200.0,
+        monopolization_threshold: 0.9,
+        defer_failure_threshold: 0.9
+      }.each do |field, value|
+        it "sets and gets #{field}" do
+          config.public_send(:"#{field}=", value)
+          expect(config.public_send(field)).to eq(value)
+
+          config.public_send(:"#{field}=", nil)
+          expect(config.public_send(field)).to be_nil
+        end
+      end
+    end
+
+    context "boolean fields for middleware" do
+      # Tests boolean parameters for middleware configuration
+      %i[monopolization_enabled defer_enabled].each do |field|
+        it "sets and gets #{field}" do
+          config.public_send(:"#{field}=", true)
+          expect(config.public_send(field)).to eq(true)
+
+          config.public_send(:"#{field}=", false)
+          expect(config.public_send(field)).to eq(false)
 
           config.public_send(:"#{field}=", nil)
           expect(config.public_send(field)).to be_nil

@@ -9,14 +9,14 @@ use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
 use futures::TryStreamExt;
-use magnus::exception::{arg_error, runtime_error};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, RClass, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::consumer::event_context::BoxEventContext;
+use prosody::timers::TimerType;
 use prosody::timers::datetime::CompactDateTime;
 use std::sync::Arc;
-use tracing::info_span;
+use tracing::{Span, error, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
@@ -69,13 +69,38 @@ impl Context {
         }
     }
 
-    /// Check if shutdown has been requested.
+    /// Check if cancellation has been requested.
+    ///
+    /// Cancellation includes both message-level cancellation (e.g., timeout)
+    /// and partition shutdown.
     ///
     /// # Returns
     ///
-    /// Boolean indicating whether shutdown is in progress.
-    fn should_shutdown(&self) -> bool {
-        self.inner.should_shutdown()
+    /// Boolean indicating whether cancellation has been requested.
+    fn should_cancel(&self) -> bool {
+        self.inner.should_cancel()
+    }
+
+    /// Wait for cancellation to be signaled.
+    ///
+    /// Cancellation includes both message-level cancellation (e.g., timeout)
+    /// and partition shutdown. This method blocks until cancellation is
+    /// signaled.
+    ///
+    /// # Arguments
+    ///
+    /// * `ruby` - Reference to the Ruby VM
+    ///
+    /// # Returns
+    ///
+    /// Nothing on success.
+    fn on_cancel(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        let inner = this.inner.clone();
+        this.bridge.wait_for(
+            ruby,
+            async move { inner.on_cancel().await },
+            Span::current(),
+        )
     }
 
     /// Schedule a timer to fire at the specified time.
@@ -101,17 +126,19 @@ impl Context {
 
         // Create span for tracing and set parent context
         let span = info_span!("schedule", time = %compact_time);
-        span.set_parent(context);
+        if let Err(err) = span.set_parent(context) {
+            error!("failed to set parent span: {err:#}");
+        }
 
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.schedule(compact_time).await },
+                async move { inner.schedule(compact_time, TimerType::Application).await },
                 span,
             )?
             .map_err(|error| {
                 Error::new(
-                    runtime_error(),
+                    ruby.exception_runtime_error(),
                     format!("Failed to schedule timer: {error:#}"),
                 )
             })
@@ -141,17 +168,23 @@ impl Context {
 
         // Create span for tracing and set parent context
         let span = info_span!("clear_and_schedule", time = %compact_time);
-        span.set_parent(context);
+        if let Err(err) = span.set_parent(context) {
+            error!("failed to set parent span: {err:#}");
+        }
 
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.clear_and_schedule(compact_time).await },
+                async move {
+                    inner
+                        .clear_and_schedule(compact_time, TimerType::Application)
+                        .await
+                },
                 span,
             )?
             .map_err(|error| {
                 Error::new(
-                    runtime_error(),
+                    ruby.exception_runtime_error(),
                     format!("Failed to clear and schedule timer: {error:#}"),
                 )
             })
@@ -180,17 +213,19 @@ impl Context {
 
         // Create span for tracing and set parent context
         let span = info_span!("unschedule", time = %compact_time);
-        span.set_parent(context);
+        if let Err(err) = span.set_parent(context) {
+            error!("failed to set parent span: {err:#}");
+        }
 
         this.bridge
             .wait_for(
                 ruby,
-                async move { inner.unschedule(compact_time).await },
+                async move { inner.unschedule(compact_time, TimerType::Application).await },
                 span,
             )?
             .map_err(|error| {
                 Error::new(
-                    runtime_error(),
+                    ruby.exception_runtime_error(),
                     format!("Failed to unschedule timer: {error:#}"),
                 )
             })
@@ -217,13 +252,19 @@ impl Context {
 
         // Create span for tracing and set parent context
         let span = info_span!("clear_scheduled");
-        span.set_parent(context);
+        if let Err(err) = span.set_parent(context) {
+            error!("failed to set parent span: {err:#}");
+        }
 
         this.bridge
-            .wait_for(ruby, async move { inner.clear_scheduled().await }, span)?
+            .wait_for(
+                ruby,
+                async move { inner.clear_scheduled(TimerType::Application).await },
+                span,
+            )?
             .map_err(|error| {
                 Error::new(
-                    runtime_error(),
+                    ruby.exception_runtime_error(),
                     format!("Failed to clear scheduled timers: {error:#}"),
                 )
             })
@@ -251,19 +292,26 @@ impl Context {
 
         // Create span for tracing and set parent context
         let span = info_span!("scheduled");
-        span.set_parent(context);
+        if let Err(err) = span.set_parent(context) {
+            error!("failed to set parent span: {err:#}");
+        }
 
         // Collect the scheduled times stream into a Vec
         let scheduled_times = this
             .bridge
             .wait_for(
                 ruby,
-                async move { inner.scheduled().try_collect::<Vec<_>>().await },
+                async move {
+                    inner
+                        .scheduled(TimerType::Application)
+                        .try_collect::<Vec<_>>()
+                        .await
+                },
                 span,
             )?
             .map_err(|e| {
                 Error::new(
-                    runtime_error(),
+                    ruby.exception_runtime_error(),
                     format!("Failed to get scheduled times: {e}"),
                 )
             })?;
@@ -296,11 +344,12 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
     let class = module.define_class(id!(ruby, "Context"), ruby.class_object())?;
 
-    // Shutdown methods
+    // Cancellation methods
     class.define_method(
-        id!(ruby, "should_shutdown?"),
-        method!(Context::should_shutdown, 0),
+        id!(ruby, "should_cancel?"),
+        method!(Context::should_cancel, 0),
     )?;
+    class.define_method(id!(ruby, "on_cancel"), method!(Context::on_cancel, 0))?;
 
     // Timer scheduling methods
     class.define_method(id!(ruby, "schedule"), method!(Context::schedule, 1))?;
@@ -345,7 +394,7 @@ fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDate
     // Validate CompactDateTime range (1970-2106)
     let seconds_u32 = u32::try_from(epoch_seconds).map_err(|_| {
         Error::new(
-            arg_error(),
+            ruby.exception_arg_error(),
             format!("Time {epoch_seconds} is outside CompactDateTime range (1970-2106)"),
         )
     })?;
@@ -354,7 +403,7 @@ fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDate
     let final_seconds = if nanos >= NANOSECOND_ROUNDING_THRESHOLD {
         seconds_u32.checked_add(1).ok_or_else(|| {
             Error::new(
-                arg_error(),
+                ruby.exception_arg_error(),
                 "Time overflow during rounding to nearest second",
             )
         })?
