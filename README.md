@@ -728,33 +728,47 @@ Best practices:
 
 ### Handling Task Cancellation
 
-Prosody cancels tasks during partition rebalancing, timeout, or shutdown. How you handle cancellation is critical:
-
-- Prosody interprets task success based on exception propagation.
-- A task that exits without an exception is considered successful.
-- Any exception signals task failure.
+Prosody cancels tasks during partition rebalancing, timeout, or shutdown. When cancelled, your handler receives `Async::Stop` at the next yield point (I/O operation, sleep, etc.).
 
 Best practices:
 
-1. Check `context.should_cancel?` periodically in long-running handlers.
-2. Exit promptly when cancelled to avoid rebalancing delays.
-3. Use `ensure` blocks for clean resource handling.
+1. Use `ensure` blocks for resource cleanup—they run even when `Async::Stop` is raised.
+2. For CPU-bound loops that don't yield, check `context.should_cancel?` periodically.
+3. Exit promptly when cancelled to avoid rebalancing delays.
 
 ```ruby
 class MyHandler < Prosody::EventHandler
   def on_message(context, message)
-    items = message.payload["items"]
-    items.each do |item|
-      # Check for cancellation before processing each item
-      return if context.should_cancel?
+    resource = acquire_resource
+    begin
+      items = message.payload["items"]
+      items.each do |item|
+        # For CPU-bound work, check cancellation periodically
+        return if context.should_cancel?
 
-      process_item(item)
+        process_item(item)
+      end
+    ensure
+      # Always runs, even on Async::Stop
+      release_resource(resource)
     end
   end
 end
 ```
 
-Failing to follow these practices can lead to slower message processing due to delayed rebalancing.
+If you catch `Async::Stop` and don't re-raise it, Prosody considers the task successful:
+
+```ruby
+def on_message(context, message)
+  do_work
+rescue Async::Stop
+  # Custom cleanup on cancellation
+  cleanup
+  raise  # Re-raise to signal cancellation to Prosody
+end
+```
+
+Failing to handle cancellation properly can lead to resource leaks or delayed rebalancing.
 
 ## Release Process
 
