@@ -209,7 +209,6 @@ module Prosody
       task_block = command.block
 
       # Extract parent context from the incoming carrier for distributed tracing
-
       parent_ctx = OpenTelemetry.propagation.extract(carrier)
 
       # Execute within the extracted OpenTelemetry context
@@ -220,8 +219,7 @@ module Prosody
           @logger.debug("Executing task #{task_id}")
 
           barrier.async do
-            start_cancellation_watcher(task_id, token, callback, execute_span)
-            start_worker(task_id, token, task_block, callback, execute_span)
+            run_with_cancellation(task_id, token, task_block, callback, execute_span)
           end
         ensure
           execute_span.finish
@@ -229,58 +227,36 @@ module Prosody
       end
     end
 
-    # Creates a task that watches for cancellation requests.
+    # Executes a task with proper cancellation support.
     #
-    # This method launches an async task that waits for the cancellation token
-    # to be triggered and handles the cancellation if it occurs.
+    # Spawns a worker task and a cancellation watcher within a barrier. When
+    # cancellation is signaled, the worker receives Async::Stop (similar to
+    # Python's asyncio.CancelledError). The worker can catch Async::Stop for
+    # cleanup. The barrier ensures both tasks are cleaned up when the block
+    # exits, even if an unexpected error occurs.
     #
     # @param task_id [String] The task identifier for logging
     # @param token [CancellationToken] The token to monitor for cancellation
-    # @param callback [Proc] The callback to notify of cancellation
-    # @param span [OpenTelemetry::Span] The tracing span for this task
-    def start_cancellation_watcher(task_id, token, callback, span)
-      Async do |task|
-        task.annotate("Cancellation watcher for task #{task_id}")
-
-        # Ensure the span context is active for cancellation operations
-        # This maintains the OpenTelemetry context across the fiber boundary
-        OpenTelemetry::Trace.with_span(span) do
-          begin
-            token.wait
-
-            if callback.call(false, RuntimeError.new("Task cancelled"))
-              @logger.debug("Cancellation received for task #{task_id}")
-            end
-          rescue => e
-            @logger.debug("Cancellation watcher error: #{e.message}")
-            span.record_exception(e)
-            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-          end
-        end
-      end
-    end
-
-    # Creates a task that executes the work and handles completion or errors.
-    #
-    # This method launches an async task that executes the provided block
-    # and calls the callback with the result or error.
-    #
-    # @param task_id [String] The task identifier for logging
-    # @param token [CancellationToken] The token to cancel when complete
     # @param task_block [Proc] The work to execute
     # @param callback [Proc] The callback to notify of completion or error
     # @param span [OpenTelemetry::Span] The tracing span for this task
-    def start_worker(task_id, token, task_block, callback, span)
-      Async do |task|
-        task.annotate("Worker for task #{task_id}")
+    def run_with_cancellation(task_id, token, task_block, callback, span)
+      OpenTelemetry::Trace.with_span(span) do
+        # Use a barrier to ensure both tasks are cleaned up when block exits
+        barrier = Async::Barrier.new
 
-        # Ensure the span context is active for the user's task execution
-        # This maintains the OpenTelemetry context across the fiber boundary
-        OpenTelemetry::Trace.with_span(span) do
+        # Spawn worker task - handles its own result reporting
+        worker_task = barrier.async do |task|
+          task.annotate("Worker for task #{task_id}")
           begin
             result = task_block.call
             if callback.call(true, result)
               @logger.debug("Task #{task_id} completed successfully")
+            end
+          rescue Async::Stop
+            # Task was cancelled - report via callback
+            if callback.call(false, RuntimeError.new("Task cancelled"))
+              @logger.debug("Task #{task_id} was cancelled")
             end
           rescue => e
             if callback.call(false, e)
@@ -289,10 +265,29 @@ module Prosody
               span.status = OpenTelemetry::Trace::Status.error(e.to_s)
             end
           ensure
-            # Always cancel the token to notify the cancellation watcher
+            # Always signal the cancellation watcher to stop waiting
             token.cancel
           end
         end
+
+        # Spawn cancellation watcher - stops worker when signaled
+        barrier.async do |task|
+          task.annotate("Cancellation watcher for task #{task_id}")
+          begin
+            token.wait
+            worker_task.stop
+          rescue => e
+            @logger.debug("Cancellation watcher error: #{e.message}")
+            span.record_exception(e)
+            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
+          end
+        end
+
+        # Wait for worker to complete (normally, via Async::Stop, or with error)
+        worker_task.wait
+      ensure
+        # Stop any remaining tasks (primarily the cancellation watcher)
+        barrier.stop
       end
     end
   end

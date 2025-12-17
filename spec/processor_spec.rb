@@ -175,6 +175,82 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       expect(result).to be_a(RuntimeError)
       expect(result.message).to eq("Task cancelled")
     end
+
+    # Verify that Async::Stop is raised in user code on cancellation
+    it "raises Async::Stop in user code when cancelled" do
+      results_queue = Queue.new
+      exception_queue = Queue.new
+      callback = proc { |success, result| results_queue.push([success, result]) }
+
+      token = processor.submit("t3", {}, callback) do
+        begin
+          sleep 0.5
+          "never"
+        rescue Async::Stop => e
+          exception_queue.push(e)
+          raise  # Re-raise to let wrapper handle it
+        end
+      end
+      tokens << token
+      token.cancel
+
+      # Verify user code received Async::Stop
+      exception = exception_queue.pop
+      expect(exception).to be_a(Async::Stop)
+
+      # Verify cancellation was reported
+      success, result = results_queue.pop
+      expect(success).to be false
+      expect(result.message).to eq("Task cancelled")
+    end
+
+    # Verify that ensure blocks run when task is cancelled
+    it "runs ensure blocks when task is cancelled" do
+      results_queue = Queue.new
+      ensure_queue = Queue.new
+      callback = proc { |success, result| results_queue.push([success, result]) }
+
+      token = processor.submit("t4", {}, callback) do
+        begin
+          sleep 0.5
+          "never"
+        ensure
+          ensure_queue.push(:cleanup_ran)
+        end
+      end
+      tokens << token
+      token.cancel
+
+      # Verify ensure block ran
+      cleanup = ensure_queue.pop
+      expect(cleanup).to eq(:cleanup_ran)
+
+      # Verify cancellation was reported
+      success, _result = results_queue.pop
+      expect(success).to be false
+    end
+
+    # Verify user can catch Async::Stop and return a value instead
+    it "allows user to catch Async::Stop and return a value" do
+      results_queue = Queue.new
+      callback = proc { |success, result| results_queue.push([success, result]) }
+
+      token = processor.submit("t5", {}, callback) do
+        begin
+          sleep 0.5
+          "never"
+        rescue Async::Stop
+          :gracefully_handled  # Don't re-raise
+        end
+      end
+      tokens << token
+      token.cancel
+
+      # User caught and returned value, so it's reported as success
+      success, result = results_queue.pop
+      expect(success).to be true
+      expect(result).to eq(:gracefully_handled)
+    end
   end
 
   # Tests for exception handling during task execution
