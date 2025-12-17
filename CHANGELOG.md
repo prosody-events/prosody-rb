@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/cincpro/prosody-rb/compare/v2.0.0...v2.0.1) (2025-12-17)
+
+
+### Bug Fixes
+
+* properly cancel worker tasks using Async::Stop ([#40](https://github.com/cincpro/prosody-rb/issues/40)) ([9e46d1b](https://github.com/cincpro/prosody-rb/commit/9e46d1be863388a3a444abac6417c0f1cfacfc67))
+
 ## [2.0.0](https://github.com/cincpro/prosody-rb/compare/v1.1.4...v2.0.0) (2025-12-16)
 
 
