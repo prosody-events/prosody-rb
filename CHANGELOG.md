@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/cincpro/prosody-rb/compare/v2.0.1...v2.0.2) (2025-12-18)
+
+
+### Bug Fixes
+
+* downgrade span parent extraction failures to debug level ([#42](https://github.com/cincpro/prosody-rb/issues/42)) ([f442147](https://github.com/cincpro/prosody-rb/commit/f442147d3863c5cdf80daa1e36112995c2145153))
+
 ## [2.0.1](https://github.com/cincpro/prosody-rb/compare/v2.0.0...v2.0.1) (2025-12-17)
 
 
