@@ -25,7 +25,7 @@ use prosody::high_level::state::ConsumerState;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::sync::Arc;
-use tracing::{Span, error, info_span};
+use tracing::{Span, debug, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
@@ -172,7 +172,7 @@ impl Client {
         // Create span for tracing and set parent context
         let span = info_span!("ruby-send", %topic, %key);
         if let Err(err) = span.set_parent(context) {
-            error!("failed to set parent span: {err:#}");
+            debug!("failed to set parent span: {err:#}");
         }
 
         // Wait for the async send operation to complete
