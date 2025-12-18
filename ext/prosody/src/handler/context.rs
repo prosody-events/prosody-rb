@@ -16,7 +16,7 @@ use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::TimerType;
 use prosody::timers::datetime::CompactDateTime;
 use std::sync::Arc;
-use tracing::{Span, error, info_span};
+use tracing::{Span, debug, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
@@ -127,7 +127,7 @@ impl Context {
         // Create span for tracing and set parent context
         let span = info_span!("schedule", time = %compact_time);
         if let Err(err) = span.set_parent(context) {
-            error!("failed to set parent span: {err:#}");
+            debug!("failed to set parent span: {err:#}");
         }
 
         this.bridge
@@ -169,7 +169,7 @@ impl Context {
         // Create span for tracing and set parent context
         let span = info_span!("clear_and_schedule", time = %compact_time);
         if let Err(err) = span.set_parent(context) {
-            error!("failed to set parent span: {err:#}");
+            debug!("failed to set parent span: {err:#}");
         }
 
         this.bridge
@@ -214,7 +214,7 @@ impl Context {
         // Create span for tracing and set parent context
         let span = info_span!("unschedule", time = %compact_time);
         if let Err(err) = span.set_parent(context) {
-            error!("failed to set parent span: {err:#}");
+            debug!("failed to set parent span: {err:#}");
         }
 
         this.bridge
@@ -253,7 +253,7 @@ impl Context {
         // Create span for tracing and set parent context
         let span = info_span!("clear_scheduled");
         if let Err(err) = span.set_parent(context) {
-            error!("failed to set parent span: {err:#}");
+            debug!("failed to set parent span: {err:#}");
         }
 
         this.bridge
@@ -293,7 +293,7 @@ impl Context {
         // Create span for tracing and set parent context
         let span = info_span!("scheduled");
         if let Err(err) = span.set_parent(context) {
-            error!("failed to set parent span: {err:#}");
+            debug!("failed to set parent span: {err:#}");
         }
 
         // Collect the scheduled times stream into a Vec
