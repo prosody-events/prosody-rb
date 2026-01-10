@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.4](https://github.com/cincpro/prosody-rb/compare/v2.0.3...v2.0.4) (2026-01-10)
+
+
+### Bug Fixes
+
+* update prosody to fix timeout-induced partition stalls ([#46](https://github.com/cincpro/prosody-rb/issues/46)) ([1d339e0](https://github.com/cincpro/prosody-rb/commit/1d339e0963873463db9a82753c52c7621bce7161))
+
 ## [2.0.3](https://github.com/cincpro/prosody-rb/compare/v2.0.2...v2.0.3) (2025-12-22)
 
 
