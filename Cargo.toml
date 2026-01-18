@@ -13,7 +13,7 @@ educe = "0.6"
 futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 opentelemetry = "0.31"
-prosody = { git = "https://github.com/cincpro/prosody.git", rev = "385ceea16e01fd7494970c6ab9a4038e2625c799", default-features = false } # replace once we have a package manager
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "5a178c4aeacc13a55655d4025b2fb540b78a3f6b", default-features = false } # replace once we have a package manager
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
