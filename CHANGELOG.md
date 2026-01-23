@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/cincpro/prosody-rb/compare/v2.0.5...v2.1.0) (2026-01-23)
+
+
+### Features
+
+* non-blocking timer retry ([#50](https://github.com/cincpro/prosody-rb/issues/50)) ([9c292b6](https://github.com/cincpro/prosody-rb/commit/9c292b6b680191de33333f0eabec88c7b8962f10))
+
 ## [2.0.5](https://github.com/cincpro/prosody-rb/compare/v2.0.4...v2.0.5) (2026-01-18)
 
 
