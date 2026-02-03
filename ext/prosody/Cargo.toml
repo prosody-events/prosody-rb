@@ -28,7 +28,9 @@ tracing-opentelemetry.workspace = true
 tracing-subscriber.workspace = true
 
 #[cfg(not(target_env = "msvc"))]
-tikv-jemallocator.workspace = true
+tikv-jemallocator = { workspace = true, features = [
+    "disable_initial_exec_tls",
+] }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 prosody = { workspace = true, default-features = false, features = [
