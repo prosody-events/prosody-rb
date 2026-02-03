@@ -16,6 +16,7 @@ use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use std::sync::{LazyLock, OnceLock};
+use tikv_jemallocator::Jemalloc;
 use tokio::runtime::Runtime;
 
 mod admin;
@@ -27,6 +28,10 @@ mod logging;
 mod scheduler;
 mod tracing_util;
 mod util;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 /// Buffer size for the communication channel between Ruby and Rust.
 /// This controls how many operations can be queued before backpressure is
