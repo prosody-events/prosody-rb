@@ -27,6 +27,9 @@ tracing.workspace = true
 tracing-opentelemetry.workspace = true
 tracing-subscriber.workspace = true
 
+#[cfg(not(target_env = "msvc"))]
+tikv-jemallocator.workspace = true
+
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 prosody = { workspace = true, default-features = false, features = [
     "cmake-build",
