@@ -134,6 +134,11 @@ impl<S: Subscriber> Layer<S> for Logger {
     /// * `event` - The tracing event to process
     /// * `_ctx` - The subscriber context (unused)
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let metadata = event.metadata();
+        if !metadata.is_event() {
+            return;
+        }
+
         thread_local! {
             static LOG_BUMP: RefCell<Bump> = RefCell::new(Bump::with_capacity(1024));
         }
@@ -142,13 +147,10 @@ impl<S: Subscriber> Layer<S> for Logger {
             let mut bump = cell.borrow_mut();
             bump.reset();
 
-            let mut visitor = Visitor::new(&bump, event.metadata());
+            let mut visitor = Visitor::new(&bump, metadata);
             event.record(&mut visitor);
 
-            if let Err(error) = self
-                .tx
-                .send((*event.metadata().level(), visitor.to_string()))
-            {
+            if let Err(error) = self.tx.send((*metadata.level(), visitor.to_string())) {
                 eprintln!("failed to send log message: {error:#}; message: {visitor}");
             }
         });
