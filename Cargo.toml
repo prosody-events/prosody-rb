@@ -13,11 +13,13 @@ educe = "0.6"
 futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 opentelemetry = "0.31"
-prosody = { git = "https://github.com/cincpro/prosody.git", rev = "438fedb5fa8e58f4f754f09c30dd43514723e0c8", default-features = false } # replace once we have a package manager
+prosody = { git = "https://github.com/cincpro/prosody.git", rev = "7b5b5e3508b10e508823586cb59a270b8b0eff9a", default-features = false, features = [
+    "libz-static",
+] } # replace once we have a package manager
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
-serde_magnus = "0.10"
+serde_magnus = "0.11"
 thiserror = "2.0"
 tikv-jemallocator = "0.6"
 tokio = "1.46"
