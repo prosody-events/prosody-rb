@@ -82,10 +82,6 @@ module Prosody
     def max_uncommitted: () -> Integer?
     def max_uncommitted=: (Integer | _ToInt) -> Integer
 
-    # Maximum messages to enqueue for a single key
-    def max_enqueued_per_key: () -> Integer?
-    def max_enqueued_per_key=: (Integer | _ToInt) -> Integer
-
     # Maximum number of retry attempts
     def max_retries: () -> Integer?
     def max_retries=: (Integer | _ToInt) -> Integer
