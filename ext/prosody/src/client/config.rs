@@ -61,9 +61,6 @@ pub struct NativeConfiguration {
     /// Maximum number of messages to process before committing offsets
     max_uncommitted: Option<u16>,
 
-    /// Maximum number of messages to enqueue for a single key
-    max_enqueued_per_key: Option<u16>,
-
     /// Threshold in seconds after which a stalled consumer is detected
     stall_threshold: Option<f32>,
 
@@ -328,10 +325,6 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
 
         if let Some(max_uncommitted) = &config.max_uncommitted {
             builder.max_uncommitted(*max_uncommitted as usize);
-        }
-
-        if let Some(max_enqueued_per_key) = &config.max_enqueued_per_key {
-            builder.max_enqueued_per_key(*max_enqueued_per_key as usize);
         }
 
         if let Some(idempotence_cache_size) = &config.idempotence_cache_size {
