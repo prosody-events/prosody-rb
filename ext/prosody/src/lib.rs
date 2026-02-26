@@ -16,6 +16,7 @@ use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use std::sync::{LazyLock, OnceLock};
+#[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
 use tokio::runtime::Runtime;
 
