@@ -1,8 +1,6 @@
 name: Build and Release Gems
 on:
   push:
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -15,23 +13,21 @@ env:
   CMAKE_POLICY_VERSION_MINIMUM: 3.5
 
 jobs:
-  release-please:
-    name: Release Please
-    runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-    steps:
-      - uses: google-github-actions/release-please-action@v3
-        id: release
-        with:
-          release-type: ruby
-          package-name: prosody
-          token: ${{ secrets.TEMP_GH_ALL_REPOS_RW }}
+#  release-please:
+#    name: Release Please
+#    runs-on: ubuntu-latest
+#    outputs:
+#      release_created: ${{ steps.release.outputs.release_created }}
+#      tag_name: ${{ steps.release.outputs.tag_name }}
+#    steps:
+#      - uses: google-github-actions/release-please-action@v3
+#        id: release
+#        with:
+#          release-type: ruby
+#          package-name: prosody
+#          token: ${{ secrets.TEMP_GH_ALL_REPOS_RW }}
 
   build-cross-compiled-gems:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -96,8 +92,6 @@ jobs:
           path: ${{ steps.cross-gem.outputs.gem-path }}
 
   build-source-gem:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     name: Build source gem
     steps:
@@ -171,7 +165,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -237,7 +231,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -309,7 +303,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -381,7 +375,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -412,41 +406,41 @@ jobs:
                    gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp && \
                    rspec /tmp/spec --tag ~tracing"
 
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    needs:
-      - build-source-gem
-      - test-linux-x86_64
-      - test-linux-musl-x86_64
-      - test-linux-aarch64
-      - test-linux-musl-aarch64
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./gems
-
-      - name: Publish to Gemfury
-        env:
-          GEMFURY_PUSH_TOKEN: ${{ secrets.FURY_TOKEN }}
-          GEMFURY_ACCOUNT: realgeeks
-        run: |
-          # Find and publish all gem files
-          echo "Publishing gems to Gemfury..."
-          find ./gems -name "*.gem" -type f | while read gem_file; do
-            echo "Publishing ${gem_file}..."
-
-            # Using curl as documented in Gemfury docs
-            RESPONSE=$(curl -s -F package=@"${gem_file}" "https://${GEMFURY_PUSH_TOKEN}@push.fury.io/${GEMFURY_ACCOUNT}/")
-
-            # Check for errors in the response
-            if [[ $RESPONSE == *"error"* ]]; then
-              echo "Error uploading ${gem_file}: ${RESPONSE}"
-              exit 1
-            else
-              echo "Successfully published ${gem_file}"
-            fi
-          done
-
-          echo "All gems published successfully!"
+#  release:
+#    name: Release
+#    runs-on: ubuntu-latest
+#    needs:
+#      - build-source-gem
+#      - test-linux-x86_64
+#      - test-linux-musl-x86_64
+#      - test-linux-aarch64
+#      - test-linux-musl-aarch64
+#    steps:
+#      - name: Download all artifacts
+#        uses: actions/download-artifact@v4
+#        with:
+#          path: ./gems
+#
+#      - name: Publish to Gemfury
+#        env:
+#          GEMFURY_PUSH_TOKEN: ${{ secrets.FURY_TOKEN }}
+#          GEMFURY_ACCOUNT: realgeeks
+#        run: |
+#          # Find and publish all gem files
+#          echo "Publishing gems to Gemfury..."
+#          find ./gems -name "*.gem" -type f | while read gem_file; do
+#            echo "Publishing ${gem_file}..."
+#
+#            # Using curl as documented in Gemfury docs
+#            RESPONSE=$(curl -s -F package=@"${gem_file}" "https://${GEMFURY_PUSH_TOKEN}@push.fury.io/${GEMFURY_ACCOUNT}/")
+#
+#            # Check for errors in the response
+#            if [[ $RESPONSE == *"error"* ]]; then
+#              echo "Error uploading ${gem_file}: ${RESPONSE}"
+#              exit 1
+#            else
+#              echo "Successfully published ${gem_file}"
+#            fi
+#          done
+#
+#          echo "All gems published successfully!"
