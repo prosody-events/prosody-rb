@@ -139,9 +139,6 @@ module Prosody
     # Maximum number of messages to process before committing offsets.
     config_param :max_uncommitted, converter: ->(v) { Integer(v) }
 
-    # Maximum number of messages to enqueue for a single key.
-    config_param :max_enqueued_per_key, converter: ->(v) { Integer(v) }
-
     # Maximum number of retry attempts.
     config_param :max_retries, converter: ->(v) { Integer(v) }
 

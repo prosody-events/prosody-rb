@@ -32,10 +32,6 @@ tikv-jemallocator = { workspace = true, features = [
     "disable_initial_exec_tls",
 ] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
-prosody = { workspace = true, default-features = false, features = [
-    "cmake-build",
-] }
 
 [lints]
 workspace = true
