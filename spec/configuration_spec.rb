@@ -20,7 +20,6 @@ RSpec.describe Prosody::Configuration do
       expect(config.source_system).to be_nil
       expect(config.max_concurrency).to be_nil
       expect(config.max_uncommitted).to be_nil
-      expect(config.max_enqueued_per_key).to be_nil
       expect(config.stall_threshold).to be_nil
       expect(config.shutdown_timeout).to be_nil
       expect(config.poll_interval).to be_nil
@@ -132,7 +131,6 @@ RSpec.describe Prosody::Configuration do
         idempotence_cache_size: 10,
         max_concurrency: 3,
         max_uncommitted: 2,
-        max_enqueued_per_key: 4,
         max_retries: 3,
         scheduler_cache_size: 8192,
         monopolization_cache_size: 8192,
@@ -303,7 +301,6 @@ RSpec.describe Prosody::Configuration do
         source_system: "system1",
         max_concurrency: 10,
         max_uncommitted: 5,
-        max_enqueued_per_key: 3,
         stall_threshold: 2.0,
         shutdown_timeout: 3.0,
         poll_interval: 4.0,
@@ -334,7 +331,6 @@ RSpec.describe Prosody::Configuration do
       expect(config.source_system).to eq("system1")
       expect(config.max_concurrency).to eq(10)
       expect(config.max_uncommitted).to eq(5)
-      expect(config.max_enqueued_per_key).to eq(3)
       expect(config.stall_threshold).to eq(2.0)
       expect(config.shutdown_timeout).to eq(3.0)
       expect(config.poll_interval).to eq(4.0)
