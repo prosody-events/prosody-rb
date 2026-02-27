@@ -83,10 +83,10 @@ jobs:
           platform: ${{ matrix.target.platform }}
           ruby-versions: "3.2,3.3,3.4"
           pre-script: >-
-            mkdir -p /var/lib/apt/lists/partial &&
-            apt-get update -qq &&
-            apt-get install -y -q cmake libcurl4-openssl-dev &&
-            ln -sf $(dirname $(find /usr/include -name curl.h | head -1)) /usr/include/curl &&
+            sudo mkdir -p /var/lib/apt/lists/partial &&
+            sudo apt-get update -qq &&
+            sudo apt-get install -y -q cmake libcurl4-openssl-dev &&
+            sudo ln -sf $(dirname $(find /usr/include -name curl.h | head -1)) /usr/include/curl &&
             git config --global credential.helper store &&
             cp .git-credentials ~/.git-credentials
 
