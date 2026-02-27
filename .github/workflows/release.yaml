@@ -86,7 +86,13 @@ jobs:
             sudo mkdir -p /var/lib/apt/lists/partial &&
             sudo apt-get update -qq &&
             sudo apt-get install -y -q cmake libcurl4-openssl-dev &&
-            sudo ln -sf $(dirname $(find /usr/include -name curl.h | head -1)) /usr/include/curl &&
+            curl_include=$(dirname $(find /usr/include -name curl.h | head -1)) &&
+            sudo ln -sf $curl_include /usr/include/curl &&
+            if [[ $CARGO_BUILD_TARGET == *musl* ]]; then
+            linker_var="CARGO_TARGET_$(echo $CARGO_BUILD_TARGET | tr a-z- A-Z_)_LINKER" &&
+            cc="${!linker_var}" &&
+            sysroot=$($cc --print-sysroot) &&
+            sudo ln -sf $curl_include ${sysroot}/include/curl; fi &&
             git config --global credential.helper store &&
             cp .git-credentials ~/.git-credentials
 
