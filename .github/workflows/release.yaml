@@ -76,7 +76,7 @@ jobs:
         with:
           platform: ${{ matrix.target.platform }}
           ruby-versions: "3.2,3.3,3.4"
-          pre-script: "if command -v apk > /dev/null; then apk add --no-cache cmake make curl-dev; elif command -v yum > /dev/null; then yum install -y cmake libcurl-devel; elif command -v apt-get > /dev/null; then mkdir -p /var/lib/apt/lists/partial && apt-get update && apt-get install -y cmake libcurl4-openssl-dev; fi"
+          pre-script: "if command -v apk > /dev/null; then apk add --no-cache cmake make curl-dev; elif command -v yum > /dev/null; then yum install -y cmake libcurl-devel; elif command -v apt-get > /dev/null; then mkdir -p /var/lib/apt/lists/partial && apt-get update && apt-get install -y cmake libcurl4-openssl-dev && curl_include=$(dirname \"$(find /usr/include -name 'curl.h' | head -1)\") && ln -sf \"$curl_include\" /usr/include/curl; fi"
 
       - name: Upload cross-compiled gem
         uses: actions/upload-artifact@v4
