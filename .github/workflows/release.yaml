@@ -87,7 +87,8 @@ jobs:
             apt-get update -qq &&
             apt-get install -y -q cmake libcurl4-openssl-dev &&
             ln -sf $(dirname $(find /usr/include -name curl.h | head -1)) /usr/include/curl &&
-            git config --global credential.helper 'store --file /usr/local/cargo/.git-credentials' &&
+            git config --global credential.helper store &&
+            cp /usr/local/cargo/.git-credentials /root/.git-credentials &&
             bundle install &&
             bundle exec rake native:$RUBY_TARGET gem
 
