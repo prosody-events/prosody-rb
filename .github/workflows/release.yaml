@@ -70,11 +70,11 @@ jobs:
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
-      - name: Write git credentials into cargo home for container mount
+      - name: Write git credentials into working directory for container mount
         run: |
           echo 'https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com' \
-            > "$HOME/.cargo/.git-credentials"
-          chmod 600 "$HOME/.cargo/.git-credentials"
+            > .git-credentials
+          chmod 600 .git-credentials
 
       - name: Cross-compile gem
         uses: cincpro/oxidize-rb-actions/cross-gem@v1
@@ -83,14 +83,12 @@ jobs:
           platform: ${{ matrix.target.platform }}
           ruby-versions: "3.2,3.3,3.4"
           pre-script: >-
-            sudo mkdir -p /var/lib/apt/lists/partial &&
-            sudo apt-get update -qq &&
-            sudo apt-get install -y -q cmake libcurl4-openssl-dev &&
-            sudo ln -sf $(dirname $(find /usr/include -name curl.h | head -1)) /usr/include/curl &&
+            mkdir -p /var/lib/apt/lists/partial &&
+            apt-get update -qq &&
+            apt-get install -y -q cmake libcurl4-openssl-dev &&
+            ln -sf $(dirname $(find /usr/include -name curl.h | head -1)) /usr/include/curl &&
             git config --global credential.helper store &&
-            cp /usr/local/cargo/.git-credentials ~/.git-credentials &&
-            bundle install &&
-            bundle exec rake native:$RUBY_TARGET gem
+            cp .git-credentials ~/.git-credentials
 
       - name: Upload cross-compiled gem
         uses: actions/upload-artifact@v4
