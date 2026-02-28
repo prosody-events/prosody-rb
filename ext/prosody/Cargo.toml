@@ -15,7 +15,7 @@ educe.workspace = true
 futures.workspace = true
 magnus = { workspace = true, default-features = false }
 opentelemetry.workspace = true
-prosody = { workspace = true, default-features = false }
+prosody = { workspace = true }
 rb-sys.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde-untagged.workspace = true
@@ -27,7 +27,8 @@ tracing.workspace = true
 tracing-opentelemetry.workspace = true
 tracing-subscriber.workspace = true
 
-#[cfg(not(target_env = "msvc"))]
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
 tikv-jemallocator = { workspace = true, features = [
     "disable_initial_exec_tls",
 ] }

@@ -30,8 +30,8 @@ jobs:
           token: ${{ secrets.TEMP_GH_ALL_REPOS_RW }}
 
   build-cross-compiled-gems:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    needs: [release-please]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -49,15 +49,13 @@ jobs:
           - id: linux-musl-aarch64
             platform: aarch64-linux-musl
 
-          # macOS
-          - id: macos-x86_64
-            platform: x86_64-darwin
-          - id: macos-arm64
-            platform: arm64-darwin
-
           # Windows
           - id: windows-x64
             platform: x64-mingw-ucrt
+
+          # macOS
+          - id: macos-arm64
+            platform: arm64-darwin
 
     name: Build ${{ matrix.target.id }}
     steps:
@@ -80,14 +78,34 @@ jobs:
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
+      - name: Write git credentials into working directory for container mount
+        run: |
+          echo 'https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com' \
+            > .git-credentials
+          chmod 600 .git-credentials
+
       - name: Cross-compile gem
         uses: cincpro/oxidize-rb-actions/cross-gem@v1
         id: cross-gem
-        env:
-          RUSTFLAGS: ${{ matrix.target.platform == 'arm-linux' && '-C link-arg=-latomic' || '' }}
         with:
           platform: ${{ matrix.target.platform }}
           ruby-versions: "3.2,3.3,3.4"
+          pre-script: >-
+            sudo mkdir -p /var/lib/apt/lists/partial &&
+            sudo apt-get update -qq &&
+            sudo apt-get install -y -q cmake libcurl4-openssl-dev &&
+            curl_include=$(dirname $(find /usr/include -name curl.h | head -1)) &&
+            sudo ln -sf $curl_include /usr/include/curl &&
+            if [[ $CARGO_BUILD_TARGET == *musl* ]]; then
+            linker_var="CARGO_TARGET_$(echo $CARGO_BUILD_TARGET | tr a-z- A-Z_)_LINKER" &&
+            cc="${!linker_var}" &&
+            sysroot=$($cc --print-sysroot) &&
+            sudo ln -sf $curl_include ${sysroot}/include/curl; fi &&
+            if [[ $CARGO_BUILD_TARGET == *apple-darwin* ]]; then
+            export CFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld" &&
+            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi &&
+            git config --global credential.helper store &&
+            cp .git-credentials ~/.git-credentials
 
       - name: Upload cross-compiled gem
         uses: actions/upload-artifact@v4
@@ -96,8 +114,8 @@ jobs:
           path: ${{ steps.cross-gem.outputs.gem-path }}
 
   build-source-gem:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    needs: [release-please]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     name: Build source gem
     steps:
@@ -119,6 +137,9 @@ jobs:
           token: ${{ secrets.GH_ALL_REPOS_RO }}
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev
 
       - name: Install dependencies
         run: bundle install --jobs 4 --retry 3
@@ -171,7 +192,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -237,7 +258,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -309,7 +330,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -381,7 +402,7 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
-          
+
           # Wait for Cassandra
           echo "🔍 Checking Cassandra..."
           for i in {1..60}; do
@@ -416,11 +437,14 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     needs:
+      - release-please
       - build-source-gem
+      - build-cross-compiled-gems
       - test-linux-x86_64
       - test-linux-musl-x86_64
       - test-linux-aarch64
       - test-linux-musl-aarch64
+    if: needs.release-please.outputs.release_created == 'true'
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
