@@ -16,6 +16,7 @@ use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use std::sync::{LazyLock, OnceLock};
+#[cfg(not(target_os = "windows"))]
 use tikv_jemallocator::Jemalloc;
 use tokio::runtime::Runtime;
 
@@ -29,7 +30,7 @@ mod scheduler;
 mod tracing_util;
 mod util;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(target_os = "windows"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
