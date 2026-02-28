@@ -97,6 +97,9 @@ jobs:
             cc="${!linker_var}" &&
             sysroot=$($cc --print-sysroot) &&
             sudo ln -sf $curl_include ${sysroot}/include/curl; fi &&
+            if [[ $CARGO_BUILD_TARGET == *apple-darwin* ]]; then
+            export CFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld" &&
+            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi &&
             git config --global credential.helper store &&
             cp .git-credentials ~/.git-credentials
 
