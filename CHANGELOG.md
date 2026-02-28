@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.1](https://github.com/cincpro/prosody-rb/compare/v2.1.0...v2.1.1) (2026-02-28)
+
+
+### Bug Fixes
+
+* graceful slab_loader shutdown, remove timer backpressure gaps, and new API surface ([#55](https://github.com/cincpro/prosody-rb/issues/55)) ([213547e](https://github.com/cincpro/prosody-rb/commit/213547e86ed0734bda570bda7fc4bc54cfbf5618))
+* only log events, not spans ([#54](https://github.com/cincpro/prosody-rb/issues/54)) ([b591d64](https://github.com/cincpro/prosody-rb/commit/b591d64ed247ff79d9a2752988a54e0be910a828))
+* remove max_enqueued_per_key from type signatures ([#56](https://github.com/cincpro/prosody-rb/issues/56)) ([bd81a44](https://github.com/cincpro/prosody-rb/commit/bd81a4435fc9a8f3ad8c8788a0f853b100178876))
+
+
+### Performance Improvements
+
+* use jemalloc allocator ([#52](https://github.com/cincpro/prosody-rb/issues/52)) ([df889ec](https://github.com/cincpro/prosody-rb/commit/df889ec73ec0a9d5210a2aaba03fc62a5c5a696f))
+
 ## [2.1.0](https://github.com/cincpro/prosody-rb/compare/v2.0.5...v2.1.0) (2026-01-23)
 
 
