@@ -183,13 +183,11 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       callback = proc { |success, result| results_queue.push([success, result]) }
 
       token = processor.submit("t3", {}, callback) do
-        begin
-          sleep 0.5
-          "never"
-        rescue Async::Stop => e
-          exception_queue.push(e)
-          raise  # Re-raise to let wrapper handle it
-        end
+        sleep 0.5
+        "never"
+      rescue Async::Stop => e
+        exception_queue.push(e)
+        raise  # Re-raise to let wrapper handle it
       end
       tokens << token
       token.cancel
@@ -211,12 +209,10 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       callback = proc { |success, result| results_queue.push([success, result]) }
 
       token = processor.submit("t4", {}, callback) do
-        begin
-          sleep 0.5
-          "never"
-        ensure
-          ensure_queue.push(:cleanup_ran)
-        end
+        sleep 0.5
+        "never"
+      ensure
+        ensure_queue.push(:cleanup_ran)
       end
       tokens << token
       token.cancel
@@ -236,12 +232,10 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       callback = proc { |success, result| results_queue.push([success, result]) }
 
       token = processor.submit("t5", {}, callback) do
-        begin
-          sleep 0.5
-          "never"
-        rescue Async::Stop
-          :gracefully_handled  # Don't re-raise
-        end
+        sleep 0.5
+        "never"
+      rescue Async::Stop
+        :gracefully_handled  # Don't re-raise
       end
       tokens << token
       token.cancel

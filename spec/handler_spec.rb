@@ -161,6 +161,7 @@ RSpec.describe Prosody::ErrorClassification do
       expect {
         Class.new do
           extend Prosody::ErrorClassification
+
           permanent :nonexistent_method, StandardError
         end
       }.to raise_error(NameError)

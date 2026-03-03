@@ -7,7 +7,7 @@ RSpec.describe Prosody::Client, integration: true do
     # Create the client with a hash directly
     client = Prosody::Client.new(
       bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
-      source_system:     "init-test-system",
+      source_system: "init-test-system"
     )
 
     # The client should be instantiated successfully
@@ -18,7 +18,7 @@ RSpec.describe Prosody::Client, integration: true do
     # Build a Configuration object explicitly
     config = Prosody::Configuration.new(
       bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
-      source_system:     "init-test-system",
+      source_system: "init-test-system"
     )
 
     # Ensure the configuration converted the string to an array
