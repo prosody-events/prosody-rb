@@ -84,10 +84,17 @@ jobs:
         with:
           crate: taplo-cli
       - uses: Swatinem/rust-cache@v2
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
       - name: Enforce Rust formatting
         run: cargo fmt --check
       - name: Enforce TOML formatting
         run: taplo validate
+      - name: Enforce Ruby formatting
+        run: bundle exec standardrb
 
   dependencies:
     name: Dependencies

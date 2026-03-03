@@ -1,6 +1,6 @@
 # Prosody Ruby Development Makefile
 
-.PHONY: help compile compile-dev test test-tracing clean
+.PHONY: help compile compile-dev test test-tracing format format-check clean
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -21,6 +21,14 @@ test-tracing: compile-dev ## Run tracing integration test with OpenTelemetry col
 	PROSODY_SUBSCRIBED_TOPICS=test-topic \
 	PROSODY_CASSANDRA_NODES=localhost:9042 \
 	bundle exec rspec --tag tracing --format documentation
+
+format: ## Format all code (Rust + Ruby)
+	cargo fmt --manifest-path ext/prosody/Cargo.toml
+	bundle exec standardrb --fix
+
+format-check: ## Check formatting without modifying files (Rust + Ruby)
+	cargo fmt --manifest-path ext/prosody/Cargo.toml --check
+	bundle exec standardrb
 
 clean: ## Clean build artifacts
 	bundle exec rake clean
