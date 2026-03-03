@@ -5,9 +5,9 @@
 
 use crate::bridge::Bridge;
 use crate::util::ensure_runtime_context;
-use crate::{id, ROOT_MOD};
+use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
-use magnus::{function, method, Error, Module, Object, Ruby, Value};
+use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
 use std::sync::Arc;
 use tracing::Span;
