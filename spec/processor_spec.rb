@@ -4,6 +4,7 @@ require "prosody"
 require "async"
 require "logger"
 require "opentelemetry-api"
+require "opentelemetry/sdk"
 
 # Tests for the CancellationToken class which provides a mechanism
 # for canceling in-flight asynchronous tasks
@@ -183,13 +184,11 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       callback = proc { |success, result| results_queue.push([success, result]) }
 
       token = processor.submit("t3", {}, callback) do
-        begin
-          sleep 0.5
-          "never"
-        rescue Async::Stop => e
-          exception_queue.push(e)
-          raise  # Re-raise to let wrapper handle it
-        end
+        sleep 0.5
+        "never"
+      rescue Async::Stop => e
+        exception_queue.push(e)
+        raise  # Re-raise to let wrapper handle it
       end
       tokens << token
       token.cancel
@@ -211,12 +210,10 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       callback = proc { |success, result| results_queue.push([success, result]) }
 
       token = processor.submit("t4", {}, callback) do
-        begin
-          sleep 0.5
-          "never"
-        ensure
-          ensure_queue.push(:cleanup_ran)
-        end
+        sleep 0.5
+        "never"
+      ensure
+        ensure_queue.push(:cleanup_ran)
       end
       tokens << token
       token.cancel
@@ -236,12 +233,10 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       callback = proc { |success, result| results_queue.push([success, result]) }
 
       token = processor.submit("t5", {}, callback) do
-        begin
-          sleep 0.5
-          "never"
-        rescue Async::Stop
-          :gracefully_handled  # Don't re-raise
-        end
+        sleep 0.5
+        "never"
+      rescue Async::Stop
+        :gracefully_handled  # Don't re-raise
       end
       tokens << token
       token.cancel
@@ -284,6 +279,46 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       expect(result).to be_a(StandardError)
       expect(result.message).to eq("boom")
       expect(logger).to have_received(:error).with("Error executing task e3: boom")
+    end
+  end
+
+  # Tests for OpenTelemetry context propagation into the worker fiber
+  context "span context propagation" do
+    let(:span_exporter) { OpenTelemetry::SDK::Trace::Export::InMemorySpanExporter.new }
+    let(:tracer) { OpenTelemetry.tracer_provider.tracer("test") }
+
+    before do
+      OpenTelemetry::SDK.configure do |c|
+        c.add_span_processor(
+          OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor.new(span_exporter)
+        )
+      end
+      processor.start
+    end
+
+    after do
+      processor.stop
+      processor.instance_variable_get(:@processing_thread).join
+      OpenTelemetry.tracer_provider = OpenTelemetry::Internal::ProxyTracerProvider.new
+    end
+
+    it "makes async_dispatch the parent of spans created inside the task block" do
+      results_queue = Queue.new
+      callback = proc { |success, result| results_queue.push([success, result]) }
+
+      processor.submit("span-test", {}, callback) do
+        tracer.in_span("child-span") {}
+      end
+
+      results_queue.pop
+
+      finished = span_exporter.finished_spans
+      dispatch = finished.find { |s| s.name == "async_dispatch" }
+      child = finished.find { |s| s.name == "child-span" }
+
+      expect(dispatch).not_to be_nil
+      expect(child).not_to be_nil
+      expect(child.parent_span_id).to eq(dispatch.span_id)
     end
   end
 

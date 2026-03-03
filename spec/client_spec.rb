@@ -8,7 +8,6 @@ require "securerandom"
 # with a real Kafka instance. Tests cover initialization, subscription, message
 # publishing/consumption, message ordering, shutdown, and error handling.
 RSpec.describe Prosody::Client, integration: true do
-
   # Collects and provides messages in a thread-safe manner.
   # Used to verify message receipt in tests.
   class MessageStream
@@ -538,7 +537,7 @@ RSpec.describe Prosody::Client, integration: true do
       def test_schedule_multiple_timers(context)
         times = create_future_times([30, 60, 90])
         schedule_times(context, times)
-        
+
         scheduled_times = context.scheduled
         @event_stream.push({
           operation: :schedule_multiple,
@@ -551,11 +550,11 @@ RSpec.describe Prosody::Client, integration: true do
       def test_unschedule_specific_timer(context)
         times = create_future_times([40, 80])
         schedule_times(context, times)
-        
+
         before_count = context.scheduled.length
         context.unschedule(times.first)
         after_count = context.scheduled.length
-        
+
         @event_stream.push({
           operation: :unschedule,
           before_count: before_count,
@@ -568,13 +567,13 @@ RSpec.describe Prosody::Client, integration: true do
       def test_clear_and_schedule_operation(context)
         initial_times = create_future_times([50, 100])
         new_time = create_future_times([150]).first
-        
+
         schedule_times(context, initial_times)
         before_count = context.scheduled.length
-        
+
         context.clear_and_schedule(new_time)
         after_scheduled = context.scheduled
-        
+
         @event_stream.push({
           operation: :clear_and_schedule,
           before_count: before_count,
@@ -587,11 +586,11 @@ RSpec.describe Prosody::Client, integration: true do
       def test_clear_all_scheduled_timers(context)
         times = create_future_times([70, 140])
         schedule_times(context, times)
-        
+
         before_count = context.scheduled.length
         context.clear_scheduled
         after_count = context.scheduled.length
-        
+
         @event_stream.push({
           operation: :clear_scheduled,
           before_count: before_count,
@@ -602,7 +601,7 @@ RSpec.describe Prosody::Client, integration: true do
 
       def test_scheduled_when_empty(context)
         scheduled_times = context.scheduled
-        
+
         @event_stream.push({
           operation: :scheduled_empty,
           scheduled_count: scheduled_times.length,
@@ -623,16 +622,16 @@ RSpec.describe Prosody::Client, integration: true do
   end
 
   def send_timer_test_messages(client, topic)
-    client.send_message(topic, "timer-ops-1", { action: "test_schedule_multiple" })
-    client.send_message(topic, "timer-ops-2", { action: "test_unschedule" })
-    client.send_message(topic, "timer-ops-3", { action: "test_clear_and_schedule" })
-    client.send_message(topic, "timer-ops-4", { action: "test_clear_scheduled" })
-    client.send_message(topic, "timer-ops-5", { action: "test_scheduled_empty" })
+    client.send_message(topic, "timer-ops-1", {action: "test_schedule_multiple"})
+    client.send_message(topic, "timer-ops-2", {action: "test_unschedule"})
+    client.send_message(topic, "timer-ops-3", {action: "test_clear_and_schedule"})
+    client.send_message(topic, "timer-ops-4", {action: "test_clear_scheduled"})
+    client.send_message(topic, "timer-ops-5", {action: "test_scheduled_empty"})
   end
 
   def verify_timer_operations(timer_operations_data)
     expect(timer_operations_data.length).to eq(5)
-    
+
     verify_schedule_multiple_operation(timer_operations_data)
     verify_unschedule_operation(timer_operations_data)
     verify_clear_and_schedule_operation(timer_operations_data)
@@ -682,10 +681,10 @@ RSpec.describe Prosody::Client, integration: true do
   it "provides comprehensive timer scheduling operations" do
     timer_stream = TimerEventStream.new
     handler = create_timer_test_handler(timer_stream)
-    
+
     client.subscribe(handler.new(timer_stream))
     send_timer_test_messages(client, topic)
-    
+
     timer_operations_data = timer_stream.wait_for_events(5, TestConfig::MESSAGE_TIMEOUT)
     verify_timer_operations(timer_operations_data)
   end
@@ -740,11 +739,11 @@ RSpec.describe Prosody::Client, integration: true do
 
   def verify_timer_scheduling_event(scheduling_events)
     expect(scheduling_events.length).to eq(1)
-    
+
     scheduled_event = scheduling_events.first
     expect(scheduled_event[:type]).to eq(:scheduled)
     expect(scheduled_event[:scheduled_count]).to eq(2)
-    
+
     scheduled_event
   end
 
@@ -772,7 +771,7 @@ RSpec.describe Prosody::Client, integration: true do
     else
       scheduled_event[:timer2_target]
     end
-    
+
     expect(event[:actual_fire_time]).to be_within(1).of(expected_target)
     expect(event[:timer_time].to_i).to be_within(1).of(expected_target.to_i)
   end
@@ -780,7 +779,7 @@ RSpec.describe Prosody::Client, integration: true do
   def verify_timer_firing_order(fired_events)
     first_timer = fired_events.min_by { |e| e[:actual_fire_time] }
     second_timer = fired_events.max_by { |e| e[:actual_fire_time] }
-    
+
     expect(first_timer[:actual_fire_time]).to be < second_timer[:actual_fire_time]
   end
 
@@ -790,7 +789,7 @@ RSpec.describe Prosody::Client, integration: true do
     handler = create_timer_firing_test_handler(timer_stream)
 
     client.subscribe(handler.new(timer_stream))
-    client.send_message(topic, "timer-fire-test", { action: "test_timer_firing" })
+    client.send_message(topic, "timer-fire-test", {action: "test_timer_firing"})
 
     scheduling_events = timer_stream.wait_for_events(1, TestConfig::MESSAGE_TIMEOUT)
     scheduled_event = verify_timer_scheduling_event(scheduling_events)

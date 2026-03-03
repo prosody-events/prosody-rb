@@ -4,7 +4,8 @@
 //! This module implements Ruby bindings for creating and deleting Kafka topics.
 
 use crate::bridge::Bridge;
-use crate::{BRIDGE, ROOT_MOD, id};
+use crate::util::ensure_runtime_context;
+use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, Ruby, Value, function, method};
 use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
@@ -39,6 +40,7 @@ impl AdminClient {
     /// - The bridge is not initialized
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(ruby: &Ruby, bootstrap_servers: Vec<String>) -> Result<Self, Error> {
+        let _guard = ensure_runtime_context(ruby);
         let admin_config = AdminConfiguration::new(bootstrap_servers)
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
@@ -47,7 +49,7 @@ impl AdminClient {
                 .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?,
         );
 
-        let bridge = BRIDGE
+        let bridge = crate::BRIDGE
             .get()
             .ok_or(Error::new(
                 ruby.exception_runtime_error(),
