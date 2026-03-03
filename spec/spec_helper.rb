@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "async"
-require 'async/rspec'
+require "async/rspec"
 require "prosody"
 
 # Load shared test configuration

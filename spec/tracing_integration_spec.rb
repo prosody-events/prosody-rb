@@ -46,7 +46,7 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
 
         context.schedule(timer_time)
 
-        span.add_event("timer_scheduled", attributes: { "timer.time" => timer_time.to_f })
+        span.add_event("timer_scheduled", attributes: {"timer.time" => timer_time.to_f})
 
         # Signal that message was received
         @message_received_latch << :received
@@ -96,12 +96,12 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
         )
       )
 
-#       # Add console exporter for debugging
-#       c.add_span_processor(
-#         OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor.new(
-#           OpenTelemetry::SDK::Trace::Export::ConsoleSpanExporter.new
-#         )
-#       )
+      #       # Add console exporter for debugging
+      #       c.add_span_processor(
+      #         OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor.new(
+      #           OpenTelemetry::SDK::Trace::Export::ConsoleSpanExporter.new
+      #         )
+      #       )
     end
   end
 
@@ -111,20 +111,18 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
   end
 
   after do
-    begin
-      # Properly shutdown the OpenTelemetry SDK to flush all spans
-      logger = Logger.new($stdout)
-      logger.info "Shutting down OpenTelemetry SDK to flush spans..."
-      # Sleep to allow natural span flushing
-      sleep 5
-      logger.info "Unsubscribing"
-      client.unsubscribe if client.consumer_state == :running
+    # Properly shutdown the OpenTelemetry SDK to flush all spans
+    logger = Logger.new($stdout)
+    logger.info "Shutting down OpenTelemetry SDK to flush spans..."
+    # Sleep to allow natural span flushing
+    sleep 5
+    logger.info "Unsubscribing"
+    client.unsubscribe if client.consumer_state == :running
 
-      logger.info "Deleting topic"
-      admin.delete_topic(topic)
-    rescue
-      # Ignore errors during cleanup
-    end
+    logger.info "Deleting topic"
+    admin.delete_topic(topic)
+  rescue
+    # Ignore errors during cleanup
   end
 
   it "creates a complete distributed trace across message sending, receiving, and timer execution" do
@@ -149,7 +147,7 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
         send_span.add_event("sending_message")
 
         # Debug: Log the current span context details
-        logger.info "Send span context - trace_id: #{send_span.context.trace_id&.unpack('H*')&.first}, span_id: #{send_span.context.span_id&.unpack('H*')&.first}"
+        logger.info "Send span context - trace_id: #{send_span.context.trace_id&.unpack1("H*")}, span_id: #{send_span.context.span_id&.unpack1("H*")}"
 
         client.send_message(topic, "test-key-123", {
           test: "tracing_integration",

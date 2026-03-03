@@ -132,7 +132,7 @@ module Prosody
     #   def on_message(context, message)
     #     timer_time = Time.now + 30
     #     context.schedule(timer_time)
-    #     
+    #
     #     # Later, cancel that specific timer
     #     context.unschedule(timer_time)
     #   end
@@ -261,7 +261,6 @@ module Prosody
     def time
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
-
   end
 
   # Main client for interacting with the Prosody messaging system.
