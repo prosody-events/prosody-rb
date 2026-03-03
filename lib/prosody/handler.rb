@@ -104,7 +104,7 @@ module Prosody
       end
 
       # Ensure the method exists (in this class or its ancestors)
-      unless instance_methods.include?(method_name)
+      unless method_defined?(method_name)
         raise NameError, "Method `#{method_name}` is not defined"
       end
 

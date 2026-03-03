@@ -4,15 +4,15 @@
 module TestConfig
   # Kafka configuration
   BOOTSTRAP_SERVERS = ENV.fetch("PROSODY_BOOTSTRAP_SERVERS", "localhost:9094")
-  
-  # Cassandra configuration  
+
+  # Cassandra configuration
   CASSANDRA_NODES = ENV.fetch("PROSODY_CASSANDRA_NODES", "localhost:9042")
-  
+
   # Test constants
   GROUP_NAME = "test-group"
   SOURCE_NAME = "test-source"
   MESSAGE_TIMEOUT = 5 # Time to wait for message delivery in seconds
-  
+
   # Creates a test configuration for Prosody::Client
   # @param topic [String] The Kafka topic to subscribe to
   # @param additional_options [Hash] Additional configuration options
