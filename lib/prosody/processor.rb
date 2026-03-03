@@ -212,8 +212,9 @@ module Prosody
       parent_ctx = OpenTelemetry.propagation.extract(carrier)
 
       # Create the dispatch span as a child of the extracted context, then
-      # capture the context with the span active so the fiber inherits it.
-      # The span is owned by run_with_cancellation, which finishes it in ensure.
+      # capture the resulting context so it can be explicitly restored inside
+      # the worker fiber. The span is owned by run_with_cancellation, which
+      # finishes it in ensure.
       dispatch_ctx = OpenTelemetry::Context.with_current(parent_ctx) do
         span = @tracer.start_span("async_dispatch", kind: :consumer)
         OpenTelemetry::Trace.with_span(span) { OpenTelemetry::Context.current }
