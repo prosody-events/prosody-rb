@@ -258,26 +258,24 @@ module Prosody
         # so we must explicitly restore dispatch_ctx so user spans are children
         # of async_dispatch.
         OpenTelemetry::Context.with_current(dispatch_ctx) do
-          begin
-            result = task_block.call
-            if callback.call(true, result)
-              @logger.debug("Task #{task_id} completed successfully")
-            end
-          rescue Async::Stop
-            # Task was cancelled - report via callback
-            if callback.call(false, RuntimeError.new("Task cancelled"))
-              @logger.debug("Task #{task_id} was cancelled")
-            end
-          rescue => e
-            if callback.call(false, e)
-              @logger.error("Error executing task #{task_id}: #{e.message}")
-              span.record_exception(e)
-              span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-            end
-          ensure
-            # Always signal the cancellation watcher to stop waiting
-            token.cancel
+          result = task_block.call
+          if callback.call(true, result)
+            @logger.debug("Task #{task_id} completed successfully")
           end
+        rescue Async::Stop
+          # Task was cancelled - report via callback
+          if callback.call(false, RuntimeError.new("Task cancelled"))
+            @logger.debug("Task #{task_id} was cancelled")
+          end
+        rescue => e
+          if callback.call(false, e)
+            @logger.error("Error executing task #{task_id}: #{e.message}")
+            span.record_exception(e)
+            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
+          end
+        ensure
+          # Always signal the cancellation watcher to stop waiting
+          token.cancel
         end
       end
 
