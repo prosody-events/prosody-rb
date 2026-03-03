@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/cincpro/prosody-rb/compare/v2.1.1...v2.1.2) (2026-03-03)
+
+
+### Bug Fixes
+
+* restore OTel context in async fibers and defer span finish ([#60](https://github.com/cincpro/prosody-rb/issues/60)) ([d545a10](https://github.com/cincpro/prosody-rb/commit/d545a105354030eeb270d7ba44c65b6abe5a3a8d))
+
 ## [2.1.1](https://github.com/cincpro/prosody-rb/compare/v2.1.0...v2.1.1) (2026-02-28)
 
 
