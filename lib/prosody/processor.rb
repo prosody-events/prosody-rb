@@ -211,19 +211,25 @@ module Prosody
       # Extract parent context from the incoming carrier for distributed tracing
       parent_ctx = OpenTelemetry.propagation.extract(carrier)
 
-      # Execute within the extracted OpenTelemetry context
-      OpenTelemetry::Context.with_current(parent_ctx) do
-        # Create execute span as child of the extracted context
-        execute_span = @tracer.start_span("async_dispatch", kind: :consumer)
-        OpenTelemetry::Trace.with_span(execute_span) do
-          @logger.debug("Executing task #{task_id}")
+      # Create the dispatch span as a child of the extracted context, then
+      # capture the context with the span active so the fiber inherits it.
+      # The span is owned by run_with_cancellation, which finishes it in ensure.
+      dispatch_ctx = OpenTelemetry::Context.with_current(parent_ctx) do
+        span = @tracer.start_span("async_dispatch", kind: :consumer)
+        OpenTelemetry::Trace.with_span(span) { OpenTelemetry::Context.current }
+      end
 
-          barrier.async do
-            run_with_cancellation(task_id, token, task_block, callback, execute_span)
-          end
-        ensure
-          execute_span.finish
+      @logger.debug("Executing task #{task_id}")
+
+      begin
+        barrier.async do
+          run_with_cancellation(task_id, token, task_block, callback, dispatch_ctx)
         end
+      rescue => e
+        # If we failed to enqueue, finish the span here since run_with_cancellation
+        # will never take ownership.
+        OpenTelemetry::Trace.current_span(dispatch_ctx).finish
+        raise e
       end
     end
 
@@ -239,15 +245,19 @@ module Prosody
     # @param token [CancellationToken] The token to monitor for cancellation
     # @param task_block [Proc] The work to execute
     # @param callback [Proc] The callback to notify of completion or error
-    # @param span [OpenTelemetry::Span] The tracing span for this task
-    def run_with_cancellation(task_id, token, task_block, callback, span)
-      OpenTelemetry::Trace.with_span(span) do
-        # Use a barrier to ensure both tasks are cleaned up when block exits
-        barrier = Async::Barrier.new
+    # @param dispatch_ctx [OpenTelemetry::Context] Context with async_dispatch span active
+    def run_with_cancellation(task_id, token, task_block, callback, dispatch_ctx)
+      span = OpenTelemetry::Trace.current_span(dispatch_ctx)
+      # Use a barrier to ensure both tasks are cleaned up when block exits
+      barrier = Async::Barrier.new
 
-        # Spawn worker task - handles its own result reporting
-        worker_task = barrier.async do |task|
-          task.annotate("Worker for task #{task_id}")
+      # Spawn worker task - handles its own result reporting
+      worker_task = barrier.async do |task|
+        task.annotate("Worker for task #{task_id}")
+        # Async fibers do not inherit fiber-local OTel context from their parent,
+        # so we must explicitly restore dispatch_ctx so user spans are children
+        # of async_dispatch.
+        OpenTelemetry::Context.with_current(dispatch_ctx) do
           begin
             result = task_block.call
             if callback.call(true, result)
@@ -269,25 +279,36 @@ module Prosody
             token.cancel
           end
         end
+      end
 
-        # Spawn cancellation watcher - stops worker when signaled
-        barrier.async do |task|
-          task.annotate("Cancellation watcher for task #{task_id}")
-          begin
-            token.wait
-            worker_task.stop
-          rescue => e
-            @logger.debug("Cancellation watcher error: #{e.message}")
-            span.record_exception(e)
-            span.status = OpenTelemetry::Trace::Status.error(e.to_s)
-          end
+      # Spawn cancellation watcher - bridges the thread-boundary cancellation signal
+      # into the fiber scheduler. The CancellationToken is a one-shot channel: the
+      # Rust bridge pushes a signal from its thread, and this fiber pops it and
+      # translates it into Async::Stop on the worker. We can't call worker_task.stop
+      # directly from the Rust thread since Async task control must happen on the
+      # scheduler thread.
+      barrier.async do |task|
+        task.annotate("Cancellation watcher for task #{task_id}")
+        begin
+          token.wait
+          worker_task.stop
+        rescue => e
+          @logger.debug("Cancellation watcher error: #{e.message}")
+          span.record_exception(e)
+          span.status = OpenTelemetry::Trace::Status.error(e.to_s)
         end
+      end
 
-        # Wait for worker to complete (normally, via Async::Stop, or with error)
-        worker_task.wait
+      # Wait for worker to complete (normally, via Async::Stop, or with error)
+      worker_task.wait
+    ensure
+      # Stop any remaining tasks (primarily the cancellation watcher).
+      # Finish the span last so it covers the full execution, and is guaranteed
+      # to close even if barrier.stop raises.
+      begin
+        barrier&.stop
       ensure
-        # Stop any remaining tasks (primarily the cancellation watcher)
-        barrier.stop
+        span.finish
       end
     end
   end
