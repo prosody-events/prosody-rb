@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
       - name: Install taplo from crates.io
@@ -90,9 +90,9 @@ jobs:
           ruby-version: '3.4'
           bundler-cache: true
       - name: Enforce Rust formatting
-        run: cargo fmt --check
+        run: cargo +nightly fmt --check
       - name: Enforce TOML formatting
-        run: taplo validate
+        run: taplo fmt --check
       - name: Enforce Ruby formatting
         run: bundle exec standardrb
 

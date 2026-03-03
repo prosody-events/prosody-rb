@@ -22,12 +22,14 @@ test-tracing: compile-dev ## Run tracing integration test with OpenTelemetry col
 	PROSODY_CASSANDRA_NODES=localhost:9042 \
 	bundle exec rspec --tag tracing --format documentation
 
-format: ## Format all code (Rust + Ruby)
-	cargo fmt --manifest-path ext/prosody/Cargo.toml
+format: ## Format all code (Rust + Ruby + TOML)
+	cargo +nightly fmt --manifest-path ext/prosody/Cargo.toml
+	taplo fmt
 	bundle exec standardrb --fix
 
-format-check: ## Check formatting without modifying files (Rust + Ruby)
-	cargo fmt --manifest-path ext/prosody/Cargo.toml --check
+format-check: ## Check formatting without modifying files (Rust + Ruby + TOML)
+	cargo +nightly fmt --manifest-path ext/prosody/Cargo.toml --check
+	taplo fmt --check
 	bundle exec standardrb
 
 clean: ## Clean build artifacts
