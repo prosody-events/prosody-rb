@@ -3,6 +3,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      release_as:
+        description: 'Force release version (e.g. 2.2.0.beta.1)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -28,6 +34,7 @@ jobs:
           release-type: ruby
           package-name: prosody
           token: ${{ secrets.TEMP_GH_ALL_REPOS_RW }}
+          release-as: ${{ github.event.inputs.release_as }}
 
   build-cross-compiled-gems:
     needs: [release-please]
