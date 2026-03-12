@@ -56,6 +56,8 @@ RSpec.describe Prosody::Configuration do
       expect(config.defer_cache_size).to be_nil
       expect(config.defer_seek_timeout).to be_nil
       expect(config.defer_discard_threshold).to be_nil
+      expect(config.telemetry_topic).to be_nil
+      expect(config.telemetry_enabled).to be_nil
     end
   end
 
@@ -167,7 +169,7 @@ RSpec.describe Prosody::Configuration do
 
     context "boolean fields for middleware" do
       # Tests boolean parameters for middleware configuration
-      %i[monopolization_enabled defer_enabled].each do |field|
+      %i[monopolization_enabled defer_enabled telemetry_enabled].each do |field|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", true)
           expect(config.public_send(field)).to eq(true)
@@ -191,7 +193,8 @@ RSpec.describe Prosody::Configuration do
         cassandra_datacenter: "dc1",
         cassandra_rack: "rack1",
         cassandra_user: "cassandra_user",
-        cassandra_password: "cassandra_password"
+        cassandra_password: "cassandra_password",
+        telemetry_topic: "prosody.telemetry-events"
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)

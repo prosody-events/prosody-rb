@@ -18,6 +18,7 @@ use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
+use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
@@ -174,6 +175,13 @@ pub struct NativeConfiguration {
     // Timeout configuration
     /// Fixed timeout duration for handler execution (in seconds).
     timeout: Option<f32>,
+
+    // Telemetry emitter configuration
+    /// Kafka topic to produce telemetry events to.
+    telemetry_topic: Option<String>,
+
+    /// Whether the telemetry emitter is enabled.
+    telemetry_enabled: Option<bool>,
 }
 
 /// Configuration for the health probe port.
@@ -668,8 +676,48 @@ impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for ConsumerBuilders {
-    /// Converts a `NativeConfiguration` reference into a `ConsumerBuilders`.
+impl<'a> TryFrom<&'a NativeConfiguration> for TelemetryEmitterConfiguration {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
+    /// `TelemetryEmitterConfiguration`.
+    ///
+    /// This takes the relevant telemetry emitter settings from the configuration
+    /// and constructs a `TelemetryEmitterConfiguration`, falling back to
+    /// environment-variable-aware defaults for any unset fields.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `TelemetryEmitterConfiguration` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a related environment variable contains an
+    /// unparseable value.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut builder = Self::builder();
+
+        if let Some(topic) = &config.telemetry_topic {
+            builder.topic(topic.clone());
+        }
+
+        if let Some(enabled) = &config.telemetry_enabled {
+            builder.enabled(*enabled);
+        }
+
+        builder.build().map_err(|e| e.to_string())
+    }
+}
+
+impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
+    /// `ConsumerBuilders`.
     ///
     /// This creates all the consumer-related configuration builders from
     /// the configuration.
@@ -681,9 +729,14 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerBuilders {
     /// # Returns
     ///
     /// A `ConsumerBuilders` containing all consumer-related configuration
-    /// builders
-    fn from(config: &'a NativeConfiguration) -> Self {
-        Self {
+    /// builders if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if the telemetry emitter configuration cannot
+    /// be built (e.g. an environment variable contains an unparseable value).
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        Ok(Self {
             consumer: config.into(),
             retry: config.into(),
             failure_topic: config.into(),
@@ -691,6 +744,7 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerBuilders {
             monopolization: config.into(),
             defer: config.into(),
             timeout: config.into(),
-        }
+            emitter: config.try_into()?,
+        })
     }
 }
