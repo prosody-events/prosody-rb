@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/cincpro/prosody-rb/compare/v2.1.3...v2.2.0) (2026-03-12)
+
+
+### Features
+
+* expose telemetry emitter configuration to Ruby client ([#64](https://github.com/cincpro/prosody-rb/issues/64)) ([e05b05d](https://github.com/cincpro/prosody-rb/commit/e05b05d35a4f180d0319a6ff3eb4cd7c8a9622dd))
+
 ## [2.1.3](https://github.com/cincpro/prosody-rb/compare/v2.1.2...v2.1.3) (2026-03-05)
 
 
