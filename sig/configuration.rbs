@@ -206,6 +206,14 @@ module Prosody
     def timeout: () -> Float?
     def timeout=: (Numeric) -> Float
 
+    # Kafka topic to produce internal telemetry events to
+    def telemetry_topic: () -> String?
+    def telemetry_topic=: (_ToS) -> String
+
+    # Whether the telemetry emitter is enabled
+    def telemetry_enabled: () -> bool?
+    def telemetry_enabled=: (untyped) -> bool
+
     # Convert configuration to a hash with non-nil values only
     def to_hash: () -> Hash[Symbol, untyped]
   end

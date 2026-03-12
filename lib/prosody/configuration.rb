@@ -248,6 +248,16 @@ module Prosody
     # If unset, defaults to 80% of stall_threshold.
     config_param :timeout, converter: ->(v) { duration_converter(v) }
 
+    # Telemetry emitter configuration
+    #
+    # Kafka topic to produce internal telemetry events to.
+    # Overrides the PROSODY_TELEMETRY_TOPIC environment variable.
+    config_param :telemetry_topic, converter: lambda(&:to_s)
+
+    # Whether the telemetry emitter is enabled.
+    # Overrides the PROSODY_TELEMETRY_ENABLED environment variable.
+    config_param :telemetry_enabled, converter: ->(v) { v.nil? ? nil : !!v }
+
     # Operation mode of the client.
     #
     # Valid values:
