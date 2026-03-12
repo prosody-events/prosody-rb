@@ -18,6 +18,7 @@ use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
+use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
@@ -174,6 +175,13 @@ pub struct NativeConfiguration {
     // Timeout configuration
     /// Fixed timeout duration for handler execution (in seconds).
     timeout: Option<f32>,
+
+    // Telemetry emitter configuration
+    /// Kafka topic to produce telemetry events to.
+    telemetry_topic: Option<String>,
+
+    /// Whether the telemetry emitter is enabled.
+    telemetry_enabled: Option<bool>,
 }
 
 /// Configuration for the health probe port.
@@ -668,6 +676,38 @@ impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
     }
 }
 
+impl<'a> From<&'a NativeConfiguration> for TelemetryEmitterConfiguration {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `TelemetryEmitterConfiguration`.
+    ///
+    /// This takes the relevant telemetry emitter settings from the configuration
+    /// and constructs a `TelemetryEmitterConfiguration`, falling back to
+    /// environment-variable-aware defaults for any unset fields.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `TelemetryEmitterConfiguration`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::builder();
+
+        if let Some(topic) = &config.telemetry_topic {
+            builder.topic(topic.clone());
+        }
+
+        if let Some(enabled) = &config.telemetry_enabled {
+            builder.enabled(*enabled);
+        }
+
+        builder
+            .build()
+            .expect("telemetry emitter configuration should always build")
+    }
+}
+
 impl<'a> From<&'a NativeConfiguration> for ConsumerBuilders {
     /// Converts a `NativeConfiguration` reference into a `ConsumerBuilders`.
     ///
@@ -691,6 +731,7 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerBuilders {
             monopolization: config.into(),
             defer: config.into(),
             timeout: config.into(),
+            emitter: config.into(),
         }
     }
 }
