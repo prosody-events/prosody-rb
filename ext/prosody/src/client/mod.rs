@@ -19,6 +19,7 @@ use crate::{BRIDGE, ROOT_MOD, id};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::HighLevelClient;
 use prosody::high_level::mode::Mode;
 use prosody::high_level::state::ConsumerState;
@@ -86,10 +87,14 @@ impl Client {
             .try_into()
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
+        let consumer_builders: ConsumerBuilders = config_ref
+            .try_into()
+            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
+
         let client = HighLevelClient::new(
             mode,
             &mut config_ref.into(),
-            &config_ref.into(),
+            &consumer_builders,
             &config_ref.into(),
         )
         .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
