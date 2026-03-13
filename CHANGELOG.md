@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/cincpro/prosody-rb/compare/v2.2.0...v2.2.1) (2026-03-13)
+
+
+### Bug Fixes
+
+* telemetry event_time uses millisecond precision with Z suffix ([#69](https://github.com/cincpro/prosody-rb/issues/69)) ([ee39b66](https://github.com/cincpro/prosody-rb/commit/ee39b66ac2dbd576a2a11a6762c8dbe5df5dfd75))
+
 ## [2.2.0](https://github.com/cincpro/prosody-rb/compare/v2.1.3...v2.2.0) (2026-03-12)
 
 
