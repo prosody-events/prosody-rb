@@ -147,8 +147,7 @@ impl Client {
             Span::current(),
         )?;
 
-        let state =
-            state.map_err(|msg| Error::new(ruby.exception_runtime_error(), msg))?;
+        let state = state.map_err(|msg| Error::new(ruby.exception_runtime_error(), msg))?;
 
         Ok(ruby.sym_new(state))
     }
