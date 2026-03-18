@@ -131,17 +131,24 @@ impl Client {
     /// A Ruby symbol representing the current consumer state.
     pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
         let inner = this.inner.clone();
-        let state = this.bridge.wait_for(
+        let state: Result<&'static str, String> = this.bridge.wait_for(
             ruby,
             async move {
-                match *inner.consumer_state().await {
-                    ConsumerState::Unconfigured => "unconfigured",
-                    ConsumerState::Configured(_) => "configured",
-                    ConsumerState::Running { .. } => "running",
+                let view = inner.consumer_state().await;
+                match &*view {
+                    ConsumerState::Unconfigured => Ok("unconfigured"),
+                    ConsumerState::ConfigurationFailed(err) => {
+                        Err(format!("consumer configuration failed: {err:#}"))
+                    }
+                    ConsumerState::Configured(_) => Ok("configured"),
+                    ConsumerState::Running { .. } => Ok("running"),
                 }
             },
             Span::current(),
         )?;
+
+        let state =
+            state.map_err(|msg| Error::new(ruby.exception_runtime_error(), msg))?;
 
         Ok(ruby.sym_new(state))
     }

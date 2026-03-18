@@ -8,7 +8,6 @@ use crate::bridge::Bridge;
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
-use futures::TryStreamExt;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, RClass, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
@@ -301,12 +300,7 @@ impl Context {
             .bridge
             .wait_for(
                 ruby,
-                async move {
-                    inner
-                        .scheduled(TimerType::Application)
-                        .try_collect::<Vec<_>>()
-                        .await
-                },
+                async move { inner.scheduled(TimerType::Application).await },
                 span,
             )?
             .map_err(|e| {
