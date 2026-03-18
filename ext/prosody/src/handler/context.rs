@@ -295,7 +295,6 @@ impl Context {
             debug!("failed to set parent span: {err:#}");
         }
 
-        // Collect the scheduled times stream into a Vec
         let scheduled_times = this
             .bridge
             .wait_for(

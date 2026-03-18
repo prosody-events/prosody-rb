@@ -129,6 +129,12 @@ impl Client {
     /// # Returns
     ///
     /// A Ruby symbol representing the current consumer state.
+    ///
+    /// # Errors
+    ///
+    /// Raises `RuntimeError` if the consumer configuration failed during
+    /// build, with the full error message from the underlying
+    /// `ModeConfigurationError`.
     pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
         let inner = this.inner.clone();
         let state: Result<&'static str, String> = this.bridge.wait_for(
