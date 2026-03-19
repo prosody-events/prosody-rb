@@ -63,7 +63,7 @@ module Prosody
     @tracer: untyped?
 
     # Creates a new processor with the given logger
-    # @param logger logger for diagnostic messages (defaults to STDOUT)
+    # @param logger logger for diagnostic messages (defaults to Prosody.logger)
     def initialize: (?Logger) -> void
 
     # Starts the processor by launching a dedicated thread

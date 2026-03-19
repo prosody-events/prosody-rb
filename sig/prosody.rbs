@@ -1,4 +1,13 @@
 module Prosody
+  @logger: Logger?
+
+  # Returns the module-level logger, creating a default if not yet set.
+  # The default writes to $stdout at INFO level.
+  def self.logger: () -> Logger
+
+  # Sets the module-level logger. Pass nil to reset to the default.
+  def self.logger=: (Logger?) -> Logger?
+
   # Wrapper for dynamically-typed results from async operations.
   # This is an internal class used for bridging Rust and Ruby.
   class DynamicResult
