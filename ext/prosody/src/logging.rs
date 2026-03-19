@@ -13,12 +13,13 @@
 use crate::bridge::Bridge;
 use crate::id;
 use crate::util::ThreadSafeValue;
+use crate::ROOT_MOD;
 use bumpalo::Bump;
 use bumpalo::collections::string::String as BumpString;
 use educe::Educe;
 use futures::StreamExt;
 use magnus::value::ReprValue;
-use magnus::{Class, Module, RClass, Ruby, Value};
+use magnus::{Ruby, Value};
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
@@ -76,9 +77,8 @@ impl Logger {
     pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, magnus::Error> {
         let (tx, rx) = unbounded_channel::<(Level, String)>();
 
-        let logger_class: RClass = ruby.module_kernel().const_get(id!(ruby, "Logger"))?;
-        let stdout: Value = ruby.module_kernel().const_get(id!(ruby, "STDOUT"))?;
-        let logger = logger_class.new_instance((stdout,))?;
+        let module = ruby.get_inner(&ROOT_MOD);
+        let logger: Value = module.funcall(id!(ruby, "logger"), ())?;
         let logger = Arc::new(ThreadSafeValue::new(logger));
 
         spawn(async move {

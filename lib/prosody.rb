@@ -13,11 +13,22 @@
 # - Automatic error classification and retry logic
 
 require "async"
+require "logger"
 require_relative "prosody/version"
 require_relative "prosody/configuration"
 require_relative "prosody/handler"
 require_relative "prosody/processor"
 require_relative "prosody/native_stubs" if defined?(Prosody::Client)
+
+module Prosody
+  def self.logger
+    @logger ||= Logger.new($stdout).tap { |l| l.level = Logger::INFO }
+  end
+
+  def self.logger=(logger)
+    @logger = logger
+  end
+end
 
 # Attempt to load the native extension specific to the current Ruby version first,
 # falling back to the generic version if not available. This allows for optimized

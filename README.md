@@ -268,6 +268,33 @@ Prosody can emit internal processing events (message lifecycle, timer events) to
 | `telemetry_topic` / `PROSODY_TELEMETRY_TOPIC` | Kafka topic to produce telemetry events to | `prosody.telemetry-events` |
 | `telemetry_enabled` / `PROSODY_TELEMETRY_ENABLED` | Enable or disable the telemetry emitter  | true                       |
 
+## Logging
+
+Prosody exposes a module-level logger used by both the native Rust extension and the Ruby async processor. By default it
+writes to `$stdout` at the `INFO` level.
+
+```ruby
+# Read the current logger
+Prosody.logger
+# => #<Logger:... @level=1 ...>
+
+# Assign a custom logger
+Prosody.logger = Logger.new("log/prosody.log", level: Logger::DEBUG)
+
+# Or silence logging entirely
+Prosody.logger = Logger.new("/dev/null")
+```
+
+Set `Prosody.logger` **before** creating a `Prosody::Client`. The Rust runtime reads the logger on first client
+initialization and will use whatever logger is configured at that point.
+
+Setting the logger back to `nil` restores the default:
+
+```ruby
+Prosody.logger = nil
+Prosody.logger.level  # => Logger::INFO
+```
+
 ## Liveness and Readiness Probes
 
 Prosody includes a built-in probe server for consumer-based applications that provides health check endpoints. The probe
