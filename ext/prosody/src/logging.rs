@@ -56,7 +56,7 @@ impl Logger {
     ///
     /// This function:
     /// 1. Creates a channel for passing log events
-    /// 2. Sets up a Ruby Logger instance directed to STDOUT
+    /// 2. Reads the user-configured logger from `Prosody.logger`
     /// 3. Spawns a tokio task to handle log events asynchronously
     ///
     /// # Arguments
@@ -71,9 +71,8 @@ impl Logger {
     /// # Errors
     ///
     /// Returns a `magnus::Error` if:
-    /// - The Ruby `Logger` class cannot be accessed
-    /// - STDOUT cannot be accessed
-    /// - Logger instantiation fails
+    /// - The `Prosody` module cannot be accessed
+    /// - Calling `Prosody.logger` fails
     pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, magnus::Error> {
         let (tx, rx) = unbounded_channel::<(Level, String)>();
 
