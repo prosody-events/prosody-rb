@@ -391,7 +391,7 @@ module Prosody
   # @private
   class AsyncTaskProcessor
     # @private
-    def initialize(logger = Logger.new($stdout))
+    def initialize(logger = Prosody.logger)
       # Actual implementation is in lib/prosody/processor.rb
     end
 

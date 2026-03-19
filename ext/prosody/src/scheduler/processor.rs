@@ -53,11 +53,11 @@ impl RubyProcessor {
     /// - Instantiation of the processor fails
     /// - Starting the processor fails
     pub fn new(ruby: &Ruby) -> Result<Self, Error> {
-        let class: RClass = ruby
-            .get_inner(&ROOT_MOD)
-            .const_get(id!(ruby, "AsyncTaskProcessor"))?;
+        let module = ruby.get_inner(&ROOT_MOD);
+        let logger: Value = module.funcall(id!(ruby, "logger"), ())?;
 
-        let instance: Value = class.new_instance(())?; // todo: pass in logger
+        let class: RClass = module.const_get(id!(ruby, "AsyncTaskProcessor"))?;
+        let instance: Value = class.new_instance((logger,))?;
         let _: Value = instance.funcall(id!(ruby, "start"), ())?;
         Ok(Self {
             processor: Arc::new(ThreadSafeValue::new(instance)),
