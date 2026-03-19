@@ -10,6 +10,7 @@
 
 #![allow(clippy::print_stderr)]
 
+use crate::ROOT_MOD;
 use crate::bridge::Bridge;
 use crate::id;
 use crate::util::ThreadSafeValue;
@@ -18,7 +19,7 @@ use bumpalo::collections::string::String as BumpString;
 use educe::Educe;
 use futures::StreamExt;
 use magnus::value::ReprValue;
-use magnus::{Class, Module, RClass, Ruby, Value};
+use magnus::{Ruby, Value};
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
@@ -55,7 +56,7 @@ impl Logger {
     ///
     /// This function:
     /// 1. Creates a channel for passing log events
-    /// 2. Sets up a Ruby Logger instance directed to STDOUT
+    /// 2. Reads the user-configured logger from `Prosody.logger`
     /// 3. Spawns a tokio task to handle log events asynchronously
     ///
     /// # Arguments
@@ -70,15 +71,13 @@ impl Logger {
     /// # Errors
     ///
     /// Returns a `magnus::Error` if:
-    /// - The Ruby `Logger` class cannot be accessed
-    /// - STDOUT cannot be accessed
-    /// - Logger instantiation fails
+    /// - The `Prosody` module cannot be accessed
+    /// - Calling `Prosody.logger` fails
     pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, magnus::Error> {
         let (tx, rx) = unbounded_channel::<(Level, String)>();
 
-        let logger_class: RClass = ruby.module_kernel().const_get(id!(ruby, "Logger"))?;
-        let stdout: Value = ruby.module_kernel().const_get(id!(ruby, "STDOUT"))?;
-        let logger = logger_class.new_instance((stdout,))?;
+        let module = ruby.get_inner(&ROOT_MOD);
+        let logger: Value = module.funcall(id!(ruby, "logger"), ())?;
         let logger = Arc::new(ThreadSafeValue::new(logger));
 
         spawn(async move {

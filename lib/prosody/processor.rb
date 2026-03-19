@@ -2,7 +2,6 @@
 
 require "async"
 require "async/barrier"
-require "logger"
 require "opentelemetry-api"
 require "prosody/version"
 
@@ -104,8 +103,8 @@ module Prosody
   class AsyncTaskProcessor
     # Creates a new processor with the given logger.
     #
-    # @param logger [Logger] Logger for diagnostic messages (defaults to STDOUT)
-    def initialize(logger = Logger.new($stdout))
+    # @param logger [Logger] Logger for diagnostic messages (defaults to Prosody.logger)
+    def initialize(logger = Prosody.logger)
       @logger = logger
       @command_queue = Queue.new
       @processing_thread = nil
