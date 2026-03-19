@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/cincpro/prosody-rb/compare/v2.2.1...v2.3.0) (2026-03-19)
+
+
+### Features
+
+* configuration error surfacing, per-type timer semaphores, timer read performance ([#71](https://github.com/cincpro/prosody-rb/issues/71)) ([ba82272](https://github.com/cincpro/prosody-rb/commit/ba82272ddb694e0e62ade6acd3ede88228671c1d))
+
 ## [2.2.1](https://github.com/cincpro/prosody-rb/compare/v2.2.0...v2.2.1) (2026-03-13)
 
 
