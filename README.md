@@ -282,7 +282,7 @@ Prosody.logger
 Prosody.logger = Logger.new("log/prosody.log", level: Logger::DEBUG)
 
 # Or silence logging entirely
-Prosody.logger = Logger.new("/dev/null")
+Prosody.logger = Logger.new(File::NULL)
 ```
 
 Set `Prosody.logger` **before** creating a `Prosody::Client`. The Rust runtime reads the logger on first client

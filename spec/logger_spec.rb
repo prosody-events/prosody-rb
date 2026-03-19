@@ -4,11 +4,11 @@ require "prosody"
 
 RSpec.describe "Prosody.logger" do
   around do |example|
-    original = Prosody.instance_variable_get(:@logger)
-    Prosody.instance_variable_set(:@logger, nil)
+    original = Prosody.logger
+    Prosody.logger = nil
     example.run
   ensure
-    Prosody.instance_variable_set(:@logger, original)
+    Prosody.logger = original
   end
 
   describe ".logger" do
