@@ -10,10 +10,10 @@
 
 #![allow(clippy::print_stderr)]
 
+use crate::ROOT_MOD;
 use crate::bridge::Bridge;
 use crate::id;
 use crate::util::ThreadSafeValue;
-use crate::ROOT_MOD;
 use bumpalo::Bump;
 use bumpalo::collections::string::String as BumpString;
 use educe::Educe;
