@@ -682,9 +682,10 @@ impl<'a> TryFrom<&'a NativeConfiguration> for TelemetryEmitterConfiguration {
     /// Attempts to convert a `NativeConfiguration` reference into a
     /// `TelemetryEmitterConfiguration`.
     ///
-    /// This takes the relevant telemetry emitter settings from the configuration
-    /// and constructs a `TelemetryEmitterConfiguration`, falling back to
-    /// environment-variable-aware defaults for any unset fields.
+    /// This takes the relevant telemetry emitter settings from the
+    /// configuration and constructs a `TelemetryEmitterConfiguration`,
+    /// falling back to environment-variable-aware defaults for any unset
+    /// fields.
     ///
     /// # Arguments
     ///
