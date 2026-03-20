@@ -45,7 +45,8 @@ pub struct NativeConfiguration {
     /// Kafka consumer group ID
     group_id: Option<String>,
 
-    /// Global shared cache capacity across all partitions for message deduplication
+    /// Global shared cache capacity across all partitions for message
+    /// deduplication
     idempotence_cache_size: Option<u32>,
 
     /// Version string for cache-busting deduplication hashes
@@ -705,7 +706,9 @@ impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
         }
 
         if let Some(ttl) = &config.idempotence_ttl {
-            builder.ttl(Duration::from_secs_f64(*ttl));
+            if ttl.is_finite() && *ttl >= 0.0 {
+                builder.ttl(Duration::from_secs_f64(*ttl));
+            }
         }
 
         builder
