@@ -9,12 +9,12 @@
 use magnus::{Error, Ruby, Value};
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
+use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
 use prosody::consumer::middleware::monopolization::MonopolizationConfigurationBuilder;
 use prosody::consumer::middleware::retry::RetryConfigurationBuilder;
 use prosody::consumer::middleware::scheduler::SchedulerConfigurationBuilder;
 use prosody::consumer::middleware::timeout::TimeoutConfigurationBuilder;
-use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
@@ -52,7 +52,7 @@ pub struct NativeConfiguration {
     idempotence_version: Option<String>,
 
     /// TTL for deduplication records in Cassandra (in seconds)
-    idempotence_ttl: Option<f32>,
+    idempotence_ttl: Option<f64>,
 
     /// List of Kafka topics to subscribe to
     subscribed_topics: Option<Vec<String>>,
@@ -705,7 +705,7 @@ impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
         }
 
         if let Some(ttl) = &config.idempotence_ttl {
-            builder.ttl(Duration::from_secs_f32(*ttl));
+            builder.ttl(Duration::from_secs_f64(*ttl));
         }
 
         builder
