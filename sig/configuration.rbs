@@ -76,11 +76,11 @@ module Prosody
 
     # Version string for cache-busting deduplication hashes
     def idempotence_version: () -> String?
-    def idempotence_version=: (String | _ToStr) -> String
+    def idempotence_version=: (_ToS) -> String
 
     # TTL for deduplication records in Cassandra (in seconds)
     def idempotence_ttl: () -> Float?
-    def idempotence_ttl=: (Float | Integer | _ToF) -> Float
+    def idempotence_ttl=: (Numeric) -> Float
 
     # Maximum number of concurrent message processing tasks
     def max_concurrency: () -> Integer?
@@ -241,13 +241,4 @@ module Prosody
     def to_int: () -> Integer
   end
 
-  # Helper interface for objects convertible to string via to_str
-  interface _ToStr
-    def to_str: () -> String
-  end
-
-  # Helper interface for objects convertible to float
-  interface _ToF
-    def to_f: () -> Float
-  end
 end
