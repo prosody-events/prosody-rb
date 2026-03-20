@@ -130,8 +130,16 @@ module Prosody
     # Maximum delay between retries (in seconds).
     config_param :max_retry_delay, converter: ->(v) { duration_converter(v) }
 
-    # Size of the cache used for message idempotence.
+    # Global shared cache capacity across all partitions for message deduplication.
+    # Default 8192. Set to 0 to disable deduplication entirely.
     config_param :idempotence_cache_size, converter: ->(v) { Integer(v) }
+
+    # Version string for cache-busting deduplication hashes. Changing this
+    # invalidates all previously recorded dedup entries.
+    config_param :idempotence_version, converter: lambda(&:to_s)
+
+    # TTL for deduplication records in Cassandra.
+    config_param :idempotence_ttl, converter: ->(v) { duration_converter(v) }
 
     # Maximum number of concurrent message processing tasks.
     config_param :max_concurrency, converter: ->(v) { Integer(v) }
