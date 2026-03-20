@@ -195,7 +195,9 @@ Configure via constructor options or environment variables. Options fall back to
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks (nil to disable)         | 8000                   |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
-| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Track this many message IDs to skip duplicates | 4096           |
+| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Global shared cache capacity across all partitions for message deduplication (0 disables the entire deduplication middleware, both in-memory and persistent) | 8192 |
+| `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
+| `idempotence_ttl` / `PROSODY_IDEMPOTENCE_TTL`         | TTL for dedup records in Cassandra            | 7d (604800 seconds) |
 | `slab_size` / `PROSODY_SLAB_SIZE`       | Timer storage granularity (rarely needs changing)    | 1h                     |
 
 ### Producer
@@ -454,6 +456,10 @@ This prevents endless loops where a service consumes its own produced messages.
 Prosody automatically deduplicates messages using the `id` field in their JSON payload. Consecutive messages with the
 same ID and key are processed only once.
 
+The deduplication system uses:
+- A **global in-memory cache** shared across all partitions, surviving partition reassignments within a process
+- A **Cassandra-backed persistent store** for cross-restart deduplication
+
 ```ruby
 # Messages with IDs are deduplicated per key
 client.send_message("my-topic", "key1", {
@@ -472,13 +478,13 @@ client.send_message("my-topic", "key2", {
 })
 ```
 
-Deduplication can be disabled by setting:
+Setting `idempotence_cache_size` to `0` disables the **entire** deduplication middleware (both the in-memory cache and the Cassandra-backed persistent store):
 
 ```ruby
 client = Prosody::Client.new(
   group_id: "my-consumer-group",
   subscribed_topics: "my-topic",
-  idempotence_cache_size: 0  # Disable deduplication
+  idempotence_cache_size: 0  # Disable all deduplication (both in-memory and persistent)
 )
 ```
 
@@ -488,8 +494,27 @@ Or via environment variable:
 PROSODY_IDEMPOTENCE_CACHE_SIZE=0
 ```
 
-Note that this deduplication is best-effort and not guaranteed. Because identifiers are cached ephemerally in memory,
-duplicates can still occur when instances rebalance or restart.
+To invalidate all previously recorded dedup entries (e.g. after a data migration), change the version string:
+
+```ruby
+client = Prosody::Client.new(
+  group_id: "my-consumer-group",
+  subscribed_topics: "my-topic",
+  idempotence_version: "2"  # Changing this invalidates all existing dedup records
+)
+```
+
+The `idempotence_ttl` option controls how long dedup records are retained in Cassandra (default: 7 days):
+
+```ruby
+client = Prosody::Client.new(
+  group_id: "my-consumer-group",
+  subscribed_topics: "my-topic",
+  idempotence_ttl: 86400.0  # Keep dedup records for 1 day
+)
+```
+
+Note that the in-memory cache is best-effort. Duplicates can still occur across different process instances.
 
 ## Timer Functionality
 
