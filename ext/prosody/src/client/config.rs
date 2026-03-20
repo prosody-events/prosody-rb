@@ -705,10 +705,11 @@ impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
             builder.version(version.clone());
         }
 
-        if let Some(ttl) = &config.idempotence_ttl {
-            if ttl.is_finite() && *ttl >= 0.0 {
-                builder.ttl(Duration::from_secs_f64(*ttl));
-            }
+        if let Some(ttl) = &config.idempotence_ttl
+            && ttl.is_finite()
+            && *ttl >= 0.0_f64
+        {
+            builder.ttl(Duration::from_secs_f64(*ttl));
         }
 
         builder
