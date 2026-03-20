@@ -268,6 +268,11 @@ module Prosody
             @logger.debug("Task #{task_id} was cancelled")
           end
         rescue => e
+          event_type = task_id.start_with?("timer/") ? "timer" : "message"
+          Prosody::SentryIntegration.capture_exception(e, {
+            event_type: event_type,
+            task_id: task_id
+          })
           if callback.call(false, e)
             @logger.error("Error executing task #{task_id}: #{e.message}")
             span.record_exception(e)
