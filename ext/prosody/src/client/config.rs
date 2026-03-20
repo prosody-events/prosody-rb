@@ -9,6 +9,7 @@
 use magnus::{Error, Ruby, Value};
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
+use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
 use prosody::consumer::middleware::monopolization::MonopolizationConfigurationBuilder;
 use prosody::consumer::middleware::retry::RetryConfigurationBuilder;
@@ -44,8 +45,15 @@ pub struct NativeConfiguration {
     /// Kafka consumer group ID
     group_id: Option<String>,
 
-    /// Size of the cache used for message idempotence
+    /// Global shared cache capacity across all partitions for message
+    /// deduplication
     idempotence_cache_size: Option<u32>,
+
+    /// Version string for cache-busting deduplication hashes
+    idempotence_version: Option<String>,
+
+    /// TTL for deduplication records in Cassandra (in seconds)
+    idempotence_ttl: Option<f64>,
 
     /// List of Kafka topics to subscribe to
     subscribed_topics: Option<Vec<String>>,
@@ -333,10 +341,6 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
 
         if let Some(max_uncommitted) = &config.max_uncommitted {
             builder.max_uncommitted(*max_uncommitted as usize);
-        }
-
-        if let Some(idempotence_cache_size) = &config.idempotence_cache_size {
-            builder.idempotence_cache_size(*idempotence_cache_size as usize);
         }
 
         if let Some(stall_threshold) = &config.stall_threshold {
@@ -676,6 +680,42 @@ impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
     }
 }
 
+impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
+    /// Converts a `NativeConfiguration` reference into a
+    /// `DeduplicationConfigurationBuilder`.
+    ///
+    /// This takes the relevant deduplication settings from the configuration
+    /// and sets them on a new `DeduplicationConfigurationBuilder` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration to convert
+    ///
+    /// # Returns
+    ///
+    /// A configured `DeduplicationConfigurationBuilder`
+    fn from(config: &'a NativeConfiguration) -> Self {
+        let mut builder = Self::default();
+
+        if let Some(cache_capacity) = &config.idempotence_cache_size {
+            builder.cache_capacity(*cache_capacity as usize);
+        }
+
+        if let Some(version) = &config.idempotence_version {
+            builder.version(version.clone());
+        }
+
+        if let Some(ttl) = &config.idempotence_ttl
+            && ttl.is_finite()
+            && *ttl >= 0.0_f64
+        {
+            builder.ttl(Duration::from_secs_f64(*ttl));
+        }
+
+        builder
+    }
+}
+
 impl<'a> TryFrom<&'a NativeConfiguration> for TelemetryEmitterConfiguration {
     type Error = String;
 
@@ -745,6 +785,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             monopolization: config.into(),
             defer: config.into(),
             timeout: config.into(),
+            dedup: config.into(),
             emitter: config.try_into()?,
         })
     }

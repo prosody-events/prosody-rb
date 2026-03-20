@@ -58,6 +58,8 @@ RSpec.describe Prosody::Configuration do
       expect(config.defer_discard_threshold).to be_nil
       expect(config.telemetry_topic).to be_nil
       expect(config.telemetry_enabled).to be_nil
+      expect(config.idempotence_version).to be_nil
+      expect(config.idempotence_ttl).to be_nil
     end
   end
 
@@ -115,7 +117,8 @@ RSpec.describe Prosody::Configuration do
         defer_base: 1.0,
         defer_max_delay: 86400.0,
         defer_failure_window: 300.0,
-        defer_seek_timeout: 30.0
+        defer_seek_timeout: 30.0,
+        idempotence_ttl: 604_800.0
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
@@ -194,7 +197,8 @@ RSpec.describe Prosody::Configuration do
         cassandra_rack: "rack1",
         cassandra_user: "cassandra_user",
         cassandra_password: "cassandra_password",
-        telemetry_topic: "prosody.telemetry-events"
+        telemetry_topic: "prosody.telemetry-events",
+        idempotence_version: "2"
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
@@ -299,6 +303,8 @@ RSpec.describe Prosody::Configuration do
         send_timeout: 5.0,
         group_id: "group1",
         idempotence_cache_size: 100,
+        idempotence_version: "2",
+        idempotence_ttl: 3600.0,
         subscribed_topics: %w[topic1 topic2],
         allowed_events: ["event1"],
         source_system: "system1",
@@ -329,6 +335,8 @@ RSpec.describe Prosody::Configuration do
       expect(config.send_timeout).to eq(5.0)
       expect(config.group_id).to eq("group1")
       expect(config.idempotence_cache_size).to eq(100)
+      expect(config.idempotence_version).to eq("2")
+      expect(config.idempotence_ttl).to eq(3600.0)
       expect(config.subscribed_topics).to eq(%w[topic1 topic2])
       expect(config.allowed_events).to eq(["event1"])
       expect(config.source_system).to eq("system1")
