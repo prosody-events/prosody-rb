@@ -3,7 +3,7 @@
 module Prosody
   module SentryIntegration
     def self.enabled?
-      defined?(::Sentry) && ::Sentry.initialized? && ENV["SENTRY_DSN"]
+      defined?(::Sentry) && ::Sentry.initialized?
     end
 
     def self.capture_exception(exception, context = {})
