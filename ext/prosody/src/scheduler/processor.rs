@@ -93,6 +93,7 @@ impl RubyProcessor {
         ruby: &Ruby,
         task_id: &str,
         carrier: HashMap<String, String>,
+        event_context: HashMap<String, String>,
         result_receiver: ResultSender,
         function: F,
     ) -> Result<CancellationToken, Error>
@@ -119,13 +120,15 @@ impl RubyProcessor {
             }
         });
 
-        // Convert the tracing context carrier to a Ruby hash
+        // Convert the tracing context carrier and event context to Ruby hashes
         let carrier = ruby.hash_from_iter(carrier);
+        let event_context = ruby.hash_from_iter(event_context);
 
-        // Call the Ruby method: def submit(task_id, callback, &task_block)
+        // Call the Ruby method: def submit(task_id, carrier, event_context, callback,
+        // &task_block)
         let token = CancellationToken::new(self.processor.get(ruby).funcall_with_block(
             id!(ruby, "submit"),
-            (task_id, carrier, callback),
+            (task_id, carrier, event_context, callback),
             block,
         )?);
 
