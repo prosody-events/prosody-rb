@@ -50,4 +50,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "async-rspec", "~> 1.17"
   spec.add_development_dependency "opentelemetry-sdk", "~> 1.10"
   spec.add_development_dependency "opentelemetry-exporter-otlp", "~> 0.31"
+  spec.add_development_dependency "sentry-ruby", "~> 6.0"
 end
