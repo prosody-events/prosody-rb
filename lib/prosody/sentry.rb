@@ -11,7 +11,8 @@ module Prosody
 
       ::Sentry.with_scope do |scope|
         scope.set_context("prosody", context)
-        scope.set_tag("prosody.event_type", context[:event_type]&.to_s)
+        event_type = context[:event_type]
+        scope.set_tag("prosody.event_type", event_type.to_s) if event_type
         ::Sentry.capture_exception(exception)
       end
     end
