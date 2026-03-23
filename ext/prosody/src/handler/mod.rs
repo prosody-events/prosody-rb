@@ -28,6 +28,7 @@ use prosody::consumer::{DemandType, Keyed};
 use prosody::error::{ClassifyError, ErrorCategory};
 use prosody::propagator::new_propagator;
 use prosody::timers::{TimerType, Trigger as ProsodyTrigger};
+use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
@@ -140,6 +141,14 @@ impl FallibleHandler for RubyHandler {
             message.offset()
         );
 
+        let event_context = HashMap::from([
+            ("event_type".into(), "message".into()),
+            ("topic".into(), message.topic().to_string()),
+            ("partition".into(), message.partition().to_string()),
+            ("key".into(), message.key().to_string()),
+            ("offset".into(), message.offset().to_string()),
+        ]);
+
         // Convert the Kafka message and context to Ruby-compatible types
         let context = Context::new(
             context.boxed(),
@@ -154,7 +163,7 @@ impl FallibleHandler for RubyHandler {
             // Schedule the task to run in Ruby
             let task_handle = self
                 .scheduler
-                .schedule(task_id, &cloned_span, move |ruby| {
+                .schedule(task_id, &cloned_span, event_context, move |ruby| {
                     let _: Value = handler
                         .get(ruby)
                         .funcall(id!(ruby, "on_message"), (context, message))?;
@@ -217,6 +226,12 @@ impl FallibleHandler for RubyHandler {
         // Create a unique task ID for this timer
         let task_id = format!("timer/{}/{}", trigger.key, trigger.time);
 
+        let event_context = HashMap::from([
+            ("event_type".into(), "timer".into()),
+            ("key".into(), trigger.key.to_string()),
+            ("time".into(), trigger.time.to_string()),
+        ]);
+
         // Convert the timer trigger and context to Ruby-compatible types
         let context = Context::new(
             context.boxed(),
@@ -231,7 +246,7 @@ impl FallibleHandler for RubyHandler {
             // Schedule the task to run in Ruby
             let task_handle = self
                 .scheduler
-                .schedule(task_id, &cloned_span, move |ruby| {
+                .schedule(task_id, &cloned_span, event_context, move |ruby| {
                     let _: Value = handler
                         .get(ruby)
                         .funcall(id!(ruby, "on_timer"), (context, timer))?;
