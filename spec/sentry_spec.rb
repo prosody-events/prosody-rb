@@ -29,6 +29,7 @@ RSpec.describe Prosody::SentryIntegration do
         expect(described_class.enabled?).to be false
       end
     end
+
   end
 
   describe ".capture_exception" do
@@ -65,4 +66,6 @@ RSpec.describe Prosody::SentryIntegration do
       end
     end
   end
+
+
 end

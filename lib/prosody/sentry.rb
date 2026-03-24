@@ -3,6 +3,14 @@
 module Prosody
   module SentryIntegration
     def self.enabled?
+      if ENV["SENTRY_DSN"] && !defined?(::Sentry)
+        unless @warned_missing_gem
+          @warned_missing_gem = true
+          Prosody.logger.error("SENTRY_DSN is set but sentry-ruby is not installed. Add `gem 'sentry-ruby'` to your Gemfile.")
+        end
+        return false
+      end
+
       defined?(::Sentry) && ::Sentry.initialized?
     end
 
