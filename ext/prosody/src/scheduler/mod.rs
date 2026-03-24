@@ -90,11 +90,12 @@ impl Scheduler {
     /// # Returns
     ///
     /// A `TaskHandle` for tracking the status and result of the scheduled task.
-    #[instrument(level = "debug", skip(self, span, function), err)]
+    #[instrument(level = "debug", skip(self, span, event_context, function), err)]
     pub async fn schedule<F>(
         &self,
         task_id: String,
         span: &Span,
+        event_context: HashMap<String, String>,
         function: F,
     ) -> Result<TaskHandle, SchedulerError>
     where
@@ -111,7 +112,7 @@ impl Scheduler {
             .bridge
             .run(move |ruby: &Ruby| {
                 cloned_instance
-                    .submit(ruby, &task_id, carrier, result_tx, function)
+                    .submit(ruby, &task_id, carrier, event_context, result_tx, function)
                     .map_err(|error| SchedulerError::Submit(error.to_string()))
             })
             .await??;

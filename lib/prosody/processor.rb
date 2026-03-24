@@ -59,6 +59,9 @@ module Prosody
       # OpenTelemetry context carrier for trace propagation
       attr_reader :carrier
 
+      # Structured event context for error reporting
+      attr_reader :event_context
+
       # The block of code to execute
       attr_reader :block
 
@@ -72,12 +75,14 @@ module Prosody
       #
       # @param task_id [String] Unique identifier for the task
       # @param carrier [Hash] OpenTelemetry context carrier with trace information
+      # @param event_context [Hash] Structured event fields for error reporting
       # @param block [Proc] The code to execute
       # @param callback [Proc] Called with (success, result) when complete
       # @param token [CancellationToken] Token that can be used to cancel execution
-      def initialize(task_id, carrier, block, callback, token)
+      def initialize(task_id, carrier, event_context, block, callback, token)
         @task_id = task_id
         @carrier = carrier
+        @event_context = event_context
         @block = block
         @callback = callback
         @token = token
@@ -146,13 +151,14 @@ module Prosody
     #
     # @param task_id [String] Unique identifier for the task
     # @param carrier [Hash] OpenTelemetry context carrier for tracing
+    # @param event_context [Hash] Structured event fields for error reporting
     # @param callback [Proc] Called with (success, result) when task completes
     # @yield The block to execute asynchronously
     # @return [CancellationToken] Token that can be used to cancel the task
-    def submit(task_id, carrier, callback, &task_block)
+    def submit(task_id, carrier, event_context, callback, &task_block)
       token = CancellationToken.new
       @command_queue.push(
-        Commands::Execute.new(task_id, carrier, task_block, callback, token)
+        Commands::Execute.new(task_id, carrier, event_context.transform_keys(&:to_sym), task_block, callback, token)
       )
       token
     end
@@ -203,6 +209,7 @@ module Prosody
     def handle_execute(command, barrier)
       task_id = command.task_id
       carrier = command.carrier
+      event_context = command.event_context
       token = command.token
       callback = command.callback
       task_block = command.block
@@ -223,7 +230,7 @@ module Prosody
 
       begin
         barrier.async do
-          run_with_cancellation(task_id, token, task_block, callback, dispatch_ctx)
+          run_with_cancellation(task_id, token, task_block, callback, dispatch_ctx, event_context)
         end
       rescue => e
         # If we failed to enqueue, finish the span here since run_with_cancellation
@@ -246,7 +253,7 @@ module Prosody
     # @param task_block [Proc] The work to execute
     # @param callback [Proc] The callback to notify of completion or error
     # @param dispatch_ctx [OpenTelemetry::Context] Context with async_dispatch span active
-    def run_with_cancellation(task_id, token, task_block, callback, dispatch_ctx)
+    def run_with_cancellation(task_id, token, task_block, callback, dispatch_ctx, event_context)
       span = OpenTelemetry::Trace.current_span(dispatch_ctx)
       # Use a barrier to ensure both tasks are cleaned up when block exits
       barrier = Async::Barrier.new
@@ -268,6 +275,7 @@ module Prosody
             @logger.debug("Task #{task_id} was cancelled")
           end
         rescue => e
+          Prosody::SentryIntegration.capture_exception(e, event_context.merge(task_id: task_id))
           if callback.call(false, e)
             @logger.error("Error executing task #{task_id}: #{e.message}")
             span.record_exception(e)
