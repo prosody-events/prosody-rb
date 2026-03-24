@@ -35,13 +35,16 @@ RSpec.describe Prosody::Commands::Execute do
   let(:callback) { proc {} }
   let(:token) { Prosody::CancellationToken.new }
 
-  subject(:command) { described_class.new(task_id, carrier, block, callback, token) }
+  let(:event_context) { {event_type: "message", topic: "t"} }
+
+  subject(:command) { described_class.new(task_id, carrier, event_context, block, callback, token) }
 
   # Verify that all command attributes are accessible
   describe "attributes" do
-    it "exposes task_id, carrier, block, callback, and token" do
+    it "exposes task_id, carrier, event_context, block, callback, and token" do
       expect(command.task_id).to eq(task_id)
       expect(command.carrier).to eq(carrier)
+      expect(command.event_context).to eq(event_context)
       expect(command.block).to eq(block)
       expect(command.callback).to eq(callback)
       expect(command.token).to be(token)
@@ -126,12 +129,14 @@ RSpec.describe Prosody::AsyncTaskProcessor do
 
     it "returns a CancellationToken and enqueues Execute command" do
       queue = processor.instance_variable_get(:@command_queue)
-      token = processor.submit(task_id, carrier, callback) { :result }
+      event_context = {"event_type" => "message", "topic" => "t"}
+      token = processor.submit(task_id, carrier, event_context, callback) { :result }
       expect(token).to be_a(Prosody::CancellationToken)
       cmd = queue.pop(true)
       expect(cmd).to be_a(Prosody::Commands::Execute)
       expect(cmd.task_id).to eq(task_id)
       expect(cmd.carrier).to eq(carrier)
+      expect(cmd.event_context).to eq(event_context.transform_keys(&:to_sym))
       expect(cmd.callback).to eq(callback)
       expect(cmd.token).to eq(token)
       expect(cmd.block.call).to eq(:result)
@@ -154,7 +159,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     it "executes tasks and invokes callback with result" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
-      token = processor.submit("t1", {}, callback) { "hello" }
+      token = processor.submit("t1", {}, {}, callback) { "hello" }
       tokens << token
       success, result = results_queue.pop
       expect(success).to be true
@@ -165,7 +170,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     it "cancels in-flight tasks and invokes callback with cancellation error" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
-      token = processor.submit("t2", {}, callback) do
+      token = processor.submit("t2", {}, {}, callback) do
         sleep 0.5
         "never"
       end
@@ -183,7 +188,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       exception_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
 
-      token = processor.submit("t3", {}, callback) do
+      token = processor.submit("t3", {}, {}, callback) do
         sleep 0.5
         "never"
       rescue Async::Stop => e
@@ -209,7 +214,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       ensure_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
 
-      token = processor.submit("t4", {}, callback) do
+      token = processor.submit("t4", {}, {}, callback) do
         sleep 0.5
         "never"
       ensure
@@ -232,7 +237,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
 
-      token = processor.submit("t5", {}, callback) do
+      token = processor.submit("t5", {}, {}, callback) do
         sleep 0.5
         "never"
       rescue Async::Stop
@@ -273,7 +278,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     it "invokes callback with false and exception, and logs error" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
-      processor.submit("e3", {}, callback) { raise StandardError, "boom" }
+      processor.submit("e3", {}, {}, callback) { raise StandardError, "boom" }
       success, result = results_queue.pop
       expect(success).to be false
       expect(result).to be_a(StandardError)
@@ -306,7 +311,7 @@ RSpec.describe Prosody::AsyncTaskProcessor do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
 
-      processor.submit("span-test", {}, callback) do
+      processor.submit("span-test", {}, {}, callback) do
         tracer.in_span("child-span") {}
       end
 
@@ -342,8 +347,8 @@ RSpec.describe Prosody::AsyncTaskProcessor do
     it "waits for in-flight tasks to complete before stopping" do
       results_queue = Queue.new
       callback = proc { |success, result| results_queue.push([success, result]) }
-      processor.submit("g1", {}, callback) { "done1" }
-      processor.submit("g2", {}, callback) { "done2" }
+      processor.submit("g1", {}, {}, callback) { "done1" }
+      processor.submit("g2", {}, {}, callback) { "done2" }
       processor.stop
       processor.instance_variable_get(:@processing_thread).join
       results = [results_queue.pop, results_queue.pop]

@@ -18,6 +18,7 @@ require_relative "prosody/version"
 require_relative "prosody/configuration"
 require_relative "prosody/handler"
 require_relative "prosody/processor"
+require_relative "prosody/sentry"
 require_relative "prosody/native_stubs" if defined?(Prosody::Client)
 
 module Prosody
