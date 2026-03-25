@@ -231,6 +231,37 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  # Verify the client raises a clear error when called from a forked child process
+  it "raises when called after fork", :fork do
+    # Force the lazy let to resolve in the parent before forking
+    _ = client
+
+    rd, wr = IO.pipe
+
+    pid = Process.fork do
+      rd.close
+      begin
+        client.consumer_state
+        wr.write("ok")
+      rescue RuntimeError => e
+        wr.write("error:#{e.message}")
+      rescue => e
+        wr.write("unexpected:#{e.message}")
+      ensure
+        wr.close
+        exit!(0)
+      end
+    end
+
+    wr.close
+    result = rd.read
+    rd.close
+    Process.waitpid(pid)
+
+    expect(result).to start_with("error:"), "expected RuntimeError in child, got: #{result}"
+    expect(result).to include("after fork")
+  end
+
   # Verify source system identifier is accessible
   it "exposes source system identifier" do
     tracer.in_span("test.source_system") do |span|

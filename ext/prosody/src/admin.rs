@@ -23,6 +23,8 @@ pub struct AdminClient {
     client: Arc<ProsodyAdminClient>,
     /// Bridge for executing asynchronous operations from Ruby
     bridge: Bridge,
+    /// PID at construction time, used to detect post-fork usage
+    pid: u32,
 }
 
 impl AdminClient {
@@ -57,7 +59,22 @@ impl AdminClient {
             ))?
             .clone();
 
-        Ok(Self { client, bridge })
+        Ok(Self {
+            client,
+            bridge,
+            pid: std::process::id(),
+        })
+    }
+
+    fn check_fork(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        if std::process::id() != this.pid {
+            return Err(Error::new(
+                ruby.exception_runtime_error(),
+                "Prosody::AdminClient cannot be used after fork. Create a new client in the child \
+                 process.",
+            ));
+        }
+        Ok(())
     }
 
     /// Creates a new Kafka topic.
@@ -82,6 +99,7 @@ impl AdminClient {
         partition_count: u16,
         replication_factor: u16,
     ) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
         let topic_config = TopicConfiguration::builder()
             .name(name)
             .partition_count(partition_count)
@@ -111,6 +129,7 @@ impl AdminClient {
     /// - The topic deletion fails
     /// - There's an issue with the asynchronous execution
     pub fn delete_topic(ruby: &Ruby, this: &Self, name: String) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
         let client = this.client.clone();
         let future = async move { client.delete_topic(&name).await };
 
