@@ -46,6 +46,8 @@ pub struct Client {
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
     propagator: TextMapCompositePropagator,
+    /// PID at construction time, used to detect post-fork usage
+    pid: u32,
 }
 
 impl Client {
@@ -111,7 +113,19 @@ impl Client {
             inner: Arc::new(client),
             bridge: bridge.clone(),
             propagator: new_propagator(),
+            pid: std::process::id(),
         })
+    }
+
+    fn check_fork(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        if std::process::id() != this.pid {
+            return Err(Error::new(
+                ruby.exception_runtime_error(),
+                "Prosody::Client cannot be used after fork. Create a new client in the child \
+                 process.",
+            ));
+        }
+        Ok(())
     }
 
     /// Returns the current state of the consumer.
@@ -136,6 +150,7 @@ impl Client {
     /// build, with the full error message from the underlying
     /// `ModeConfigurationError`.
     pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+        Self::check_fork(ruby, this)?;
         let inner = this.inner.clone();
         let state: Result<&'static str, String> = this.bridge.wait_for(
             ruby,
@@ -181,6 +196,7 @@ impl Client {
         key: String,
         payload: Value,
     ) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
         let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
         let value = deserialize(ruby, payload)?;
@@ -219,6 +235,7 @@ impl Client {
     /// - The handler cannot be wrapped
     /// - The client cannot subscribe with the handler
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
         let _guard = ensure_runtime_context(ruby);
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
         let inner = this.inner.clone();
@@ -248,6 +265,7 @@ impl Client {
     ///
     /// The number of assigned partitions as a u32.
     pub fn assigned_partitions(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
+        Self::check_fork(ruby, this)?;
         let inner = this.inner.clone();
         this.bridge.wait_for(
             ruby,
@@ -270,6 +288,7 @@ impl Client {
     ///
     /// `true` if the consumer is stalled, `false` otherwise.
     pub fn is_stalled(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+        Self::check_fork(ruby, this)?;
         let inner = this.inner.clone();
         this.bridge.wait_for(
             ruby,
@@ -292,6 +311,7 @@ impl Client {
     ///
     /// Returns an error if the unsubscribe operation fails.
     fn unsubscribe(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
         let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
 
