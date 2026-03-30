@@ -266,6 +266,18 @@ module Prosody
     # Overrides the PROSODY_TELEMETRY_ENABLED environment variable.
     config_param :telemetry_enabled, converter: ->(v) { v.nil? ? nil : !!v }
 
+    # Span linking for message execution spans.
+    # Controls how the receive span connects to the OTel context from the Kafka producer.
+    # Accepted values: "child" (child-of relationship) or "follows_from".
+    # Overrides the PROSODY_MESSAGE_SPANS environment variable. Default: "child".
+    config_param :message_spans, converter: ->(v) { v.to_s }
+
+    # Span linking for timer execution spans.
+    # Controls how timer spans connect to the OTel context stored at schedule time.
+    # Accepted values: "child" (child-of relationship) or "follows_from".
+    # Overrides the PROSODY_TIMER_SPANS environment variable. Default: "follows_from".
+    config_param :timer_spans, converter: ->(v) { v.to_s }
+
     # Operation mode of the client.
     #
     # Valid values:

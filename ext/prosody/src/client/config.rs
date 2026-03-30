@@ -16,6 +16,7 @@ use prosody::consumer::middleware::retry::RetryConfigurationBuilder;
 use prosody::consumer::middleware::scheduler::SchedulerConfigurationBuilder;
 use prosody::consumer::middleware::timeout::TimeoutConfigurationBuilder;
 use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
+use prosody::consumer::SpanRelation;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
@@ -190,6 +191,13 @@ pub struct NativeConfiguration {
 
     /// Whether the telemetry emitter is enabled.
     telemetry_enabled: Option<bool>,
+
+    // OTel span linking
+    /// Span linking for message execution spans (`child` or `follows_from`).
+    message_spans: Option<String>,
+
+    /// Span linking for timer execution spans (`child` or `follows_from`).
+    timer_spans: Option<String>,
 }
 
 /// Configuration for the health probe port.
@@ -777,8 +785,20 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
     /// Returns a `String` error if the telemetry emitter configuration cannot
     /// be built (e.g. an environment variable contains an unparseable value).
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut consumer: ConsumerConfigurationBuilder = config.into();
+
+        if let Some(s) = &config.message_spans {
+            let relation = s.parse::<SpanRelation>().map_err(|e| e.to_string())?;
+            consumer.message_spans(relation);
+        }
+
+        if let Some(s) = &config.timer_spans {
+            let relation = s.parse::<SpanRelation>().map_err(|e| e.to_string())?;
+            consumer.timer_spans(relation);
+        }
+
         Ok(Self {
-            consumer: config.into(),
+            consumer,
             retry: config.into(),
             failure_topic: config.into(),
             scheduler: config.into(),
