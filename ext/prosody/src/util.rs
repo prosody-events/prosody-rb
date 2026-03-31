@@ -51,8 +51,10 @@ macro_rules! id {
 /// `rb_gc_unregister_address`. This type handles that automatically: if dropped
 /// on a Ruby thread, the value is cleaned up normally. If dropped on a
 /// non-Ruby thread (e.g. a Tokio worker), the value is leaked rather than
-/// risking a segfault. The leaked GC registration is harmless — Ruby cleans
-/// it up at process exit.
+/// risking a segfault. The leaked GC root keeps the Ruby object alive for the
+/// lifetime of the process. In practice the risk is low — most
+/// `ThreadSafeValue` instances are long-lived (`Arc`-wrapped singletons) and
+/// only drop during shutdown.
 #[derive(Debug)]
 pub struct ThreadSafeValue(ManuallyDrop<BoxValue<Value>>);
 
@@ -101,10 +103,10 @@ impl Drop for ThreadSafeValue {
             return;
         }
 
-        // On a non-Ruby thread: leak rather than segfault. The GC-registered
-        // address is harmless — Ruby cleans it up at process exit.
+        // On a non-Ruby thread: leak rather than segfault. The GC root keeps
+        // the Ruby object alive, but this only occurs at shutdown in practice.
         warn!(
-            "leaked a Ruby value because it was dropped on a Tokio thread; this is safe but \
+            "leaked a Ruby value because it was dropped on a non-Ruby thread; this is safe but \
              indicates a value outlived its expected scope"
         );
         forget(inner);
