@@ -782,18 +782,25 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
     ///
     /// # Errors
     ///
-    /// Returns a `String` error if the telemetry emitter configuration cannot
-    /// be built (e.g. an environment variable contains an unparseable value).
+    /// Returns a `String` error if:
+    /// - The telemetry emitter configuration cannot be built (e.g. an
+    ///   environment variable contains an unparseable value).
+    /// - `message_spans` or `timer_spans` contains an unrecognized value
+    ///   (expected `"child"` or `"follows_from"`).
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut consumer: ConsumerConfigurationBuilder = config.into();
 
         if let Some(s) = &config.message_spans {
-            let relation = s.parse::<SpanRelation>().map_err(|e| e.to_string())?;
+            let relation = s
+                .parse::<SpanRelation>()
+                .map_err(|e| format!("message_spans: {e}"))?;
             consumer.message_spans(relation);
         }
 
         if let Some(s) = &config.timer_spans {
-            let relation = s.parse::<SpanRelation>().map_err(|e| e.to_string())?;
+            let relation = s
+                .parse::<SpanRelation>()
+                .map_err(|e| format!("timer_spans: {e}"))?;
             consumer.timer_spans(relation);
         }
 
