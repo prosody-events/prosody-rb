@@ -61,8 +61,8 @@ impl Scheduler {
     /// Returns a `Magnus::Error` if the Ruby processor cannot be created.
     pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, Error> {
         Ok(Self {
-            bridge,
-            processor: RubyProcessor::new(ruby)?,
+            bridge: bridge.clone(),
+            processor: RubyProcessor::new(ruby, bridge)?,
             propagator: new_propagator(),
         })
     }

@@ -34,11 +34,6 @@ mod util;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-/// Buffer size for the communication channel between Ruby and Rust.
-/// This controls how many operations can be queued before backpressure is
-/// applied.
-const BRIDGE_BUFFER_SIZE: usize = 64;
-
 /// Global instance of the Ruby-Rust communication bridge.
 /// Initialized during extension startup and used throughout the library.
 pub static BRIDGE: OnceLock<Bridge> = OnceLock::new();

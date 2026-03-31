@@ -4,6 +4,7 @@
 //! It includes mechanisms for executing Ruby code from Rust threads and for
 //! managing asynchronous callback communication between the two languages.
 
+use crate::bridge::Bridge;
 use crate::id;
 use crate::util::ThreadSafeValue;
 use magnus::value::ReprValue;
@@ -25,9 +26,11 @@ impl AsyncCallback {
     /// # Arguments
     ///
     /// * `queue` - A Ruby Queue object that will receive values from Rust
-    pub fn from_queue(queue: Value) -> Self {
+    /// * `bridge` - The bridge used to defer cleanup of the wrapped queue
+    ///   value onto the Ruby thread when the callback is dropped
+    pub fn from_queue(queue: Value, bridge: Bridge) -> Self {
         Self {
-            queue: ThreadSafeValue::new(queue),
+            queue: ThreadSafeValue::new(queue, bridge),
         }
     }
 
