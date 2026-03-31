@@ -5,6 +5,7 @@
 //! with a Ruby `AsyncTaskProcessor` class to manage task execution,
 //! cancellation, and lifecycle management.
 
+use crate::bridge::Bridge;
 use crate::scheduler::cancellation::CancellationToken;
 use crate::scheduler::result::ResultSender;
 use crate::util::ThreadSafeValue;
@@ -28,6 +29,9 @@ pub struct RubyProcessor {
     /// Thread-safe reference to the Ruby `AsyncTaskProcessor` instance
     processor: Arc<ThreadSafeValue>,
 
+    /// Bridge for communicating between Rust and Ruby threads
+    bridge: Bridge,
+
     /// Flag indicating whether the processor is in shutdown state
     is_shutdown: Arc<AtomicBool>,
 }
@@ -41,6 +45,7 @@ impl RubyProcessor {
     /// # Arguments
     ///
     /// * `ruby` - Reference to the Ruby VM
+    /// * `bridge` - Bridge for communicating between Rust and Ruby threads
     ///
     /// # Returns
     ///
@@ -52,7 +57,7 @@ impl RubyProcessor {
     /// - The `AsyncTaskProcessor` Ruby class cannot be found
     /// - Instantiation of the processor fails
     /// - Starting the processor fails
-    pub fn new(ruby: &Ruby) -> Result<Self, Error> {
+    pub fn new(ruby: &Ruby, bridge: Bridge) -> Result<Self, Error> {
         let module = ruby.get_inner(&ROOT_MOD);
         let logger: Value = module.funcall(id!(ruby, "logger"), ())?;
 
@@ -60,7 +65,8 @@ impl RubyProcessor {
         let instance: Value = class.new_instance((logger,))?;
         let _: Value = instance.funcall(id!(ruby, "start"), ())?;
         Ok(Self {
-            processor: Arc::new(ThreadSafeValue::new(instance)),
+            processor: Arc::new(ThreadSafeValue::new(instance, bridge.clone())),
+            bridge,
             is_shutdown: Arc::default(),
         })
     }
@@ -126,11 +132,14 @@ impl RubyProcessor {
 
         // Call the Ruby method: def submit(task_id, carrier, event_context, callback,
         // &task_block)
-        let token = CancellationToken::new(self.processor.get(ruby).funcall_with_block(
-            id!(ruby, "submit"),
-            (task_id, carrier, event_context, callback),
-            block,
-        )?);
+        let token = CancellationToken::new(
+            self.processor.get(ruby).funcall_with_block(
+                id!(ruby, "submit"),
+                (task_id, carrier, event_context, callback),
+                block,
+            )?,
+            self.bridge.clone(),
+        );
 
         Ok(token)
     }
