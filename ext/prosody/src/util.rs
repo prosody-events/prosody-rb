@@ -122,8 +122,8 @@ impl Drop for ThreadSafeValue {
             .is_err()
         {
             warn!(
-                "failed to defer Ruby value cleanup to bridge (bridge shut down); leaked a Ruby \
-                 value"
+                "could not send Ruby value to bridge for cleanup because the bridge has \
+                 shut down"
             );
         }
     }
