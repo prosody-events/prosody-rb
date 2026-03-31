@@ -49,6 +49,13 @@ pub(crate) type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
 /// A wrapper for results returned from async operations to Ruby.
 ///
 /// Uses `AtomicTake` to ensure the value can only be extracted once.
+///
+/// # Safety
+///
+/// The boxed value must **not** contain Ruby types (e.g. [`magnus::Value`]).
+/// `DynamicResult` is spawned onto a Tokio thread and has no custom `Drop`,
+/// so any Ruby value inside would be dropped on a non-Ruby thread, causing a
+/// segfault. All current callers return non-Ruby types (`bool`, `()`, etc.).
 #[derive(Debug)]
 #[magnus::wrap(class = "Prosody::DynamicResult")]
 struct DynamicResult(AtomicTake<Box<dyn Any + Send>>);
