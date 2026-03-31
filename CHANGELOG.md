@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.4.0](https://github.com/cincpro/prosody-rb/compare/v2.3.0...v2.4.0) (2026-03-31)
+
+
+### Features
+
+* persistent deduplication with global cache and Cassandra backend ([#75](https://github.com/cincpro/prosody-rb/issues/75)) ([01837e1](https://github.com/cincpro/prosody-rb/commit/01837e15bdbed2b2ae689b099134d852d8b20083))
+* protect client methods against post-fork usage ([#78](https://github.com/cincpro/prosody-rb/issues/78)) ([930dcdf](https://github.com/cincpro/prosody-rb/commit/930dcdffe9efdbe6f17f85dcc5a00747fc8f0e76))
+* Sentry error monitoring for handler dispatch ([#76](https://github.com/cincpro/prosody-rb/issues/76)) ([daca41f](https://github.com/cincpro/prosody-rb/commit/daca41f75b219d91e184ef8af855cb2c318ba1e5))
+* shutdown grace period and configurable span relation ([#79](https://github.com/cincpro/prosody-rb/issues/79)) ([01f29c8](https://github.com/cincpro/prosody-rb/commit/01f29c83a689479c626b528fe801f7a99df9ddad))
+* warn when SENTRY_DSN is set but sentry-ruby is not installed ([#77](https://github.com/cincpro/prosody-rb/issues/77)) ([433bbbd](https://github.com/cincpro/prosody-rb/commit/433bbbd60fecd3f582f6d2003a9e8cdc46d7355f))
+
+
+### Bug Fixes
+
+* expose configurable logger via Prosody.logger ([#73](https://github.com/cincpro/prosody-rb/issues/73)) ([f677d84](https://github.com/cincpro/prosody-rb/commit/f677d843320fe6619b3b25ffc86cc5cc5f15934f))
+* prevent segfault when ThreadSafeValue is dropped on a non-Ruby thread ([#80](https://github.com/cincpro/prosody-rb/issues/80)) ([d3abbb9](https://github.com/cincpro/prosody-rb/commit/d3abbb935bf1929439f615ceba28ae01d24da27f))
+* properly clean up Ruby values dropped on non-Ruby threads ([#81](https://github.com/cincpro/prosody-rb/issues/81)) ([6b0f561](https://github.com/cincpro/prosody-rb/commit/6b0f561aae5cfeda4fc31658cc3e9d5c05ecf7d1))
+
 ## [2.3.0](https://github.com/cincpro/prosody-rb/compare/v2.2.1...v2.3.0) (2026-03-19)
 
 
