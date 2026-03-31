@@ -6,7 +6,7 @@
 
 use crate::bridge::Bridge;
 use crate::logging::Logger;
-use crate::{BRIDGE, BRIDGE_BUFFER_SIZE, RUNTIME, TRACING_INIT};
+use crate::{BRIDGE, RUNTIME, TRACING_INIT};
 use magnus::value::BoxValue;
 use magnus::{Ruby, Value};
 use prosody::tracing::initialize_tracing;
@@ -50,18 +50,19 @@ macro_rules! id {
 /// [`BoxValue`] must be dropped on a Ruby thread because its `Drop` impl calls
 /// `rb_gc_unregister_address`. This type handles that automatically: if dropped
 /// on a Ruby thread, the value is cleaned up normally. If dropped on a
-/// non-Ruby thread (e.g. a Tokio worker), the value is leaked rather than
-/// risking a segfault. The leaked GC root keeps the Ruby object alive for the
-/// lifetime of the process. In practice the risk is low — most
-/// `ThreadSafeValue` instances are long-lived (`Arc`-wrapped singletons) and
-/// only drop during shutdown.
+/// non-Ruby thread, the value is sent through the bridge for deferred cleanup
+/// on the Ruby thread. If the bridge is unavailable (shutdown), the value is
+/// leaked with a warning rather than risking a segfault.
 #[derive(Debug)]
-pub struct ThreadSafeValue(ManuallyDrop<BoxValue<Value>>);
+pub struct ThreadSafeValue {
+    value: ManuallyDrop<RubyDrop>,
+    bridge: Bridge,
+}
 
 // SAFETY: The underlying value can only be accessed from a Ruby thread
-// (enforced by requiring `&Ruby` in `get`). Drop is safe across threads:
-// on a Ruby thread it calls `rb_gc_unregister_address` normally; on any
-// other thread it leaks the value instead of calling into Ruby.
+// (enforced by requiring `&Ruby` in `get`). Drop is safe across threads: it
+// sends cleanup through the bridge when not on a Ruby thread, falling back
+// to a leak if the bridge is unavailable.
 unsafe impl Send for ThreadSafeValue {}
 
 // SAFETY: `get` requires `&Ruby`, ensuring the value is only read on a Ruby
@@ -74,7 +75,76 @@ impl ThreadSafeValue {
     /// # Arguments
     ///
     /// * `value` - The Ruby value to wrap
-    pub fn new(value: Value) -> Self {
+    /// * `bridge` - The bridge used to defer cleanup onto the Ruby thread
+    pub fn new(value: Value, bridge: Bridge) -> Self {
+        Self {
+            value: ManuallyDrop::new(RubyDrop::new(value)),
+            bridge,
+        }
+    }
+
+    /// Gets a reference to the wrapped Ruby value.
+    ///
+    /// This method ensures that access to the Ruby value only happens
+    /// within a Ruby thread context by requiring a `Ruby` reference.
+    ///
+    /// # Arguments
+    ///
+    /// * `ruby` - A reference to the Ruby VM
+    pub fn get(&self, ruby: &Ruby) -> &Value {
+        self.value.get(ruby)
+    }
+}
+
+impl Drop for ThreadSafeValue {
+    fn drop(&mut self) {
+        // SAFETY: `drop` is called exactly once per value, so this
+        // `ManuallyDrop::take` cannot double-free.
+        let inner = unsafe { ManuallyDrop::take(&mut self.value) };
+
+        // On a Ruby thread: safe to drop directly.
+        if RubyDrop::can_drop() {
+            drop(inner);
+            return;
+        }
+
+        // On a non-Ruby thread: send to the bridge for cleanup on the Ruby
+        // thread. When the closure runs, `inner` is dropped on the Ruby thread
+        // and `RubyDrop::Drop` takes the normal cleanup path.
+        //
+        // If the send fails (bridge shut down), the `SendError` owns the
+        // closure which owns `inner`. When `SendError` drops on this
+        // non-Ruby thread, `RubyDrop::Drop` takes the leak path — warn +
+        // forget.
+        if self
+            .bridge
+            .send(Box::new(move |_ruby| drop(inner)))
+            .is_err()
+        {
+            warn!(
+                "failed to defer Ruby value cleanup to bridge (bridge shut down); leaked a Ruby \
+                 value"
+            );
+        }
+    }
+}
+
+/// Wraps a [`BoxValue`] and ensures it is dropped on a Ruby thread.
+///
+/// `BoxValue::drop` calls `rb_gc_unregister_address`, which must only run on
+/// a Ruby thread. `RubyDrop` handles this safely: on a Ruby thread it drops
+/// normally; on any other thread it leaks with a warning rather than
+/// segfaulting. It has no knowledge of channels or bridges, so there is no
+/// risk of infinite recursion in `Drop`.
+#[derive(Debug)]
+struct RubyDrop(ManuallyDrop<BoxValue<Value>>);
+
+// SAFETY: Either dropped on a Ruby thread (normal cleanup) or leaked on a
+// non-Ruby thread (forget + warn). Never calls into Ruby from the wrong thread.
+unsafe impl Send for RubyDrop {}
+
+impl RubyDrop {
+    fn new(value: Value) -> Self {
         Self(ManuallyDrop::new(BoxValue::new(value)))
     }
 
@@ -86,25 +156,27 @@ impl ThreadSafeValue {
     /// # Arguments
     ///
     /// * `_ruby` - A reference to the Ruby VM
-    pub fn get(&self, _ruby: &Ruby) -> &Value {
+    fn get(&self, _ruby: &Ruby) -> &Value {
         &self.0
+    }
+
+    /// Returns `true` if the current thread is a Ruby thread and it is safe
+    /// to call `rb_gc_unregister_address` (i.e. drop the inner [`BoxValue`]).
+    fn can_drop() -> bool {
+        Ruby::get().is_ok()
     }
 }
 
-impl Drop for ThreadSafeValue {
+impl Drop for RubyDrop {
     fn drop(&mut self) {
-        // SAFETY: `drop` is called exactly once per value, so this
-        // `ManuallyDrop::take` cannot double-free.
+        // SAFETY: `drop` is called exactly once per value.
         let inner = unsafe { ManuallyDrop::take(&mut self.0) };
 
-        // On a Ruby thread: safe to drop directly (calls rb_gc_unregister_address).
         if Ruby::get().is_ok() {
             drop(inner);
             return;
         }
 
-        // On a non-Ruby thread: leak rather than segfault. The GC root keeps
-        // the Ruby object alive, but this only occurs at shutdown in practice.
         warn!(
             "leaked a Ruby value because it was dropped on a non-Ruby thread; this is safe but \
              indicates a value outlived its expected scope"
@@ -138,7 +210,7 @@ pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
     let guard = Handle::try_current().is_err().then(|| RUNTIME.enter());
 
     // Set up the bridge for Ruby-Rust communication
-    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby, BRIDGE_BUFFER_SIZE));
+    let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby));
 
     // Initialize tracing for observability
     #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]

@@ -26,9 +26,9 @@ impl CancellationToken {
     /// # Arguments
     ///
     /// * `token` - A Ruby value that responds to the `cancel` method
-    pub fn new(token: Value) -> Self {
+    pub fn new(token: Value, bridge: Bridge) -> Self {
         Self {
-            token: ThreadSafeValue::new(token),
+            token: ThreadSafeValue::new(token, bridge),
         }
     }
 

@@ -78,7 +78,7 @@ impl Logger {
 
         let module = ruby.get_inner(&ROOT_MOD);
         let logger: Value = module.funcall(id!(ruby, "logger"), ())?;
-        let logger = Arc::new(ThreadSafeValue::new(logger));
+        let logger = Arc::new(ThreadSafeValue::new(logger, bridge.clone()));
 
         spawn(async move {
             UnboundedReceiverStream::new(rx)
