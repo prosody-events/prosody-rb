@@ -10,7 +10,9 @@ use crate::{BRIDGE, BRIDGE_BUFFER_SIZE, RUNTIME, TRACING_INIT};
 use magnus::value::BoxValue;
 use magnus::{Ruby, Value};
 use prosody::tracing::initialize_tracing;
+use std::mem::{ManuallyDrop, forget};
 use tokio::runtime::{EnterGuard, Handle};
+use tracing::warn;
 
 /// Creates a static Ruby identifier (symbol) for efficient reuse.
 ///
@@ -42,13 +44,26 @@ macro_rules! id {
 /// them in a type that implements both `Send` and `Sync`. This type enforces
 /// that the underlying Ruby value is only accessed within a Ruby thread
 /// context.
+///
+/// # Drop safety
+///
+/// [`BoxValue`] must be dropped on a Ruby thread because its `Drop` impl calls
+/// `rb_gc_unregister_address`. This type handles that automatically: if dropped
+/// on a Ruby thread, the value is cleaned up normally. If dropped on a
+/// non-Ruby thread (e.g. a Tokio worker), the value is leaked rather than
+/// risking a segfault. The leaked GC registration is harmless — Ruby cleans
+/// it up at process exit.
 #[derive(Debug)]
-pub struct ThreadSafeValue(BoxValue<Value>);
+pub struct ThreadSafeValue(ManuallyDrop<BoxValue<Value>>);
 
-// SAFETY: The underlying value can only be accessed from a Ruby thread.
+// SAFETY: The underlying value can only be accessed from a Ruby thread
+// (enforced by requiring `&Ruby` in `get`). Drop is safe across threads:
+// on a Ruby thread it calls `rb_gc_unregister_address` normally; on any
+// other thread it leaks the value instead of calling into Ruby.
 unsafe impl Send for ThreadSafeValue {}
 
-// SAFETY: The underlying value can only be accessed from a Ruby thread.
+// SAFETY: `get` requires `&Ruby`, ensuring the value is only read on a Ruby
+// thread. The inner `BoxValue` is never mutated after construction.
 unsafe impl Sync for ThreadSafeValue {}
 
 impl ThreadSafeValue {
@@ -58,7 +73,7 @@ impl ThreadSafeValue {
     ///
     /// * `value` - The Ruby value to wrap
     pub fn new(value: Value) -> Self {
-        Self(BoxValue::new(value))
+        Self(ManuallyDrop::new(BoxValue::new(value)))
     }
 
     /// Gets a reference to the wrapped Ruby value.
@@ -71,6 +86,28 @@ impl ThreadSafeValue {
     /// * `_ruby` - A reference to the Ruby VM
     pub fn get(&self, _ruby: &Ruby) -> &Value {
         &self.0
+    }
+}
+
+impl Drop for ThreadSafeValue {
+    fn drop(&mut self) {
+        // SAFETY: `drop` is called exactly once per value, so this
+        // `ManuallyDrop::take` cannot double-free.
+        let inner = unsafe { ManuallyDrop::take(&mut self.0) };
+
+        // On a Ruby thread: safe to drop directly (calls rb_gc_unregister_address).
+        if Ruby::get().is_ok() {
+            drop(inner);
+            return;
+        }
+
+        // On a non-Ruby thread: leak rather than segfault. The GC-registered
+        // address is harmless — Ruby cleans it up at process exit.
+        warn!(
+            "leaked a Ruby value because it was dropped on a Tokio thread; this is safe but \
+             indicates a value outlived its expected scope"
+        );
+        forget(inner);
     }
 }
 
