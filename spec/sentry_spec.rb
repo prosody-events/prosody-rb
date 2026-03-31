@@ -29,6 +29,29 @@ RSpec.describe Prosody::SentryIntegration do
         expect(described_class.enabled?).to be false
       end
     end
+
+    context "when Sentry is defined but not initialized and SENTRY_DSN is set" do
+      around do |example|
+        ENV["SENTRY_DSN"] = "https://key@sentry.io/123"
+        example.run
+      ensure
+        ENV.delete("SENTRY_DSN")
+      end
+
+      it "auto-initializes Sentry from SENTRY_DSN and returns true" do
+        allow(Sentry).to receive(:initialized?).and_return(false, true)
+        expect(Sentry).to receive(:init)
+        expect(described_class.enabled?).to be true
+      end
+    end
+
+    context "when Sentry is defined but not initialized and SENTRY_DSN is not set" do
+      it "does not call Sentry.init and returns false" do
+        allow(Sentry).to receive(:initialized?).and_return(false)
+        expect(Sentry).not_to receive(:init)
+        expect(described_class.enabled?).to be false
+      end
+    end
   end
 
   describe ".capture_exception" do
