@@ -191,7 +191,7 @@ Configure via constructor options or environment variables. Options fall back to
 | `timeout` / `PROSODY_TIMEOUT`           | Cancel handler if it runs longer than this           | 80% of stall threshold |
 | `commit_interval` / `PROSODY_COMMIT_INTERVAL` | How often to save progress to Kafka            | 1s                     |
 | `poll_interval` / `PROSODY_POLL_INTERVAL` | How often to fetch new messages from Kafka         | 100ms                  |
-| `shutdown_timeout` / `PROSODY_SHUTDOWN_TIMEOUT` | Shutdown budget; handlers complete freely before cancellation fires near the deadline | 30s |
+| `shutdown_timeout` / `PROSODY_SHUTDOWN_TIMEOUT` | Shutdown budget; handlers run freely until cancellation fires near the end of the timeout | 30s |
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks (nil to disable)         | 8000                   |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
@@ -800,7 +800,7 @@ Best practices:
 
 ### Handling Task Cancellation
 
-Prosody cancels tasks during partition rebalancing or timeout. During shutdown, handlers run freely for most of the shutdown timeout before the cancellation signal fires — giving in-flight work time to complete. When cancelled, your handler receives `Async::Stop` at the next yield point (I/O operation, sleep, etc.).
+Prosody cancels tasks during partition rebalancing, timeout, or shutdown. During shutdown, handlers run freely for most of the `shutdown_timeout` before the cancellation signal fires—giving in-flight work time to complete. When cancelled, your handler receives `Async::Stop` at the next yield point (I/O operation, sleep, etc.).
 
 Best practices:
 

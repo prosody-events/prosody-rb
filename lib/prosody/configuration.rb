@@ -115,7 +115,7 @@ module Prosody
     # Threshold in seconds after which a stalled consumer is detected.
     config_param :stall_threshold, converter: ->(v) { duration_converter(v) }
 
-    # Shutdown budget; handlers complete freely before cancellation fires near the deadline.
+    # Shutdown budget; handlers run freely until cancellation fires near the end of the timeout.
     config_param :shutdown_timeout, converter: ->(v) { duration_converter(v) }
 
     # Interval between Kafka poll operations (in seconds).
