@@ -16,7 +16,8 @@ use magnus::{Error, Module, RClass, Ruby, Value};
 use std::any::Any;
 use thiserror::Error;
 use tokio::select;
-use tokio::sync::mpsc::{Receiver, Sender, channel};
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 use tracing::{Instrument, Span, debug, error, warn};
 
@@ -43,7 +44,7 @@ pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
 });
 
 /// Type alias for a boxed closure that can be executed in a Ruby context.
-type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
+pub(crate) type RubyFunction = Box<dyn FnOnce(&Ruby) + Send>;
 
 /// A wrapper for results returned from async operations to Ruby.
 ///
@@ -62,23 +63,27 @@ pub struct Bridge {
     /// Channel sender for submitting functions to be executed in the Ruby
     /// context.
     #[educe(Debug(ignore))]
-    tx: Sender<RubyFunction>,
+    tx: UnboundedSender<RubyFunction>,
 }
 
 impl Bridge {
-    /// Creates a new Bridge with a specified buffer size.
+    /// Creates a new Bridge.
+    ///
+    /// The internal command channel is unbounded. In typical request/response
+    /// flows, callers wait for Ruby to process commands, which tends to bound
+    /// queue growth in practice. However, fire-and-forget uses (e.g. from
+    /// `Drop` implementations on non-Ruby threads) can enqueue without
+    /// blocking, so growth is unbounded if the Ruby bridge thread is stalled.
     ///
     /// # Arguments
     ///
     /// * `ruby` - Reference to the Ruby VM.
-    /// * `buffer_size` - Size of the internal channel buffer for pending
-    ///   operations.
     ///
     /// # Returns
     ///
     /// A new `Bridge` instance.
-    pub fn new(ruby: &Ruby, buffer_size: usize) -> Self {
-        let (tx, mut rx) = channel(buffer_size);
+    pub fn new(ruby: &Ruby) -> Self {
+        let (tx, mut rx) = unbounded_channel();
 
         // Create a dedicated Ruby thread to process functions
         ruby.thread_create_from_fn(move |ruby| {
@@ -130,7 +135,6 @@ impl Bridge {
 
         self.tx
             .send(Box::new(function))
-            .await
             .map_err(|_| BridgeError::Shutdown)?;
 
         result_rx.await.map_err(|_| BridgeError::Shutdown)
@@ -167,7 +171,7 @@ impl Bridge {
 
         // Create a Ruby Queue to receive the result
         let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!(ruby, "new"), ())?;
-        let callback = AsyncCallback::from_queue(queue);
+        let callback = AsyncCallback::from_queue(queue, self.clone());
         let tx = self.tx.clone();
 
         // Spawn a task to await the future and send the result back to Ruby
@@ -181,7 +185,7 @@ impl Bridge {
                     }
                 };
 
-                if let Err(error) = tx.send(Box::new(function)).await {
+                if let Err(error) = tx.send(Box::new(function)) {
                     error!("failed to send callback to Ruby: {error:#}");
                 }
             }
@@ -197,6 +201,15 @@ impl Bridge {
             .downcast::<Fut::Output>()
             .map_err(|_| Error::new(ruby.exception_runtime_error(), "failed to downcast result"))
             .map(|output| *output)
+    }
+
+    /// Synchronously enqueues a function for execution on the Ruby thread.
+    ///
+    /// Unlike [`run`](Self::run), this method does not await a result and can
+    /// be called from synchronous contexts such as `Drop` implementations.
+    /// Returns `Err` only if the bridge receiver has been dropped (shutdown).
+    pub(crate) fn send(&self, function: RubyFunction) -> Result<(), SendError<RubyFunction>> {
+        self.tx.send(function)
     }
 }
 
@@ -220,7 +233,7 @@ impl Bridge {
 ///
 /// Returns a `BridgeError` if there was an issue with polling or executing
 /// commands.
-fn poll(rx: &mut Receiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError> {
+fn poll(rx: &mut UnboundedReceiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError> {
     // Set up cancellation channel
     let (cancel_tx, cancel_rx) = oneshot::channel();
     let mut maybe_cancel_tx = Some(cancel_tx);

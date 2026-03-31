@@ -76,8 +76,8 @@ impl RubyHandler {
     pub fn new(bridge: Bridge, ruby: &Ruby, handler_instance: Value) -> Result<Self, Error> {
         Ok(Self {
             bridge: bridge.clone(),
+            handler: Arc::new(ThreadSafeValue::new(handler_instance, bridge.clone())),
             scheduler: Arc::new(Scheduler::new(ruby, bridge)?),
-            handler: Arc::new(ThreadSafeValue::new(handler_instance)),
             propagator: Arc::new(new_propagator()),
         })
     }
