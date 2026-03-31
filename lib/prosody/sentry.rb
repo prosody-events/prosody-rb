@@ -19,7 +19,7 @@ module Prosody
         ::Sentry.init { |c| c.dsn = ENV["SENTRY_DSN"] }
       end
 
-      true
+      ::Sentry.initialized?
     end
 
     def self.capture_exception(exception, context = {})
