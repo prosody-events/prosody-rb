@@ -26,6 +26,8 @@ impl AsyncCallback {
     /// # Arguments
     ///
     /// * `queue` - A Ruby Queue object that will receive values from Rust
+    /// * `bridge` - The bridge used to defer cleanup of the wrapped queue
+    ///   value onto the Ruby thread when the callback is dropped
     pub fn from_queue(queue: Value, bridge: Bridge) -> Self {
         Self {
             queue: ThreadSafeValue::new(queue, bridge),

@@ -69,8 +69,11 @@ pub struct Bridge {
 impl Bridge {
     /// Creates a new Bridge.
     ///
-    /// The internal command channel is unbounded — all existing senders block
-    /// waiting for a response, so there is no risk of unbounded growth.
+    /// The internal command channel is unbounded. In typical request/response
+    /// flows, callers wait for Ruby to process commands, which tends to bound
+    /// queue growth in practice. However, fire-and-forget uses (e.g. from
+    /// `Drop` implementations on non-Ruby threads) can enqueue without
+    /// blocking, so growth is unbounded if the Ruby bridge thread is stalled.
     ///
     /// # Arguments
     ///
