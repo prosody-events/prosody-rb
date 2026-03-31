@@ -41,8 +41,10 @@ module Prosody
     # Checks if cancellation has been requested.
     #
     # This method can be called within message handlers to detect when the
-    # handler should exit. Cancellation includes both message-level cancellation
-    # (e.g., handler timeout) and partition shutdown.
+    # handler should exit. Cancellation includes message-level cancellation
+    # (e.g., handler timeout) and partition shutdown. During shutdown,
+    # cancellation is delayed until near the end of the shutdown timeout to
+    # allow in-flight work to complete.
     #
     # @return [Boolean] true if cancellation has been requested, false otherwise
     #
@@ -60,9 +62,11 @@ module Prosody
 
     # Blocks until cancellation is signaled.
     #
-    # Cancellation includes both message-level cancellation (e.g., handler timeout)
-    # and partition shutdown. This method is useful for long-running handlers that
-    # need to wait for external events while remaining responsive to cancellation.
+    # Cancellation includes message-level cancellation (e.g., handler timeout)
+    # and partition shutdown. During shutdown, cancellation is delayed until near
+    # the end of the shutdown timeout to allow in-flight work to complete.
+    # This method is useful for long-running handlers that need to wait for
+    # external events while remaining responsive to cancellation.
     #
     # @return [void]
     #

@@ -9,6 +9,7 @@
 use magnus::{Error, Ruby, Value};
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
+use prosody::consumer::SpanRelation;
 use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
 use prosody::consumer::middleware::monopolization::MonopolizationConfigurationBuilder;
@@ -190,6 +191,13 @@ pub struct NativeConfiguration {
 
     /// Whether the telemetry emitter is enabled.
     telemetry_enabled: Option<bool>,
+
+    // OTel span linking
+    /// Span linking for message execution spans (`child` or `follows_from`).
+    message_spans: Option<String>,
+
+    /// Span linking for timer execution spans (`child` or `follows_from`).
+    timer_spans: Option<String>,
 }
 
 /// Configuration for the health probe port.
@@ -774,11 +782,30 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
     ///
     /// # Errors
     ///
-    /// Returns a `String` error if the telemetry emitter configuration cannot
-    /// be built (e.g. an environment variable contains an unparseable value).
+    /// Returns a `String` error if:
+    /// - The telemetry emitter configuration cannot be built (e.g. an
+    ///   environment variable contains an unparseable value).
+    /// - `message_spans` or `timer_spans` contains an unrecognized value
+    ///   (expected `"child"` or `"follows_from"`).
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut consumer: ConsumerConfigurationBuilder = config.into();
+
+        if let Some(s) = &config.message_spans {
+            let relation = s
+                .parse::<SpanRelation>()
+                .map_err(|e| format!("message_spans: {e}"))?;
+            consumer.message_spans(relation);
+        }
+
+        if let Some(s) = &config.timer_spans {
+            let relation = s
+                .parse::<SpanRelation>()
+                .map_err(|e| format!("timer_spans: {e}"))?;
+            consumer.timer_spans(relation);
+        }
+
         Ok(Self {
-            consumer: config.into(),
+            consumer,
             retry: config.into(),
             failure_topic: config.into(),
             scheduler: config.into(),
