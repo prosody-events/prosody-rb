@@ -113,19 +113,10 @@ impl Drop for ThreadSafeValue {
         // and `RubyDrop::Drop` takes the normal cleanup path.
         //
         // If the send fails (bridge shut down), the `SendError` owns the
-        // closure which owns `inner`. When `SendError` drops on this
-        // non-Ruby thread, `RubyDrop::Drop` takes the leak path — warn +
-        // forget.
-        if self
-            .bridge
-            .send(Box::new(move |_ruby| drop(inner)))
-            .is_err()
-        {
-            warn!(
-                "could not send Ruby value to bridge for cleanup because the bridge has \
-                 shut down"
-            );
-        }
+        // closure which owns `inner`. When `SendError` drops here on the
+        // non-Ruby thread, `RubyDrop::Drop` takes the leak path and emits
+        // its own warning — no need to warn here too.
+        let _ = self.bridge.send(Box::new(move |_ruby| drop(inner)));
     }
 }
 
