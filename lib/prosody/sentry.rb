@@ -11,7 +11,15 @@ module Prosody
         return false
       end
 
-      defined?(::Sentry) && ::Sentry.initialized?
+      return false unless defined?(::Sentry)
+
+      unless ::Sentry.initialized?
+        return false unless ENV["SENTRY_DSN"]
+
+        ::Sentry.init { |c| c.dsn = ENV["SENTRY_DSN"] }
+      end
+
+      ::Sentry.initialized?
     end
 
     def self.capture_exception(exception, context = {})
