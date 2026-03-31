@@ -60,6 +60,8 @@ RSpec.describe Prosody::Configuration do
       expect(config.telemetry_enabled).to be_nil
       expect(config.idempotence_version).to be_nil
       expect(config.idempotence_ttl).to be_nil
+      expect(config.message_spans).to be_nil
+      expect(config.timer_spans).to be_nil
     end
   end
 
@@ -198,7 +200,9 @@ RSpec.describe Prosody::Configuration do
         cassandra_user: "cassandra_user",
         cassandra_password: "cassandra_password",
         telemetry_topic: "prosody.telemetry-events",
-        idempotence_version: "2"
+        idempotence_version: "2",
+        message_spans: "child",
+        timer_spans: "follows_from"
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)
@@ -326,7 +330,9 @@ RSpec.describe Prosody::Configuration do
         cassandra_rack: "rack1",
         cassandra_user: "test_user",
         cassandra_password: "test_password",
-        cassandra_retention: 2_592_000.0
+        cassandra_retention: 2_592_000.0,
+        message_spans: "child",
+        timer_spans: "follows_from"
       )
 
       # Verify all parameters were correctly set and transformed
@@ -359,6 +365,8 @@ RSpec.describe Prosody::Configuration do
       expect(config.cassandra_user).to eq("test_user")
       expect(config.cassandra_password).to eq("test_password")
       expect(config.cassandra_retention).to eq(2_592_000.0)
+      expect(config.message_spans).to eq("child")
+      expect(config.timer_spans).to eq("follows_from")
     end
 
     # Tests that the configuration can be modified via a block

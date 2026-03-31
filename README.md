@@ -191,7 +191,7 @@ Configure via constructor options or environment variables. Options fall back to
 | `timeout` / `PROSODY_TIMEOUT`           | Cancel handler if it runs longer than this           | 80% of stall threshold |
 | `commit_interval` / `PROSODY_COMMIT_INTERVAL` | How often to save progress to Kafka            | 1s                     |
 | `poll_interval` / `PROSODY_POLL_INTERVAL` | How often to fetch new messages from Kafka         | 100ms                  |
-| `shutdown_timeout` / `PROSODY_SHUTDOWN_TIMEOUT` | Wait this long for in-flight work before force-quit | 30s              |
+| `shutdown_timeout` / `PROSODY_SHUTDOWN_TIMEOUT` | Shutdown budget; handlers run freely until cancellation fires near the end of the timeout | 30s |
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks (nil to disable)         | 8000                   |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
@@ -199,6 +199,8 @@ Configure via constructor options or environment variables. Options fall back to
 | `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
 | `idempotence_ttl` / `PROSODY_IDEMPOTENCE_TTL`         | TTL for dedup records in Cassandra            | 7d (604800 seconds) |
 | `slab_size` / `PROSODY_SLAB_SIZE`       | Timer storage granularity (rarely needs changing)    | 1h                     |
+| `message_spans` / `PROSODY_MESSAGE_SPANS` | Span linking for message execution: `child` (child-of) or `follows_from` | `child` |
+| `timer_spans` / `PROSODY_TIMER_SPANS`   | Span linking for timer execution: `child` (child-of) or `follows_from`   | `follows_from` |
 
 ### Producer
 
@@ -670,6 +672,16 @@ class MyHandler < Prosody::EventHandler
 end
 ```
 
+### Span Linking
+
+By default, message execution spans use **`child`** (child-of relationship — the execution span is part of
+the same trace as the producer). Timer execution spans use **`follows_from`** (the execution span starts a
+new trace with a span link back to the scheduling span, since timer execution is causally related but not part of
+the same operation).
+
+Both strategies are configurable via the `message_spans` / `PROSODY_MESSAGE_SPANS` and `timer_spans` /
+`PROSODY_TIMER_SPANS` options. Accepted values: `'child'`, `'follows_from'`.
+
 ## Best Practices
 
 ### Ensuring Thread-Safe Handlers
@@ -788,7 +800,7 @@ Best practices:
 
 ### Handling Task Cancellation
 
-Prosody cancels tasks during partition rebalancing, timeout, or shutdown. When cancelled, your handler receives `Async::Stop` at the next yield point (I/O operation, sleep, etc.).
+Prosody cancels tasks during partition rebalancing, timeout, or shutdown. During shutdown, handlers run freely for most of the `shutdown_timeout` before the cancellation signal fires—giving in-flight work time to complete. When cancelled, your handler receives `Async::Stop` at the next yield point (I/O operation, sleep, etc.).
 
 Best practices:
 
