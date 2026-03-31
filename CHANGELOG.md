@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2](https://github.com/cincpro/prosody-rb/compare/v2.4.1...v2.4.2) (2026-03-31)
+
+
+### Bug Fixes
+
+* auto-initialize Sentry from SENTRY_DSN when sentry-ruby is installed ([#84](https://github.com/cincpro/prosody-rb/issues/84)) ([a358031](https://github.com/cincpro/prosody-rb/commit/a3580313b4152608896cd6ba55fa73856ad26cab))
+
 ## [2.4.1](https://github.com/cincpro/prosody-rb/compare/v2.4.0...v2.4.1) (2026-03-31)
 
 
