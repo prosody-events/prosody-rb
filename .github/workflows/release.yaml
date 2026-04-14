@@ -288,7 +288,7 @@ jobs:
     name: Test aarch64-linux
     needs:
       - build-cross-compiled-gems
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - name: Download gem artifact
@@ -296,13 +296,6 @@ jobs:
         with:
           name: linux-aarch64-gem
           path: ./gems
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
-      # Use tonistiigi/binfmt instead of multiarch/qemu-user-static:register
-      - name: Set up binfmt_misc
-        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -346,12 +339,12 @@ jobs:
           done
       - name: Run tests
         run: |
-          docker run --rm --platform linux/arm64 --network kafka-test-network \
+          docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            arm64v8/ruby:3.3 \
+            ruby:3.3 \
             bash -c "set -e && cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
@@ -364,7 +357,7 @@ jobs:
     name: Test aarch64-linux-musl
     needs:
       - build-cross-compiled-gems
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - name: Download gem artifact
@@ -372,12 +365,6 @@ jobs:
         with:
           name: linux-musl-aarch64-gem
           path: ./gems
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
-      - name: Set up binfmt_misc
-        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
@@ -421,12 +408,12 @@ jobs:
           done
       - name: Run tests
         run: |
-          docker run --rm --platform linux/arm64 --network kafka-test-network \
+          docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            arm64v8/ruby:3.3-alpine \
+            ruby:3.3-alpine \
             sh -c "set -e && cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
