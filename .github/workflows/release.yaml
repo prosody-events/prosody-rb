@@ -19,6 +19,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_TEST_DEBUG: 0
   CMAKE_POLICY_VERSION_MINIMUM: 3.5
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   release-please:
@@ -28,12 +29,14 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: google-github-actions/release-please-action@v3
+      - uses: actions/checkout@v4
+      - name: Release Please Action
         id: release
+        uses: googleapis/release-please-action@v4
         with:
-          release-type: ruby
-          package-name: prosody
-          token: ${{ secrets.TEMP_GH_ALL_REPOS_RW }}
+          token: ${{ secrets.GH_PAT }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
           release-as: ${{ github.event.inputs.release_as }}
 
   build-cross-compiled-gems:
@@ -69,30 +72,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup git credentials
-        uses: de-vri-es/setup-git-credentials@v2
-        with:
-          credentials: https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com/
-
       - name: Setup Ruby & Rust
-        uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
+        uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
           cargo-cache: true
           cargo-vendor: true
           cache-version: v1-${{ matrix.target.platform }}
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
-      - name: Write git credentials into working directory for container mount
-        run: |
-          echo 'https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com' \
-            > .git-credentials
-          chmod 600 .git-credentials
 
       - name: Cross-compile gem
-        uses: cincpro/oxidize-rb-actions/cross-gem@v1
+        uses: oxidize-rb/actions/cross-gem@v1
         id: cross-gem
         with:
           platform: ${{ matrix.target.platform }}
@@ -110,9 +101,7 @@ jobs:
             sudo ln -sf $curl_include ${sysroot}/include/curl; fi &&
             if [[ $CARGO_BUILD_TARGET == *apple-darwin* ]]; then
             export CFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld" &&
-            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi &&
-            git config --global credential.helper store &&
-            cp .git-credentials ~/.git-credentials
+            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi
 
       - name: Upload cross-compiled gem
         uses: actions/upload-artifact@v4
@@ -129,21 +118,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup git credentials
-        uses: de-vri-es/setup-git-credentials@v2
-        with:
-          credentials: https://Joshua-Griffith_fnf:${{ secrets.TEMP_GH_ALL_REPOS_RW }}@github.com/
-
       - name: Setup Ruby & Rust
-        uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
+        uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
           cargo-cache: true
           cache-version: v1-source
-          token: ${{ secrets.GH_ALL_REPOS_RO }}
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev
@@ -182,15 +164,18 @@ jobs:
       - name: Start Kafka container
         run: |
           docker run -d --name kafka --network kafka-test-network \
-            -e KAFKA_CFG_NODE_ID=0 \
-            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnamilegacy/kafka:3.7
+            -e KAFKA_NODE_ID=0 \
+            -e KAFKA_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            apache/kafka:latest
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -248,15 +233,18 @@ jobs:
       - name: Start Kafka container
         run: |
           docker run -d --name kafka --network kafka-test-network \
-            -e KAFKA_CFG_NODE_ID=0 \
-            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnamilegacy/kafka:3.7
+            -e KAFKA_NODE_ID=0 \
+            -e KAFKA_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            apache/kafka:latest
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -300,7 +288,7 @@ jobs:
     name: Test aarch64-linux
     needs:
       - build-cross-compiled-gems
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - name: Download gem artifact
@@ -308,27 +296,23 @@ jobs:
         with:
           name: linux-aarch64-gem
           path: ./gems
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-      # Use tonistiigi/binfmt instead of multiarch/qemu-user-static:register
-      - name: Set up binfmt_misc
-        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
         run: |
           docker run -d --name kafka --network kafka-test-network \
-            -e KAFKA_CFG_NODE_ID=0 \
-            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnamilegacy/kafka:3.7
+            -e KAFKA_NODE_ID=0 \
+            -e KAFKA_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            apache/kafka:latest
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -355,12 +339,12 @@ jobs:
           done
       - name: Run tests
         run: |
-          docker run --rm --platform linux/arm64 --network kafka-test-network \
+          docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            arm64v8/ruby:3.3 \
+            ruby:3.3 \
             bash -c "set -e && cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
@@ -373,7 +357,7 @@ jobs:
     name: Test aarch64-linux-musl
     needs:
       - build-cross-compiled-gems
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - name: Download gem artifact
@@ -381,26 +365,23 @@ jobs:
         with:
           name: linux-musl-aarch64-gem
           path: ./gems
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-      - name: Set up binfmt_misc
-        run: docker run --rm --privileged tonistiigi/binfmt --install all
       - name: Create Docker network
         run: docker network create kafka-test-network
       - name: Start Kafka container
         run: |
           docker run -d --name kafka --network kafka-test-network \
-            -e KAFKA_CFG_NODE_ID=0 \
-            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
-            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
-            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-            docker.io/bitnamilegacy/kafka:3.7
+            -e KAFKA_NODE_ID=0 \
+            -e KAFKA_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+            -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+            apache/kafka:latest
       - name: Start Cassandra container
         run: |
           docker run -d --name cassandra --network kafka-test-network \
@@ -427,12 +408,12 @@ jobs:
           done
       - name: Run tests
         run: |
-          docker run --rm --platform linux/arm64 --network kafka-test-network \
+          docker run --rm --network kafka-test-network \
             -e PROSODY_BOOTSTRAP_SERVERS=kafka:9092 \
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            arm64v8/ruby:3.3-alpine \
+            ruby:3.3-alpine \
             sh -c "set -e && cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
@@ -452,32 +433,38 @@ jobs:
       - test-linux-aarch64
       - test-linux-musl-aarch64
     if: needs.release-please.outputs.release_created == 'true'
+    environment: release
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./gems
+          merge-multiple: true
 
-      - name: Publish to Gemfury
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+
+      - name: Publish gems to RubyGems.org
         env:
-          GEMFURY_PUSH_TOKEN: ${{ secrets.FURY_TOKEN }}
-          GEMFURY_ACCOUNT: realgeeks
+          GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
         run: |
-          # Find and publish all gem files
-          echo "Publishing gems to Gemfury..."
-          find ./gems -name "*.gem" -type f | while read gem_file; do
-            echo "Publishing ${gem_file}..."
-
-            # Using curl as documented in Gemfury docs
-            RESPONSE=$(curl -s -F package=@"${gem_file}" "https://${GEMFURY_PUSH_TOKEN}@push.fury.io/${GEMFURY_ACCOUNT}/")
-
-            # Check for errors in the response
-            if [[ $RESPONSE == *"error"* ]]; then
-              echo "Error uploading ${gem_file}: ${RESPONSE}"
-              exit 1
-            else
-              echo "Successfully published ${gem_file}"
+          for gem in ./gems/*.gem; do
+            [ -f "$gem" ] || continue
+            echo "::group::Pushing $(basename "$gem")"
+            set +e
+            gem push "$gem" > push.out 2>&1
+            status=$?
+            set -e
+            cat push.out
+            if [ "$status" -ne 0 ]; then
+              if grep -q "Repushing of gem" push.out; then
+                echo "::warning::$(basename "$gem") already published, skipping."
+              else
+                echo "::error::Failed to push $(basename "$gem")"
+                exit "$status"
+              fi
             fi
+            echo "::endgroup::"
           done
-
-          echo "All gems published successfully!"

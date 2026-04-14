@@ -1,5 +1,4 @@
 [package]
-authors = ["Joshua Griffith <Joshua.Griffith@fnf.com>"]
 edition = "2024"
 license = "MIT"
 name = "prosody"

@@ -6,17 +6,15 @@ Gem::Specification.new do |spec|
   spec.name = "prosody"
   spec.version = Prosody::VERSION
   spec.authors = ["Joshua Griffith"]
-  spec.email = ["Joshua.Griffith@fnf.com"]
 
-  spec.summary = "Ruby bindings for Kafka with configurable retry mechanisms " \
-                 "and OpenTelemetry support"
+  spec.summary = "Ruby bindings for the Prosody Kafka client library"
   spec.description = <<~DESC
     Prosody offers Ruby bindings to the Prosody Kafka client, providing features
     for message production and consumption, including configurable retry
     mechanisms, failure handling strategies, and integrated OpenTelemetry
     support for distributed tracing.
   DESC
-  spec.homepage = "https://github.com/cincpro/prosody"
+  spec.homepage = "https://github.com/prosody-events/prosody-rb"
 
   spec.license = "MIT"
 
@@ -26,8 +24,8 @@ Gem::Specification.new do |spec|
   # Metadata for RubyGems
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/cincpro/prosody"
-  spec.metadata["changelog_uri"] = "https://github.com/cincpro/prosody/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/prosody-events/prosody-rb"
+  spec.metadata["changelog_uri"] = "https://github.com/prosody-events/prosody-rb/blob/main/CHANGELOG.md"
 
   # Specify which files should be included in the gem
   gemspec = File.basename(__FILE__)
