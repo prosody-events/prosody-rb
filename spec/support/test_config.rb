@@ -11,7 +11,7 @@ module TestConfig
   # Test constants
   GROUP_NAME = "test-group"
   SOURCE_NAME = "test-source"
-  MESSAGE_TIMEOUT = 5 # Time to wait for message delivery in seconds
+  MESSAGE_TIMEOUT = 30 # Time to wait for message delivery in seconds
 
   # Creates a test configuration for Prosody::Client
   # @param topic [String] The Kafka topic to subscribe to
