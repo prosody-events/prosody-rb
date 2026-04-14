@@ -1,6 +1,6 @@
 # Prosody: Ruby Bindings for Kafka
 
-Prosody offers Ruby bindings to the [Prosody Kafka client](https://github.com/cincpro/prosody), providing
+Prosody offers Ruby bindings to the [Prosody Kafka client](https://github.com/prosody-events/prosody), providing
 features for message production and consumption, including configurable retry mechanisms, failure handling
 strategies, and integrated OpenTelemetry support for distributed tracing.
 
@@ -20,16 +20,13 @@ strategies, and integrated OpenTelemetry support for distributed tracing.
 Add this line to your application's Gemfile:
 
 ```ruby
-# In your Gemfile
-source "https://gem.fury.io/realgeeks/" do
-  gem "prosody"
-end
+gem "prosody"
 ```
 
 Or install directly:
 
 ```bash
-gem install prosody --source=https://gem.fury.io/realgeeks/
+gem install prosody
 ```
 
 ## Quick Start

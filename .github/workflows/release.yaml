@@ -19,6 +19,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_TEST_DEBUG: 0
   CMAKE_POLICY_VERSION_MINIMUM: 3.5
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   release-please:
@@ -71,30 +72,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup git credentials
-        uses: de-vri-es/setup-git-credentials@v2
-        with:
-          credentials: https://Joshua-Griffith_fnf:${{ secrets.GH_PAT }}@github.com/
-
       - name: Setup Ruby & Rust
-        uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
+        uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
           cargo-cache: true
           cargo-vendor: true
           cache-version: v1-${{ matrix.target.platform }}
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
-      - name: Write git credentials into working directory for container mount
-        run: |
-          echo 'https://Joshua-Griffith_fnf:${{ secrets.GH_PAT }}@github.com' \
-            > .git-credentials
-          chmod 600 .git-credentials
 
       - name: Cross-compile gem
-        uses: cincpro/oxidize-rb-actions/cross-gem@v1
+        uses: oxidize-rb/actions/cross-gem@v1
         id: cross-gem
         with:
           platform: ${{ matrix.target.platform }}
@@ -112,9 +101,7 @@ jobs:
             sudo ln -sf $curl_include ${sysroot}/include/curl; fi &&
             if [[ $CARGO_BUILD_TARGET == *apple-darwin* ]]; then
             export CFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld" &&
-            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi &&
-            git config --global credential.helper store &&
-            cp .git-credentials ~/.git-credentials
+            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi
 
       - name: Upload cross-compiled gem
         uses: actions/upload-artifact@v4
@@ -131,21 +118,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup git credentials
-        uses: de-vri-es/setup-git-credentials@v2
-        with:
-          credentials: https://Joshua-Griffith_fnf:${{ secrets.GH_PAT }}@github.com/
-
       - name: Setup Ruby & Rust
-        uses: cincpro/oxidize-rb-actions/setup-ruby-and-rust@v1
+        uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
           cargo-cache: true
           cache-version: v1-source
-          token: ${{ secrets.GH_ALL_REPOS_RO }}
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev
@@ -317,7 +297,7 @@ jobs:
           name: linux-aarch64-gem
           path: ./gems
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       # Use tonistiigi/binfmt instead of multiarch/qemu-user-static:register
@@ -393,7 +373,7 @@ jobs:
           name: linux-musl-aarch64-gem
           path: ./gems
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       - name: Set up binfmt_misc
@@ -466,22 +446,38 @@ jobs:
       - test-linux-aarch64
       - test-linux-musl-aarch64
     if: needs.release-please.outputs.release_created == 'true'
+    environment: release
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./gems
+          merge-multiple: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
 
-      - name: Publish to RubyGems.org
+      - name: Publish gems to RubyGems.org
         env:
-          RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+          GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
         run: |
-          mkdir -p ~/.gem
-          printf -- "---\n:rubygems_api_key: ${RUBYGEMS_API_KEY}\n" > ~/.gem/credentials
-          chmod 0600 ~/.gem/credentials
-          find ./gems -name "*.gem" -type f -exec gem push {} \;
+          for gem in ./gems/*.gem; do
+            [ -f "$gem" ] || continue
+            echo "::group::Pushing $(basename "$gem")"
+            set +e
+            gem push "$gem" > push.out 2>&1
+            status=$?
+            set -e
+            cat push.out
+            if [ "$status" -ne 0 ]; then
+              if grep -q "Repushing of gem" push.out; then
+                echo "::warning::$(basename "$gem") already published, skipping."
+              else
+                echo "::error::Failed to push $(basename "$gem")"
+                exit "$status"
+              fi
+            fi
+            echo "::endgroup::"
+          done
