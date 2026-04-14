@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.1.0...prosody/v0.1.1) (2026-04-14)
+
+
+### Bug Fixes
+
+* **ci:** use cross-gem fork with pre-script support for rdkafka-sys ([#8](https://github.com/prosody-events/prosody-rb/issues/8)) ([bc70d53](https://github.com/prosody-events/prosody-rb/commit/bc70d53bfb88b6ea9aa259336f60891e02a690a1))
+
 ## 0.1.0 (2026-04-14)
 
 
