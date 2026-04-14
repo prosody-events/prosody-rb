@@ -83,7 +83,9 @@ jobs:
 
 
       - name: Cross-compile gem
-        uses: oxidize-rb/actions/cross-gem@v1
+        # TODO: Switch back to oxidize-rb/actions/cross-gem@v1 when upstream merges pre-script support
+        # https://github.com/oxidize-rb/actions/pull/71
+        uses: prosody-events/actions/cross-gem@add-pre-script-input
         id: cross-gem
         with:
           platform: ${{ matrix.target.platform }}
