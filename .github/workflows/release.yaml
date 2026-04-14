@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - test-release-pipeline
   workflow_dispatch:
     inputs:
       release_as:
@@ -41,8 +40,8 @@ jobs:
           release-as: ${{ github.event.inputs.release_as }}
 
   build-cross-compiled-gems:
-    # needs: [release-please]
-    # if: needs.release-please.outputs.release_created == 'true'
+    needs: [release-please]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -84,6 +83,8 @@ jobs:
 
 
       - name: Cross-compile gem
+        # TODO: Switch back to oxidize-rb/actions/cross-gem@v1 when upstream merges pre-script support
+        # https://github.com/oxidize-rb/actions/pull/71
         uses: prosody-events/actions/cross-gem@add-pre-script-input
         id: cross-gem
         with:
@@ -111,8 +112,8 @@ jobs:
           path: ${{ steps.cross-gem.outputs.gem-path }}
 
   build-source-gem:
-    # needs: [release-please]
-    # if: needs.release-please.outputs.release_created == 'true'
+    needs: [release-please]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     name: Build source gem
     steps:
@@ -424,7 +425,6 @@ jobs:
 
   release:
     name: Release
-    if: false # disabled for pipeline testing
     runs-on: ubuntu-latest
     needs:
       - release-please
@@ -434,6 +434,7 @@ jobs:
       - test-linux-musl-x86_64
       - test-linux-aarch64
       - test-linux-musl-aarch64
+    if: needs.release-please.outputs.release_created == 'true'
     environment: release
     steps:
       - name: Download all artifacts
