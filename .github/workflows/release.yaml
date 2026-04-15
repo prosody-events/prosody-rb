@@ -436,6 +436,8 @@ jobs:
       - test-linux-musl-aarch64
     if: needs.release-please.outputs.release_created == 'true'
     environment: release
+    permissions:
+      id-token: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -448,9 +450,10 @@ jobs:
         with:
           ruby-version: '3.4'
 
+      - name: Configure RubyGems credentials
+        uses: rubygems/configure-rubygems-credentials@v1.0.0
+
       - name: Publish gems to RubyGems.org
-        env:
-          GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
         run: |
           for gem in ./gems/*.gem; do
             [ -f "$gem" ] || continue
