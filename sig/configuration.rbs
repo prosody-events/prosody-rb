@@ -202,6 +202,10 @@ module Prosody
     def defer_cache_size: () -> Integer?
     def defer_cache_size=: (Integer | _ToInt) -> Integer
 
+    # Maximum deferred store cache entries. Env: PROSODY_DEFER_STORE_CACHE_SIZE
+    def defer_store_cache_size: () -> Integer?
+    def defer_store_cache_size=: (Integer | _ToInt) -> Integer
+
     # Defer seek timeout (seconds)
     def defer_seek_timeout: () -> Float?
     def defer_seek_timeout=: (Numeric) -> Float
