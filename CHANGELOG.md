@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.1.1...prosody/v0.1.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* **deps:** upgrade prosody to 0.1.2 ([#12](https://github.com/prosody-events/prosody-rb/issues/12)) ([381a5d9](https://github.com/prosody-events/prosody-rb/commit/381a5d9b53092680bb81bef406b3180ec6ace305))
+
 ## [0.1.1](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.1.0...prosody/v0.1.1) (2026-04-14)
 
 
