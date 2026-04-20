@@ -175,6 +175,9 @@ pub struct NativeConfiguration {
     /// Cache size for defer middleware.
     defer_cache_size: Option<u32>,
 
+    /// Maximum number of deferred store entries kept in the write-through cache per Cassandra defer store.
+    defer_store_cache_size: Option<u32>,
+
     /// Timeout for Kafka seek operations (in seconds).
     defer_seek_timeout: Option<f32>,
 
@@ -649,6 +652,10 @@ impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
 
         if let Some(cache_size) = &config.defer_cache_size {
             builder.cache_size(*cache_size as usize);
+        }
+
+        if let Some(store_cache_size) = &config.defer_store_cache_size {
+            builder.store_cache_size(*store_cache_size as usize);
         }
 
         if let Some(seek_timeout) = &config.defer_seek_timeout {

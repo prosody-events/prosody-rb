@@ -244,6 +244,9 @@ module Prosody
     # Cache size for defer middleware.
     config_param :defer_cache_size, converter: ->(v) { Integer(v) }
 
+    # Maximum deferred store cache entries per Cassandra defer store. Env: PROSODY_DEFER_STORE_CACHE_SIZE
+    config_param :defer_store_cache_size, converter: ->(v) { Integer(v) }
+
     # Timeout for Kafka seek operations (in seconds).
     config_param :defer_seek_timeout, converter: ->(v) { duration_converter(v) }
 

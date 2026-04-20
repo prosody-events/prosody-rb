@@ -54,6 +54,7 @@ RSpec.describe Prosody::Configuration do
       expect(config.defer_failure_threshold).to be_nil
       expect(config.defer_failure_window).to be_nil
       expect(config.defer_cache_size).to be_nil
+      expect(config.defer_store_cache_size).to be_nil
       expect(config.defer_seek_timeout).to be_nil
       expect(config.defer_discard_threshold).to be_nil
       expect(config.telemetry_topic).to be_nil
@@ -142,6 +143,7 @@ RSpec.describe Prosody::Configuration do
         scheduler_cache_size: 8192,
         monopolization_cache_size: 8192,
         defer_cache_size: 1024,
+        defer_store_cache_size: 8192,
         defer_discard_threshold: 100
       }.each do |field, value|
         it "sets and gets #{field}" do
