@@ -175,7 +175,8 @@ pub struct NativeConfiguration {
     /// Cache size for defer middleware.
     defer_cache_size: Option<u32>,
 
-    /// Maximum number of deferred store entries kept in the write-through cache per Cassandra defer store.
+    /// Maximum number of deferred store entries kept in the write-through cache
+    /// per Cassandra defer store.
     defer_store_cache_size: Option<u32>,
 
     /// Timeout for Kafka seek operations (in seconds).

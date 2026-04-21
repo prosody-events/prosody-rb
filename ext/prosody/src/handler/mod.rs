@@ -21,6 +21,7 @@ use futures::pin_mut;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use opentelemetry::trace::Status;
 use prosody::consumer::event_context::EventContext;
 use prosody::consumer::message::ConsumerMessage;
 use prosody::consumer::middleware::FallibleHandler;
@@ -31,7 +32,6 @@ use prosody::timers::{TimerType, Trigger as ProsodyTrigger};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
-use opentelemetry::trace::Status;
 use tokio::select;
 use tracing::{Instrument, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -182,18 +182,20 @@ impl FallibleHandler for RubyHandler {
             select! {
                 result = &mut result_future => {
                     if let Err(ref e) = result {
-                        cloned_span.set_status(Status::error(e.to_string()));
+                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
                     }
                     result?;
                 }
                 () = cancel_future => {
-                    // If cancellation requested, cancel the task and wait for it to complete
-                    task_handle.cancellation_token.cancel(&self.bridge).await?;
-                    let result = result_future.await;
-                    if let Err(ref e) = result {
-                        cloned_span.set_status(Status::error(e.to_string()));
+                    // If cancellation requested, cancel the task and wait for it to complete.
+                    // A cancel() failure is a genuine bridge error and should be marked on the span.
+                    // The subsequent result_future error is an expected cancellation, not a handler bug.
+                    let cancel_result = task_handle.cancellation_token.cancel(&self.bridge).await;
+                    if let Err(ref e) = cancel_result {
+                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
                     }
-                    result?;
+                    cancel_result?;
+                    result_future.await?;
                 }
             }
 
@@ -272,18 +274,20 @@ impl FallibleHandler for RubyHandler {
             select! {
                 result = &mut result_future => {
                     if let Err(ref e) = result {
-                        cloned_span.set_status(Status::error(e.to_string()));
+                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
                     }
                     result?;
                 }
                 () = cancel_future => {
-                    // If cancellation requested, cancel the task and wait for it to complete
-                    task_handle.cancellation_token.cancel(&self.bridge).await?;
-                    let result = result_future.await;
-                    if let Err(ref e) = result {
-                        cloned_span.set_status(Status::error(e.to_string()));
+                    // If cancellation requested, cancel the task and wait for it to complete.
+                    // A cancel() failure is a genuine bridge error and should be marked on the span.
+                    // The subsequent result_future error is an expected cancellation, not a handler bug.
+                    let cancel_result = task_handle.cancellation_token.cancel(&self.bridge).await;
+                    if let Err(ref e) = cancel_result {
+                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
                     }
-                    result?;
+                    cancel_result?;
+                    result_future.await?;
                 }
             }
 

@@ -26,8 +26,8 @@ impl CancellationToken {
     /// # Arguments
     ///
     /// * `token` - A Ruby value that responds to the `cancel` method
-    /// * `bridge` - The bridge used to defer cleanup of the wrapped token
-    ///   value onto the Ruby thread when the token is dropped
+    /// * `bridge` - The bridge used to defer cleanup of the wrapped token value
+    ///   onto the Ruby thread when the token is dropped
     pub fn new(token: Value, bridge: Bridge) -> Self {
         Self {
             token: ThreadSafeValue::new(token, bridge),
