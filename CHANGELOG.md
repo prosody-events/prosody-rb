@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.1.2...prosody/v0.1.3) (2026-04-21)
+
+
+### Bug Fixes
+
+* **tracing:** set error status on on_message and on_timer spans ([#14](https://github.com/prosody-events/prosody-rb/issues/14)) ([849c021](https://github.com/prosody-events/prosody-rb/commit/849c0212b88d1069fc728ab38e9e05d79408c093))
+
 ## [0.1.2](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.1.1...prosody/v0.1.2) (2026-04-20)
 
 
