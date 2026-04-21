@@ -31,8 +31,10 @@ use prosody::timers::{TimerType, Trigger as ProsodyTrigger};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
+use opentelemetry::trace::Status;
 use tokio::select;
 use tracing::{Instrument, info_span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod context;
 mod message;
@@ -179,12 +181,19 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
+                    if let Err(ref e) = result {
+                        cloned_span.set_status(Status::error(e.to_string()));
+                    }
                     result?;
                 }
                 () = cancel_future => {
                     // If cancellation requested, cancel the task and wait for it to complete
                     task_handle.cancellation_token.cancel(&self.bridge).await?;
-                    result_future.await?;
+                    let result = result_future.await;
+                    if let Err(ref e) = result {
+                        cloned_span.set_status(Status::error(e.to_string()));
+                    }
+                    result?;
                 }
             }
 
@@ -262,12 +271,19 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
+                    if let Err(ref e) = result {
+                        cloned_span.set_status(Status::error(e.to_string()));
+                    }
                     result?;
                 }
                 () = cancel_future => {
                     // If cancellation requested, cancel the task and wait for it to complete
                     task_handle.cancellation_token.cancel(&self.bridge).await?;
-                    result_future.await?;
+                    let result = result_future.await;
+                    if let Err(ref e) = result {
+                        cloned_span.set_status(Status::error(e.to_string()));
+                    }
+                    result?;
                 }
             }
 
