@@ -181,13 +181,13 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
-                    result.inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                 }
                 () = cancel_future => {
                     // A cancel() failure is a genuine bridge error; mark the span.
                     // The subsequent result_future error is expected cancellation, not a handler bug.
                     task_handle.cancellation_token.cancel(&self.bridge).await
-                        .inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
+                        .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                     result_future.await?;
                 }
             }
@@ -266,13 +266,13 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
-                    result.inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                 }
                 () = cancel_future => {
                     // A cancel() failure is a genuine bridge error; mark the span.
                     // The subsequent result_future error is expected cancellation, not a handler bug.
                     task_handle.cancellation_token.cancel(&self.bridge).await
-                        .inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
+                        .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                     result_future.await?;
                 }
             }
@@ -307,11 +307,6 @@ impl ClassifyError for RubyHandlerError {
             RubyHandlerError::Processing(error) => error.classify_error(),
         }
     }
-}
-
-fn first_line(e: &impl std::fmt::Display) -> String {
-    let s = e.to_string();
-    s.lines().next().unwrap_or_default().to_owned()
 }
 
 /// Errors that can occur when handling Kafka messages in Ruby.
