@@ -181,20 +181,13 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
-                    if let Err(ref e) = result {
-                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
-                    }
-                    result?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
                 }
                 () = cancel_future => {
-                    // If cancellation requested, cancel the task and wait for it to complete.
-                    // A cancel() failure is a genuine bridge error and should be marked on the span.
-                    // The subsequent result_future error is an expected cancellation, not a handler bug.
-                    let cancel_result = task_handle.cancellation_token.cancel(&self.bridge).await;
-                    if let Err(ref e) = cancel_result {
-                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
-                    }
-                    cancel_result?;
+                    // A cancel() failure is a genuine bridge error; mark the span.
+                    // The subsequent result_future error is expected cancellation, not a handler bug.
+                    task_handle.cancellation_token.cancel(&self.bridge).await
+                        .inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
                     result_future.await?;
                 }
             }
@@ -273,20 +266,13 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
-                    if let Err(ref e) = result {
-                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
-                    }
-                    result?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
                 }
                 () = cancel_future => {
-                    // If cancellation requested, cancel the task and wait for it to complete.
-                    // A cancel() failure is a genuine bridge error and should be marked on the span.
-                    // The subsequent result_future error is an expected cancellation, not a handler bug.
-                    let cancel_result = task_handle.cancellation_token.cancel(&self.bridge).await;
-                    if let Err(ref e) = cancel_result {
-                        cloned_span.set_status(Status::error(e.to_string().lines().next().unwrap_or_default().to_owned()));
-                    }
-                    cancel_result?;
+                    // A cancel() failure is a genuine bridge error; mark the span.
+                    // The subsequent result_future error is expected cancellation, not a handler bug.
+                    task_handle.cancellation_token.cancel(&self.bridge).await
+                        .inspect_err(|e| cloned_span.set_status(Status::error(first_line(e))))?;
                     result_future.await?;
                 }
             }
@@ -321,6 +307,11 @@ impl ClassifyError for RubyHandlerError {
             RubyHandlerError::Processing(error) => error.classify_error(),
         }
     }
+}
+
+fn first_line(e: &impl std::fmt::Display) -> String {
+    let s = e.to_string();
+    s.lines().next().unwrap_or_default().to_owned()
 }
 
 /// Errors that can occur when handling Kafka messages in Ruby.
