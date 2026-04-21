@@ -21,6 +21,7 @@ use futures::pin_mut;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use opentelemetry::trace::Status;
 use prosody::consumer::event_context::EventContext;
 use prosody::consumer::message::ConsumerMessage;
 use prosody::consumer::middleware::FallibleHandler;
@@ -33,6 +34,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
 use tracing::{Instrument, info_span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod context;
 mod message;
@@ -179,11 +181,13 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
-                    result?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                 }
                 () = cancel_future => {
-                    // If cancellation requested, cancel the task and wait for it to complete
-                    task_handle.cancellation_token.cancel(&self.bridge).await?;
+                    // A cancel() failure is a genuine bridge error; mark the span.
+                    // The subsequent result_future error is expected cancellation, not a handler bug.
+                    task_handle.cancellation_token.cancel(&self.bridge).await
+                        .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                     result_future.await?;
                 }
             }
@@ -262,11 +266,13 @@ impl FallibleHandler for RubyHandler {
             // Wait for either task completion or shutdown signal
             select! {
                 result = &mut result_future => {
-                    result?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                 }
                 () = cancel_future => {
-                    // If cancellation requested, cancel the task and wait for it to complete
-                    task_handle.cancellation_token.cancel(&self.bridge).await?;
+                    // A cancel() failure is a genuine bridge error; mark the span.
+                    // The subsequent result_future error is expected cancellation, not a handler bug.
+                    task_handle.cancellation_token.cancel(&self.bridge).await
+                        .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
                     result_future.await?;
                 }
             }
