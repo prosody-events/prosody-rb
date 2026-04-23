@@ -29,6 +29,13 @@ Or install directly:
 gem install prosody
 ```
 
+## Configuration
+```ruby
+# In config/application.rb
+...
+config.active_support.isolation_level = :fiber
+```
+
 ## Quick Start
 
 ```ruby
@@ -335,7 +342,21 @@ PROSODY_STALL_THRESHOLD=15s  # Default stall detection threshold
 4. Setting the threshold too low might cause false positives, while setting it too high could delay detection of actual
    issues.
 5. The probe server is only active when consuming messages (not for producer-only usage).
+6. Be sure your ActiveSupport isolation level is set to `:fiber`:
 
+
+```ruby
+# In config/application.rb
+config.active_support.isolation_level = :fiber
+```
+
+Or else you may see this error from ActiveRecord calls on different fibers sharing the thread:
+
+```
+ActiveRecord::StatementInvalid: Mysql2::Error: This connection is in use by: #<Fiber
+```
+
+### Client Stall State
 You can monitor the stall state programmatically using the client's methods:
 
 ```ruby
