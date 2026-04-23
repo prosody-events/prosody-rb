@@ -29,13 +29,6 @@ Or install directly:
 gem install prosody
 ```
 
-## Configuration
-```ruby
-# In config/application.rb
-...
-config.active_support.isolation_level = :fiber
-```
-
 ## Quick Start
 
 ```ruby
