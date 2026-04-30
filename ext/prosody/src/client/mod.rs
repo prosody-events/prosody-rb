@@ -16,6 +16,7 @@ use crate::handler::RubyHandler;
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
 use crate::{BRIDGE, ROOT_MOD, id};
+use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
@@ -37,10 +38,12 @@ mod config;
 /// This struct bridges Ruby applications with the Prosody messaging system,
 /// providing methods for sending messages to Kafka topics and subscribing to
 /// events with Ruby handlers.
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 #[magnus::wrap(class = "Prosody::Client")]
 pub struct Client {
     /// The underlying Prosody client
+    #[educe(Debug(ignore))]
     inner: Arc<HighLevelClient<RubyHandler>>,
     /// Bridge for communicating between Rust and Ruby
     bridge: Bridge,
@@ -212,7 +215,7 @@ impl Client {
         this.bridge
             .wait_for(
                 ruby,
-                async move { client.send(topic.as_str().into(), &key, &value).await },
+                async move { client.send(topic.as_str().into(), &key, value).await },
                 span,
             )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
