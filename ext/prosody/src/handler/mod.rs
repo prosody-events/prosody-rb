@@ -86,9 +86,9 @@ impl RubyHandler {
 }
 
 impl FallibleHandler for RubyHandler {
-    type Payload = serde_json::Value;
     type Error = RubyHandlerError;
     type Output = ();
+    type Payload = serde_json::Value;
 
     /// Processes a Kafka message by dispatching it to the Ruby handler.
     ///
