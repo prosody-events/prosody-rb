@@ -15,9 +15,8 @@
 use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
+use mimalloc::MiMalloc;
 use std::sync::{LazyLock, OnceLock};
-#[cfg(not(target_os = "windows"))]
-use tikv_jemallocator::Jemalloc;
 use tokio::runtime::Runtime;
 
 mod admin;
@@ -30,9 +29,8 @@ mod scheduler;
 mod tracing_util;
 mod util;
 
-#[cfg(not(target_os = "windows"))]
 #[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
+static GLOBAL: MiMalloc = MiMalloc;
 
 /// Global instance of the Ruby-Rust communication bridge.
 /// Initialized during extension startup and used throughout the library.
