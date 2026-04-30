@@ -21,7 +21,7 @@ use serde_magnus::serialize;
 pub struct Message {
     /// The wrapped Prosody consumer message
     #[educe(Debug(ignore))]
-    inner: ConsumerMessage,
+    inner: ConsumerMessage<serde_json::Value>,
 }
 
 impl Message {
@@ -105,13 +105,13 @@ impl Message {
     }
 }
 
-impl From<ConsumerMessage> for Message {
+impl From<ConsumerMessage<serde_json::Value>> for Message {
     /// Creates a new Message wrapper from a Prosody `ConsumerMessage`.
     ///
     /// # Arguments
     ///
     /// * `value` - The Prosody `ConsumerMessage` to wrap
-    fn from(value: ConsumerMessage) -> Self {
+    fn from(value: ConsumerMessage<serde_json::Value>) -> Self {
         Self { inner: value }
     }
 }

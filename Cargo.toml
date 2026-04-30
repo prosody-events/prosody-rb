@@ -13,10 +13,11 @@ educe = "0.6"
 futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 opentelemetry = "0.31"
-prosody = { version = "0.1", features = ["libz-static"] }
+prosody = { version = "0.2", features = ["libz-static"] }
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
+serde_json = "1.0"
 serde_magnus = "0.11"
 thiserror = "2.0"
 tikv-jemallocator = "0.6"
