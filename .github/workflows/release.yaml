@@ -85,6 +85,13 @@ jobs:
       - name: Cross-compile gem
         # TODO: Switch back to oxidize-rb/actions/cross-gem@v1 when upstream merges pre-script support
         # https://github.com/oxidize-rb/actions/pull/71
+        #
+        # The pre-script's *windows-gnu* branch defines ERROR_COMMITMENT_MINIMUM=635
+        # so libmimalloc-sys (>= 0.1.39) can cross-compile against rb-sys-dock's
+        # x64-mingw-ucrt image, which ships mingw-w64 < 10.0.0. The constant was
+        # first added to mingw-w64 in 10.0.0; mimalloc's prim/windows/prim.c
+        # references it unconditionally. See microsoft/mimalloc#910 and
+        # purpleprotocol/mimalloc_rust#125. Same workaround Apache Arrow ships.
         uses: prosody-events/actions/cross-gem@add-pre-script-input
         id: cross-gem
         with:
@@ -103,7 +110,9 @@ jobs:
             sudo ln -sf $curl_include ${sysroot}/include/curl; fi &&
             if [[ $CARGO_BUILD_TARGET == *apple-darwin* ]]; then
             export CFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld" &&
-            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi
+            export CXXFLAGS_aarch64_apple_darwin="-fuse-ld=/opt/osxcross/target/bin/aarch64-apple-darwin-ld"; fi &&
+            if [[ $CARGO_BUILD_TARGET == *windows-gnu* ]]; then
+            export CFLAGS_x86_64_pc_windows_gnu="-DERROR_COMMITMENT_MINIMUM=635"; fi
 
       - name: Upload cross-compiled gem
         uses: actions/upload-artifact@v4
