@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.2.0...prosody/v0.2.1) (2026-05-11)
+
+
+### Bug Fixes
+
+* **ci:** define ERROR_COMMITMENT_MINIMUM for Windows cross-compile ([#22](https://github.com/prosody-events/prosody-rb/issues/22)) ([870d821](https://github.com/prosody-events/prosody-rb/commit/870d82132868b376ae9f1e80181de80ff3859dc3))
+
 ## [0.2.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.1.3...prosody/v0.2.0) (2026-05-11)
 
 
