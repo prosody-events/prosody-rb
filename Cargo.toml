@@ -14,7 +14,7 @@ futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.31"
-prosody = { version = "0.3", features = ["libz-static"] }
+prosody = { version = "0.4", features = ["libz-static"] }
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
