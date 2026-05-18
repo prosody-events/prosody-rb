@@ -11,6 +11,7 @@
 // Temporarily removing allows to see what lints we have
 
 #![allow(clippy::multiple_crate_versions, missing_docs)]
+#![recursion_limit = "256"]
 
 use crate::bridge::Bridge;
 use magnus::value::Lazy;
