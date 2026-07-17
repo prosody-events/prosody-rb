@@ -20,4 +20,7 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  # Shared keyed-state harness (StateSink, nonce naming, state_config).
+  config.include KeyedStateSupport
 end
