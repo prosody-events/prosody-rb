@@ -504,9 +504,9 @@ client = Prosody::Client.new(
 )
 ```
 
-(The `PROSODY_IDEMPOTENCE_CACHE_SIZE=0` environment variable is only meaningful
-for a producer-only client, where it disables the producer's idempotence cache;
-a consumer built with it still reports a configuration error.)
+This applies to every client — `Prosody::Client.new` always builds a consumer, so
+`0` is rejected regardless of whether any topics are subscribed, and whether it is
+supplied in the client configuration or via `PROSODY_IDEMPOTENCE_CACHE_SIZE`.
 
 To invalidate all previously recorded dedup entries (e.g. after a data migration), change the version string:
 
