@@ -92,10 +92,11 @@ RSpec.describe "Prosody keyed state scans" do
           @count.times { |i| map.set(format("k%04d", i), i) }
           map.commit
 
-          # Drive the raw native StateScan (obtained via the existing private
-          # open_scan) from N concurrent sub-tasks so the one-token permit is
-          # exercised; using send keeps this test-only with no new public surface.
-          scan = map.send(:open_scan, :forward)
+          # Drive the raw native StateScan (obtained directly from the native
+          # handle via the surviving @native.scan seam) from N concurrent
+          # sub-tasks so the one-token permit is exercised; reaching through the
+          # ivar keeps this test-only with no new public surface.
+          scan = map.instance_variable_get(:@native).scan("forward")
           collected = []
           barrier = Async::Barrier.new
           4.times do
