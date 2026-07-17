@@ -33,6 +33,11 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_collections\[1\]\.name.*duplicate/)
     end
 
+    it "accepts a single bare registration hash" do
+      error = client_error(state_collections: {name: "cart", kind: "value", payload: "json"})
+      expect(error).to be_nil
+    end
+
     it "rejects a zero TTL" do
       error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 0}])
       expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
@@ -90,7 +95,7 @@ RSpec.describe "Prosody keyed state" do
 
     it "accepts keyset_limit 0 on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 0}])
-      expect(error&.message.to_s).not_to match(/keyset_limit/)
+      expect(error).to be_nil
     end
 
     it "rejects an unknown kind token" do

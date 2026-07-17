@@ -229,7 +229,7 @@ module Prosody
     #
     # @param keys [Array<String>] the keys to read, in order
     # @return [Array<Object, nil>] one result per input key; `nil` for absent keys
-    def get_many(keys) = @native.get_many(Array(keys))
+    def get_many(keys) = @native.get_many(keys)
 
     # Inserts or overwrites `key`.
     #

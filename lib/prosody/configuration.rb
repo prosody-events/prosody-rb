@@ -288,7 +288,8 @@ module Prosody
     # Duplicate names within the set are rejected by the native layer.
     config_param :state_collections,
       converter: lambda { |v|
-        Array(v).map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
+        list = v.is_a?(Hash) ? [v] : Array(v)
+        list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
       }
 
     # Root directory for the local keyed-state cache (the committed-value fjall
