@@ -179,6 +179,86 @@ module Prosody
     def scheduled
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
+
+    # Vends the native single-value JSON state handle for the named collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeValueState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def value_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Vends the native ordered-map JSON state handle for the named collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeMapState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def map_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Vends the native deque JSON state handle for the named collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeDequeState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def deque_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Vends the native single-value message state handle for the named
+    # collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeValueState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def message_value_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Vends the native ordered-map message state handle for the named
+    # collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeMapState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def message_map_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Vends the native deque message state handle for the named collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeDequeState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def message_deque_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
   end
 
   # Represents a Kafka message with its metadata and payload.
@@ -385,6 +465,249 @@ module Prosody
     # @example Getting the source system
     #   puts client.source_system  # => "my-service"
     def source_system
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # Native single-value keyed-state handle, vended by the context and wrapped by
+  # {Prosody::ValueState}. Every operation is fiber-yield async: it crosses the
+  # bridge and yields the fiber while the Rust core drives the operation.
+  #
+  # @see ext/prosody/src/handler/state.rs for implementation
+  class NativeValueState
+    # @private
+    def initialize
+      raise NotImplementedError, "This class is implemented natively in Rust"
+    end
+
+    # Reads the current value.
+    #
+    # @return [Object, nil] the stored value, or nil when absent
+    def get
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Buffers a write of the value.
+    #
+    # @param value [Object] the value to store
+    # @return [nil]
+    # @raise [NullValueError] if value is nil
+    def set(value)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Buffers a clear of the value.
+    #
+    # @return [nil]
+    def clear
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Durably commits the buffered operations mid-handler.
+    #
+    # @return [nil]
+    def commit
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Discards the buffered uncommitted operations.
+    #
+    # @return [nil]
+    def rollback
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # Native String-keyed ordered-map keyed-state handle, vended by the context and
+  # wrapped by {Prosody::MapState}. Every operation is fiber-yield async.
+  #
+  # @see ext/prosody/src/handler/state.rs for implementation
+  class NativeMapState
+    # @private
+    def initialize
+      raise NotImplementedError, "This class is implemented natively in Rust"
+    end
+
+    # Reads the value for a key.
+    #
+    # @param key [String] the map key
+    # @return [Object, nil] the value, or nil when the key is absent
+    def get(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Reads several keys in a single isolated batch.
+    #
+    # @param keys [Array<String>] the keys to read, in order
+    # @return [Array<Object, nil>] one result per input key
+    def get_many(keys)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Inserts or overwrites a key.
+    #
+    # @param key [String] the map key
+    # @param value [Object] the value to store
+    # @return [nil]
+    # @raise [NullValueError] if value is nil
+    def set(key, value)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Removes a key.
+    #
+    # @param key [String] the map key
+    # @return [nil]
+    def remove(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Removes every entry.
+    #
+    # @return [nil]
+    def clear
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Opens a native ordered scan over the live entries.
+    #
+    # @param direction [String] "forward" or "backward"
+    # @return [StateScan] the native cursor
+    def scan(direction)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Durably commits the buffered operations mid-handler.
+    #
+    # @return [nil]
+    def commit
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Discards the buffered uncommitted operations.
+    #
+    # @return [nil]
+    def rollback
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # Native deque keyed-state handle, vended by the context and wrapped by
+  # {Prosody::DequeState}. Every operation is fiber-yield async.
+  #
+  # @see ext/prosody/src/handler/state.rs for implementation
+  class NativeDequeState
+    # @private
+    def initialize
+      raise NotImplementedError, "This class is implemented natively in Rust"
+    end
+
+    # The number of live elements.
+    #
+    # @return [Integer]
+    def len
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Whether the deque holds no live elements.
+    #
+    # @return [Boolean]
+    def is_empty
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Reads the element at front-relative position.
+    #
+    # @param index [Integer] the zero-based position from the front
+    # @return [Object, nil] the element, or nil past the end
+    def get(index)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Appends an element at the back.
+    #
+    # @param value [Object] the element
+    # @return [nil]
+    # @raise [NullValueError] if value is nil
+    def push_back(value)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Prepends an element at the front.
+    #
+    # @param value [Object] the element
+    # @return [nil]
+    # @raise [NullValueError] if value is nil
+    def push_front(value)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Removes and returns the front element.
+    #
+    # @return [Object, nil] the removed element, or nil when empty
+    def pop_front
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Removes and returns the back element.
+    #
+    # @return [Object, nil] the removed element, or nil when empty
+    def pop_back
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Removes every element.
+    #
+    # @return [nil]
+    def clear
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Opens a native scan over the live elements.
+    #
+    # @param direction [String] "forward" or "backward"
+    # @return [StateScan] the native cursor
+    def scan(direction)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Durably commits the buffered operations mid-handler.
+    #
+    # @return [nil]
+    def commit
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Discards the buffered uncommitted operations.
+    #
+    # @return [nil]
+    def rollback
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # Native scan cursor over a keyed-state collection, driven one chunk at a time
+  # by the {Prosody::MapState} / {Prosody::DequeState} traversal methods. Each
+  # pull crosses the bridge and yields the fiber; +close+ is idempotent.
+  #
+  # @see ext/prosody/src/handler/state.rs for implementation
+  class StateScan
+    # @private
+    def initialize
+      raise NotImplementedError, "This class is implemented natively in Rust"
+    end
+
+    # Pulls the next item from the cursor.
+    #
+    # @return [Object, nil] the next item, or nil when the cursor is exhausted
+    def next
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Closes the native cursor. Idempotent.
+    #
+    # @return [nil]
+    def close
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end

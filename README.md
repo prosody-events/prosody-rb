@@ -9,6 +9,7 @@ strategies, and integrated OpenTelemetry support for distributed tracing.
 - **Kafka Consumer**: Per-key ordering with cross-key concurrency, offset management, consumer groups
 - **Kafka Producer**: Idempotent delivery with configurable retries
 - **Timer System**: Persistent scheduled execution backed by Cassandra or in-memory store
+- **Keyed State**: Per-key value/map/deque collections that survive across events, transactional by default
 - **Quality of Service**: Fair scheduling limits concurrency and prevents failures from starving fresh traffic. Pipeline mode adds deferred retry and monopolization detection
 - **Distributed Tracing**: OpenTelemetry integration for tracing message flow across services
 - **Backpressure**: Pauses partitions when handlers fall behind
@@ -260,6 +261,29 @@ Persistent storage for timers and deferred retries (not needed if `mock: true`):
 | `cassandra_datacenter` / `PROSODY_CASSANDRA_DATACENTER` | Prefer this datacenter for queries | - |
 | `cassandra_rack` / `PROSODY_CASSANDRA_RACK` | Prefer this rack for queries      | -       |
 | `cassandra_retention` / `PROSODY_CASSANDRA_RETENTION` | Delete data older than this | 1y     |
+
+### Keyed State
+
+Register keyed-state collections before you subscribe. Persistence is backed by Cassandra and is not needed when `mock: true`. See the [Keyed State](#keyed-state-1) feature section for handler usage; the client-level knobs and per-collection fields are below. Where an option and an environment variable are paired, an explicitly set option wins; otherwise the environment variable applies, then the default.
+
+| Option / Environment Variable | Description | Default |
+|-------------------------------|-------------|---------|
+| `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
+| `state_cache_dir` / `PROSODY_FJALL_CACHE_DIR` | Root directory for the local committed-value cache; each live client needs its own directory (it is locked exclusively) | per-client temp dir |
+| `state_recovery_delay` / `PROSODY_KEYED_STATE_RECOVERY_DELAY` | Whole-second delay between staging a provisional cell and the recovery sweep; every collection TTL must strictly exceed it | 30s |
+
+Prefer the definition constructors (`Prosody.value` / `.map` / `.deque` and their `message_*` variants, documented below): they serialize into `state_collections` so you declare each collection once and reuse the same object with `context.state`. Each entry has these fields:
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `name` | Collection name; non-empty and unique within the client | (required) |
+| `kind` | `"value"`, `"map"`, or `"deque"` | (required) |
+| `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received) | (required) |
+| `ttl_seconds` | Per-write TTL in whole seconds (at least 1; must exceed the recovery delay) | (none) |
+| `read_uncommitted` | Opt out of transactional staging | false |
+| `keyset_limit` | Map-only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
+
+Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `read_uncommitted:`).
 
 ### Telemetry Emitter
 
@@ -529,6 +553,130 @@ client = Prosody::Client.new(
 ```
 
 Note that the in-memory cache is best-effort. Duplicates can still occur across different process instances.
+
+## Keyed State
+
+Prosody supports keyed state: per-key data that a handler reads and writes and that survives across events. State is partitioned by the message key, so each key has a single writer at a time, and by default writes settle atomically with the event — a handler that raises leaves no partial state. Values are either JSON payloads or the full Kafka `Prosody::Message` the handler received. Register collections on the client before subscribing, then bind them inside the handler with `context.state(definition)`. Every operation is fiber-yield async: it looks like an ordinary blocking call but yields the fiber (never the thread) while the Rust core drives it, exactly like the rest of Prosody (see [ARCHITECTURE.md](ARCHITECTURE.md)).
+
+```ruby
+# Definitions: declared once, reused for registration and binding.
+CART    = Prosody.value("cart", ttl: 30 * 24 * 3600) # ValueState
+TOTALS  = Prosody.map("totals")                       # keys are always String
+BACKLOG = Prosody.message_deque("backlog")            # deque of Prosody::Message
+
+class OrderHandler < Prosody::EventHandler
+  def on_message(context, message)
+    cart = context.state(CART)             # bound for this attempt only
+    current = cart.get || {"items" => []}  # Hash, or nil when absent
+    cart.set(current.merge("items" => current["items"] + [message.payload["order_id"]]))
+
+    totals = context.state(TOTALS)
+    totals.set(message.key, message.payload["total"])
+    totals.each_pair { |key, total| Prosody.logger.info("#{key}=#{total}") }
+
+    backlog = context.state(BACKLOG)
+    backlog.push(message)                  # stores the full Prosody::Message
+    oldest = backlog.get(0)                # Prosody::Message, or nil when empty
+    Prosody.logger.info("oldest order: #{oldest&.payload&.dig("order_id")}")
+  end
+end
+
+client = Prosody::Client.new(
+  bootstrap_servers: "localhost:9092",
+  group_id: "orders",
+  subscribed_topics: "orders",
+  state_collections: [CART, TOTALS, BACKLOG]
+)
+client.subscribe(OrderHandler.new)
+```
+
+### Definitions
+
+A definition constructor declares one collection and returns a frozen definition object carrying its `name`, `kind`, and `payload`. Reference that definition both in `Configuration#state_collections` (registration) and in `context.state` (binding) — declare each collection once and reuse it. (Reuse is a convenience, not a requirement: binding matches a definition to a registered collection by its `name`/`kind`/`payload` fields, not by object identity, so a structurally-equal definition also works.) Three kinds, each with a JSON variant (values are your JSON payload) and a message variant (values are the full Kafka `Prosody::Message`):
+
+- `Prosody.value(name, ttl:, read_uncommitted:)`: single value. Vends a `ValueState`.
+- `Prosody.map(name, ttl:, keyset_limit:, read_uncommitted:)`: ordered map with **String** keys. Vends a `MapState`.
+- `Prosody.deque(name, ttl:, read_uncommitted:)`: double-ended queue. Vends a `DequeState`.
+- `Prosody.message_value(name, ...)`: single value holding a `Prosody::Message`. Vends a `ValueState`.
+- `Prosody.message_map(name, ...)`: ordered map of `Prosody::Message` (String keys). Vends a `MapState`.
+- `Prosody.message_deque(name, ...)`: deque of `Prosody::Message`. Vends a `DequeState`.
+
+Every constructor accepts `ttl:` (whole seconds) and `read_uncommitted:`; maps also accept `keyset_limit:`. Payloads cross the boundary as plain JSON with no runtime validation, so a definition documents the intended shape but does not enforce one. Map keys are always `String`.
+
+### State Handles
+
+`context.state(definition)` vends a typed handle bound to the collection for the current event attempt. The handle — and any iterator it opens — is valid only within the handler invocation that created it; there is no post-handler read window. Binding an unregistered name raises a `PermanentStateError`; so does a definition whose `kind` or `payload` disagrees with what was durably registered under that name (a schema conflict across deploys, validated by core at first use — not a Ruby object-identity check).
+
+`ValueState`:
+
+- `get`: reads the current value, or `nil` when absent.
+- `set(value)`: buffers a write. Writing `nil` is rejected — call `clear`.
+- `clear`: deletes the stored value.
+- `commit` / `rollback`: see [Commit and Rollback](#commit-and-rollback).
+
+`MapState` (keys are always `String`):
+
+- `get(key)`: reads the value for `key`, or `nil` when absent.
+- `get_many(keys)`: reads several keys in one isolated batch, returning one entry per key in the same order (`result[i]` is the value for `keys[i]`); a missing key is `nil`.
+- `set(key, value)`: inserts or overwrites. Writing `nil` is rejected — call `delete(key)`.
+- `delete(key)`: removes `key`. Deliberately returns `nil`, not the removed value or a "was present" flag (a documented divergence from `Hash#delete`; surfacing it would force a hidden read on every delete).
+- `clear`: removes every entry.
+- `each_pair` / `reverse_each_pair`: see [Scan Iteration](#scan-iteration).
+- `commit` / `rollback`.
+
+`DequeState`:
+
+- `push(value)`: appends at the back. Writing `nil` is rejected.
+- `unshift(value)`: prepends at the front. Writing `nil` is rejected.
+- `pop`: removes and returns the back element, or `nil` when empty.
+- `shift`: removes and returns the front element, or `nil` when empty.
+- `length` (aliased `size`): number of live elements.
+- `empty?`: whether the deque holds no live elements.
+- `get(index)`: reads the element at front-relative `index`, or `nil` past the end. `index` must be a non-negative Integer; a fractional, negative, or non-Integer value is a caller mistake, rejected with a `TransientStateError`.
+- `each` / `reverse_each`: see [Scan Iteration](#scan-iteration).
+- `commit` / `rollback`.
+
+Writing a JSON `nil` to any handle raises `NullValueError` (a `TransientStateError`): `nil` is not storable because it is indistinguishable from absence, so the store is left untouched — use `clear`/`delete` to express deletion.
+
+### Scan Iteration
+
+Maps expose `each_pair` / `reverse_each_pair` (yielding `key, value`); deques expose `each` / `reverse_each` (yielding elements). The `reverse_*` variant is the backward direction — there is no direction argument. Called without a block, each returns an `Enumerator`; each step yields the fiber while the next chunk is fetched.
+
+Iterators are valid only within the attempt that opened them. Exiting the loop early — a `break`, `return`, or a raised exception — closes the underlying native cursor via `ensure`, so an early exit releases the scan promptly:
+
+```ruby
+context.state(totals).reverse_each_pair do |key, total|
+  break if total > 1000 # early exit closes the cursor
+  process(key, total)
+end
+```
+
+Ruby deliberately does **not** mix in `Enumerable`: its aggregate methods (`map`, `to_a`, `select`, ...) would silently materialize an unbounded remote collection. Traversal is explicit — iterate with the block form, or drive the returned `Enumerator` one step at a time.
+
+### Commit and Rollback
+
+Every handle exposes `commit` and `rollback`. By default a handler's writes are buffered and settle atomically when the event completes; commit and rollback are the explicit mid-handler escape hatch.
+
+- `commit` durably flushes this collection's buffered operations mid-handler. It is at-least-once: the flush becomes visible even if the event later fails and is redelivered, and it establishes a floor that a later `rollback` cannot cross.
+- `rollback` discards this collection's buffered uncommitted operations back to the last commit floor. It is infallible.
+
+Both return `nil`. The erased core seam deliberately drops the store outcome, so there is **no** `:applied` / `:noop` return — do not expect one.
+
+### Semantics
+
+- **Per-key single writer.** State is keyed by the message key; only one handler invocation writes a given key at a time.
+- **Transactional by default.** A handler's writes settle atomically with the event. A handler that raises leaves no partial state (unless you opted a collection into `read_uncommitted:`, or flushed explicitly with `commit`).
+- **At-least-once.** Redelivery re-runs the handler; reads reflect committed prior attempts. Keep handlers idempotent.
+- **Attempt-scoped.** The context, the handles it vends, and any iterators those handles open are valid only within the handler invocation that created them. Do not retain them past the handler.
+
+### Error Handling
+
+Keyed-state failures surface as structured errors that flow through the same handler-error bridge as everything else (the transient/permanent category is carried as data, never parsed from the message):
+
+- `TransientStateError` (subclasses `TransientError`): the default. A temporary store read/write failure, **and every caller mistake** — a rejected `nil`/unrepresentable write (use `clear`/`delete` instead), an item-shape mismatch, an out-of-range or non-Integer deque index, or an invalid scan direction. Caller mistakes are transient on purpose: a permanent error discards the in-flight message and can silently lose data, so a code error retries and stays visible (logs/metrics/lag) until you fix it. `NullValueError` is a `TransientStateError`.
+- `PermanentStateError` (subclasses `PermanentError`): reserved for failures a retry cannot resolve in-process — an unregistered or identity-mismatched collection, a duplicate registration, or a bad TTL. (A handler may also raise one explicitly to declare its own failure permanent.)
+
+State errors are never Terminal — the core folds Terminal into Transient. Because they subclass the existing `PermanentError` / `TransientError` hierarchy, rethrowing one from a handler classifies the event exactly like a plain permanent/transient error, with no bridge change.
 
 ## Timer Functionality
 
@@ -944,6 +1092,7 @@ Represents the context of message processing:
 
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
 - `on_cancel`: Blocks until cancellation is signaled.
+- `state(definition)`: Binds a registered collection for the current event attempt, returning a typed handle (`ValueState`, `MapState`, or `DequeState`). Raises `PermanentStateError` when the name was never registered, or when the definition's `kind`/`payload` disagrees with the collection's durably-registered schema. See the [Keyed State](#keyed-state-2) API reference below.
 
 Timer scheduling methods:
 
@@ -959,3 +1108,36 @@ Represents a timer that has fired, provided to the `on_timer` method:
 
 - `key` (String): The entity key identifying what this timer belongs to
 - `time` (Time): The time when this timer was scheduled to fire
+
+### Keyed State
+
+Definition constructors (each returns a frozen definition object used both in `Configuration#state_collections` and with `context.state`):
+
+- `Prosody.value(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
+- `Prosody.deque(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
+- `Prosody.message_deque(name, ttl: nil, read_uncommitted: nil)`
+
+`Prosody::ValueState`:
+
+- `get`, `set(value)`, `clear`, `commit`, `rollback`
+
+`Prosody::MapState` (keys are `String`):
+
+- `get(key)`, `get_many(keys)`, `set(key, value)`, `delete(key)` (returns `nil`), `clear`
+- `each_pair` / `reverse_each_pair` (block or `Enumerator`), `commit`, `rollback`
+
+`Prosody::DequeState`:
+
+- `push(value)`, `unshift(value)`, `pop`, `shift`, `length` (aliased `size`), `empty?`, `get(index)`, `clear`
+- `each` / `reverse_each` (block or `Enumerator`), `commit`, `rollback`
+
+Errors:
+
+- `Prosody::TransientStateError < Prosody::TransientError`: the default — a temporary store read/write failure, or any caller mistake (a `nil`/unrepresentable write, item-shape mismatch, out-of-range index, invalid scan direction), rejected transient so it retries rather than discarding the message.
+- `Prosody::PermanentStateError < Prosody::PermanentError`: reserved for failures a retry cannot resolve in-process (unregistered/identity-mismatched collection, duplicate registration, bad TTL), or one a handler raises explicitly.
+- `Prosody::NullValueError < Prosody::TransientStateError`: raised when a `nil` is written; use `clear`/`delete` instead.
+
+State errors are never Terminal (core folds Terminal into Transient).

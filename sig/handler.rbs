@@ -1,4 +1,8 @@
 module Prosody
+  # Base error class for all Prosody errors (defined in lib/prosody/handler.rb).
+  class Error < ::StandardError
+  end
+
   # Abstract base for all errors raised by EventHandler methods.
   # Subclasses must implement `#permanent?` to indicate retry behavior.
   class EventHandlerError < Prosody::Error

@@ -1,0 +1,153 @@
+module Prosody
+  # --- error taxonomy -----------------------------------------------------
+  # Raised for keyed-state failures a retry cannot resolve (unregistered
+  # collection, identity mismatch, duplicate registration, bad TTL). Never
+  # Terminal: core folds Terminal into Transient.
+  class PermanentStateError < PermanentError
+  end
+
+  # Raised for keyed-state failures that may succeed on retry, plus every
+  # caller mistake (null write, wrong item shape, invalid index, invalid
+  # direction). Never Terminal.
+  class TransientStateError < TransientError
+  end
+
+  # Raised when a JSON null is written to a collection. Null is not storable
+  # (indistinguishable from absence); use clear/delete instead.
+  class NullValueError < TransientStateError
+  end
+
+  # --- definition interfaces (phantom-typed over the payload) --------------
+  # The runtime returns a single frozen StateDefinition (Data) that structurally
+  # satisfies every interface below; the type parameter is annotation-only.
+  interface _ValueDefinition[T]
+    def name: () -> String
+    def kind: () -> String
+    def payload: () -> String
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MapDefinition[V]
+    def name: () -> String
+    def kind: () -> String
+    def payload: () -> String
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _DequeDefinition[T]
+    def name: () -> String
+    def kind: () -> String
+    def payload: () -> String
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MessageValueDefinition[P]
+    def name: () -> String
+    def kind: () -> String
+    def payload: () -> String
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MessageMapDefinition[P]
+    def name: () -> String
+    def kind: () -> String
+    def payload: () -> String
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MessageDequeDefinition[P]
+    def name: () -> String
+    def kind: () -> String
+    def payload: () -> String
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  # --- definition constructors --------------------------------------------
+  def self.value: [T] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
+  def self.map: [V] (untyped name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
+  def self.deque: [T] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
+  def self.message_value: [P] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
+  def self.message_map: [P] (untyped name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
+  def self.message_deque: [P] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageDequeDefinition[P]
+
+  # --- handles ------------------------------------------------------------
+  # A single-value keyed-state handle. Reads return the stored value or nil.
+  # Every op is fiber-yield async: it looks blocking but never blocks the thread.
+  class ValueState[T]
+    def get: () -> T?
+    def set: (T value) -> void
+    def clear: () -> void
+    def commit: () -> nil
+    def rollback: () -> nil
+
+    private
+    def initialize: (untyped native) -> void
+  end
+
+  # A String-keyed ordered-map keyed-state handle.
+  class MapState[V]
+    def get: (String key) -> V?
+    def get_many: (Array[String] keys) -> Array[V?]
+    def set: (String key, V value) -> void
+    def delete: (String key) -> nil
+    def clear: () -> void
+    def commit: () -> nil
+    def rollback: () -> nil
+    def each_pair: () { (String, V) -> void } -> void
+                 | () -> Enumerator[[ String, V ], void]
+    def reverse_each_pair: () { (String, V) -> void } -> void
+                         | () -> Enumerator[[ String, V ], void]
+
+    private
+    def initialize: (untyped native) -> void
+  end
+
+  # A deque keyed-state handle.
+  class DequeState[T]
+    def push: (T value) -> void
+    def unshift: (T value) -> void
+    def pop: () -> T?
+    def shift: () -> T?
+    def length: () -> Integer
+    def size: () -> Integer
+    def empty?: () -> bool
+    def clear: () -> void
+    def commit: () -> nil
+    def rollback: () -> nil
+    def get: (Integer index) -> T?
+    def each: () { (T) -> void } -> void
+            | () -> Enumerator[T, void]
+    def reverse_each: () { (T) -> void } -> void
+                    | () -> Enumerator[T, void]
+
+    private
+    def initialize: (untyped native) -> void
+  end
+
+  # Native scan cursor (Prosody::StateScan), driven by the wrapper traversal.
+  class StateScan
+    def next: () -> untyped
+    def close: () -> void
+  end
+
+  # --- internal routing module --------------------------------------------
+  module State
+    SCAN_DIRECTIONS: Array[Symbol]
+    VEND: Hash[Array[String], [ Symbol, Symbol ]]
+
+    # Adds keyed-state vending to the native context.
+    module Vending
+      def state: [T] (_ValueDefinition[T]) -> ValueState[T]
+               | [V] (_MapDefinition[V]) -> MapState[V]
+               | [T] (_DequeDefinition[T]) -> DequeState[T]
+               | [P] (_MessageValueDefinition[P]) -> ValueState[P]
+               | [P] (_MessageMapDefinition[P]) -> MapState[P]
+               | [P] (_MessageDequeDefinition[P]) -> DequeState[P]
+    end
+  end
+
+  # Reopened to add keyed-state vending (see lib/prosody/state.rb).
+  class Context
+    include State::Vending
+  end
+end

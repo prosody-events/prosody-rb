@@ -79,6 +79,14 @@ end
 
 When processing thousands of messages, yielding allows much higher throughput because work continues during waits.
 
+### Keyed-State Scans Yield Per Step
+
+Keyed-state traversal follows the same rule. `each` / `each_pair` (and their `reverse_*` variants) drive a native cursor
+one chunk at a time: every step crosses the bridge through `Bridge::wait_for`, so the enumerating fiber yields while Rust
+fetches the next chunk and resumes when it arrives. A scan therefore looks like an ordinary blocking loop but never blocks
+the thread — other fibers keep running between steps — and the native cursor is closed via `ensure` when the loop
+finishes, breaks, or raises.
+
 ## Architecture Overview
 
 Prosody combines a Rust core with a Ruby interface:

@@ -23,4 +23,9 @@ RSpec::Core::RakeTask.new(:spec)
 
 require "standard/rake"
 
-task default: %i[compile spec standard]
+desc "Validate RBS signatures over the whole sig/ tree"
+task :rbs do
+  sh "rbs -r logger -I sig validate"
+end
+
+task default: %i[compile spec standard rbs]
