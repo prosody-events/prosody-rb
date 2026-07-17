@@ -566,18 +566,23 @@ BACKLOG = Prosody.message_deque("backlog")            # deque of Prosody::Messag
 
 class OrderHandler < Prosody::EventHandler
   def on_message(context, message)
-    cart = context.state(CART)             # bound for this attempt only
-    current = cart.get || {"items" => []}  # Hash, or nil when absent
-    cart.set(current.merge("items" => current["items"] + [message.payload["order_id"]]))
+    amount = message.payload["total"]
 
+    # ValueState reads like an attribute: read into a local, mutate, write back.
+    cart = context.state(CART)                     # bound for this attempt only
+    basket = cart.value || {"items" => [], "total" => 0}
+    basket["items"] << message.payload["order_id"]
+    basket["total"] += amount
+    cart.value = basket
+
+    # MapState reads like a Hash: [] / []= / fetch accumulate a running total.
     totals = context.state(TOTALS)
-    totals.set(message.key, message.payload["total"])
-    totals.each_pair { |key, total| Prosody.logger.info("#{key}=#{total}") }
+    totals[message.key] = totals.fetch(message.key, 0) + amount
 
+    # DequeState reads like an Array: << appends, size/shift bound the history.
     backlog = context.state(BACKLOG)
-    backlog.push(message)                  # stores the full Prosody::Message
-    oldest = backlog.get(0)                # Prosody::Message, or nil when empty
-    Prosody.logger.info("oldest order: #{oldest&.payload&.dig("order_id")}")
+    backlog << message                             # stores the full Prosody::Message
+    backlog.shift while backlog.size > 100         # keep only the newest 100
   end
 end
 
@@ -612,6 +617,7 @@ Every constructor accepts `ttl:` (whole seconds) and `read_uncommitted:`; maps a
 - `get`: reads the current value, or `nil` when absent.
 - `set(value)`: buffers a write. Writing `nil` is rejected — call `clear`.
 - `clear`: deletes the stored value.
+- `value` / `value=`: idiomatic aliases of `get` / `set`, so a value cell reads and writes like an attribute (`cart.value`, `cart.value = basket`).
 - `commit` / `rollback`: see [Commit and Rollback](#commit-and-rollback).
 
 `MapState` (keys are always `String`):
@@ -624,6 +630,16 @@ Every constructor accepts `ttl:` (whole seconds) and `read_uncommitted:`; maps a
 - `each_pair` / `reverse_each_pair`: see [Scan Iteration](#scan-iteration).
 - `commit` / `rollback`.
 
+  Idiomatic `Hash`-style conveniences, each composed from the canonical ops above and doing only **bounded** reads (there is deliberately no `keys`/`values`/`to_h`/`count`, which would materialize the whole remote map):
+
+- `[]` / `[]=` / `store`: aliases of `get` / `set` (`store` mirrors `Hash#store`, returning the stored value).
+- `fetch(key, default)` / `fetch(key) { |key| ... }`: like `Hash#fetch` — the value when present, otherwise the block result, else the default, else a `KeyError`. One read.
+- `key?` (aliases `has_key?` / `include?` / `member?`): presence check in one read.
+- `values_at(*keys)`: like `Hash#values_at`, in one batched read (`get_many`).
+- `fetch_values(*keys)` / `slice(*keys)`: like their `Hash` namesakes, each in one batched read.
+- `dig(key, *rest)`: like `Hash#dig` — one read for `key`, then digs into the returned local value.
+- `each`: alias of `each_pair`.
+
 `DequeState`:
 
 - `push(value)`: appends at the back. Writing `nil` is rejected.
@@ -635,6 +651,13 @@ Every constructor accepts `ttl:` (whole seconds) and `read_uncommitted:`; maps a
 - `get(index)`: reads the element at front-relative `index`, or `nil` past the end. `index` must be a non-negative Integer; a fractional, negative, or non-Integer value is a caller mistake, rejected with a `TransientStateError`.
 - `each` / `reverse_each`: see [Scan Iteration](#scan-iteration).
 - `commit` / `rollback`.
+
+  Idiomatic `Array`-style conveniences, composed from the canonical ops (bounded reads only — there is deliberately no `to_a`/`map`/`sort`, which would materialize the whole remote deque):
+
+- `<<` / `append` / `prepend`: append at the back (`<<`, `append`) or front (`prepend`), each returning `self` for chaining.
+- `first` / `last`: the front / back element, or `nil` when empty. `last` performs two reads (length, then the element); they are consistent because the deque has a single writer per attempt.
+- `fetch(index, default)` / `fetch(index) { |index| ... }`: like `Array#fetch`, but `index` must be a single non-negative Integer (a negative or fractional index raises `TransientStateError`, matching `get` — not `Array`'s negative-from-the-end lookup).
+- No `[]` or `at`: this is a remote, forward-only deque with no negative-index or range support, so it does not wear `Array`'s `[]`/`at` (which would invite `deque[-1]` / `deque[0..2]`). Use `get`, or `first` / `last` for the ends.
 
 Writing a JSON `nil` to any handle raises `NullValueError` (a `TransientStateError`): `nil` is not storable because it is indistinguishable from absence, so the store is left untouched — use `clear`/`delete` to express deletion.
 

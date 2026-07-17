@@ -62,6 +62,10 @@ module Prosody
     def commit: () -> nil
     def rollback: () -> nil
 
+    # idiomatic conveniences
+    def value: () -> T?              # alias of #get
+    def value=: (T value) -> T      # alias of #set (assignment yields value)
+
     private
     def initialize: (NativeValueState native) -> void
   end
@@ -81,6 +85,25 @@ module Prosody
                  | () -> Enumerator[[ String, V ], void]
     def reverse_each_pair: () { (String, V) -> void } -> void
                          | () -> Enumerator[[ String, V ], void]
+
+    # idiomatic Hash-style conveniences (bounded reads only)
+    def []: (String key) -> V?                       # alias of #get
+    def []=: (String key, V value) -> V              # alias of #set (assignment yields value)
+    def store: (String key, V value) -> V            # wrapper over #set, returns value
+    def each: () { (String, V) -> void } -> void     # alias of #each_pair
+            | () -> Enumerator[[ String, V ], void]
+    def values_at: (*String keys) -> Array[V?]
+    def fetch: (String key) -> V
+             | [D] (String key, D default) -> (V | D)
+             | [R] (String key) { (String) -> R } -> (V | R)
+    def key?: (String key) -> bool
+    def has_key?: (String key) -> bool
+    def include?: (String key) -> bool
+    def member?: (String key) -> bool
+    def dig: (String key, *untyped) -> untyped
+    def slice: (*String keys) -> Hash[String, V]
+    def fetch_values: (*String keys) -> Array[V]
+                    | [R] (*String keys) { (String) -> R } -> Array[V | R]
 
     private
     def initialize: (NativeMapState native) -> void
@@ -105,6 +128,17 @@ module Prosody
             | () -> Enumerator[T, void]
     def reverse_each: () { (T) -> void } -> void
                     | () -> Enumerator[T, void]
+
+    # idiomatic Array-style conveniences (bounded reads only). Deliberately no
+    # #[] or #at: this is a remote, forward-only, non-negative-index deque.
+    def prepend: (T value) -> self   # wrapper over #unshift
+    def append: (T value) -> self    # wrapper over #push
+    def <<: (T value) -> self
+    def first: () -> T?
+    def last: () -> T?
+    def fetch: (Integer index) -> T
+             | [D] (Integer index, D default) -> (T | D)
+             | [R] (Integer index) { (Integer) -> R } -> (T | R)
 
     private
     def initialize: (NativeDequeState native) -> void

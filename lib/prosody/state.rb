@@ -229,6 +229,18 @@ module Prosody
     #
     # @return [nil]
     def rollback = @native.rollback
+
+    # Reads the current value. Idiomatic alias of {#get}.
+    #
+    # @return [Object, nil]
+    alias_method :value, :get
+
+    # Buffers a write of the value. Idiomatic alias of {#set}. As with any Ruby
+    # writer, `state.value = x` evaluates to `x` regardless of the return.
+    #
+    # @param value [Object]
+    # @return [void]
+    alias_method :value=, :set
   end
 
   # A `String`-keyed ordered-map keyed-state handle.
@@ -310,12 +322,130 @@ module Prosody
     # @return [Enumerator, void]
     def reverse_each_pair(&block) = traverse(:backward, &block)
 
+    # --- idiomatic Hash-style aliases and conveniences ------------------
+    # Each is composed from the canonical ops above and adds no capability
+    # the naming matrix lacks. Bounded reads only: there is deliberately no
+    # +keys+/+values+/+to_h+/+count+ or +Enumerable+, which would materialize
+    # the whole (potentially unbounded) remote collection.
+
+    # Reads +key+. Idiomatic alias of {#get} (mirrors +Hash#[]+).
+    alias_method :[], :get
+
+    # Writes +key+. Idiomatic alias of {#set} (mirrors +Hash#[]=+). As with any
+    # Ruby +[]=+, `map[key] = value` evaluates to +value+ regardless of return.
+    alias_method :[]=, :set
+
+    # Writes +key+, returning the stored +value+ (mirrors +Hash#store+). A
+    # wrapper, not an alias: unlike +[]=+, +store+ is called normally, so its
+    # return is observed — and the native write returns +nil+.
+    #
+    # @param key [String]
+    # @param value [Object]
+    # @return [Object] the stored +value+
+    def store(key, value)
+      set(key, value)
+      value
+    end
+
+    # Traverses live entries in key order. Idiomatic alias of {#each_pair}
+    # (mirrors +Hash#each+).
+    alias_method :each, :each_pair
+
+    # Reads several keys positionally (mirrors +Hash#values_at+).
+    #
+    # @param keys [Array<String>] the keys to read
+    # @return [Array<Object, nil>] one result per key; +nil+ for absent keys
+    def values_at(*keys) = get_many(keys)
+
+    # Reads +key+, raising or defaulting when absent (mirrors +Hash#fetch+).
+    # Performs a single read; a +nil+ result is unambiguously "absent" under
+    # the null ban.
+    #
+    # @param key [String]
+    # @param default [Object] returned when +key+ is absent
+    # @yieldparam key [String] called (instead of +default+) when +key+ is absent
+    # @return [Object]
+    # @raise [KeyError] when +key+ is absent and no default or block is given
+    def fetch(key, *default, &block)
+      if default.length > 1
+        raise ArgumentError, "wrong number of arguments (given #{default.length + 1}, expected 1..2)"
+      end
+      warn "warning: block supersedes default value argument" if block && !default.empty?
+
+      value = @native.get(key)
+      return value unless value.nil?
+      return block.call(key) if block
+      return default.first unless default.empty?
+
+      raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
+    end
+
+    # Whether +key+ has a live value (mirrors +Hash#key?+). Performs one read.
+    #
+    # @param key [String]
+    # @return [Boolean]
+    def key?(key) = !@native.get(key).nil?
+    alias_method :has_key?, :key?
+    alias_method :include?, :key?
+    alias_method :member?, :key?
+
+    # Reads +key+ and digs into the nested value (mirrors +Hash#dig+). A single
+    # bounded read; digging continues in the returned local value.
+    #
+    # @param key [String]
+    # @return [Object, nil]
+    # @raise [TypeError] if a nested value does not respond to +dig+
+    def dig(key, *rest)
+      value = @native.get(key)
+      return value if rest.empty? || value.nil?
+
+      unless value.respond_to?(:dig)
+        raise TypeError, "#{value.class} does not have #dig method"
+      end
+
+      value.dig(*rest)
+    end
+
+    # Reads +keys+ as a single bounded batch, returning a +Hash+ of only the
+    # keys that are present (mirrors +Hash#slice+). Absent keys are omitted.
+    #
+    # @param keys [Array<String>] the keys to read
+    # @return [Hash{String => Object}] present keys mapped to their values
+    def slice(*keys)
+      result = {}
+      keys.zip(get_many(keys)) do |key, value|
+        result[key] = value unless value.nil?
+      end
+      result
+    end
+
+    # Reads +keys+ as a single bounded batch, requiring every key to be present
+    # (mirrors +Hash#fetch_values+). Without a block, a missing key raises
+    # {KeyError}; with a block, the block is called with each missing key and
+    # its result substituted.
+    #
+    # @param keys [Array<String>] the keys to read, in order
+    # @yieldparam key [String] called for each absent key
+    # @return [Array<Object>] one value per key, in order
+    # @raise [KeyError] when a key is absent and no block is given
+    def fetch_values(*keys, &block)
+      keys.zip(get_many(keys)).map do |key, value|
+        next value unless value.nil?
+        next block.call(key) if block
+
+        raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
+      end
+    end
+
     private
 
     def traverse(direction)
       return enum_for(:traverse, direction) unless block_given?
 
-      scan_each(direction) { |pair| yield pair[0], pair[1] }
+      # Yield the [key, value] pair as a single Array, matching Hash#each_pair:
+      # a two-parameter block auto-splats it (|k, v|), a one-parameter block
+      # receives the pair (|pair|), and the no-block Enumerator yields pairs.
+      scan_each(direction) { |pair| yield pair }
     end
   end
 
@@ -409,6 +539,96 @@ module Prosody
     # @yieldparam element [Object]
     # @return [Enumerator, void]
     def reverse_each(&block) = traverse(:backward, &block)
+
+    # --- idiomatic Array-style conveniences -----------------------------
+    # Composed from the canonical ops above; bounded reads only (no +to_a+,
+    # +map+, +sort+, or +Enumerable+ that would materialize the whole deque).
+    #
+    # Deliberately NOT provided: +[]+ and +at+. This is a remote, forward-only
+    # deque — it supports a single non-negative +Integer+ index and neither
+    # negative indices nor ranges. Wearing +Array+'s +[]+/+at+ would invite
+    # +deque[-1]+/+deque[0..2]+, which cannot be honored; use the explicit
+    # {#get}, or {#first}/{#last} for the ends.
+
+    # Prepends +value+, returning +self+ for chaining (mirrors +Array#prepend+).
+    # A wrapper, not an alias: the native write returns +nil+.
+    #
+    # @param value [Object]
+    # @return [self]
+    def prepend(value)
+      unshift(value)
+      self
+    end
+
+    # Appends +value+, returning +self+ for chaining (mirrors +Array#append+).
+    # A wrapper, not an alias: the native write returns +nil+.
+    #
+    # @param value [Object]
+    # @return [self]
+    def append(value)
+      push(value)
+      self
+    end
+
+    # Appends +value+ at the back and returns +self+ for chaining
+    # (mirrors +Array#<<+).
+    #
+    # @param value [Object]
+    # @return [self]
+    def <<(value)
+      push(value)
+      self
+    end
+
+    # The front element, or +nil+ when empty (mirrors +Array#first+).
+    #
+    # @return [Object, nil]
+    def first = @native.get(0)
+
+    # The back element, or +nil+ when empty (mirrors +Array#last+). Performs
+    # two reads (length, then the last element); they are consistent because
+    # keyed state is single-owner within one handler attempt, so no concurrent
+    # writer can mutate the deque between them.
+    #
+    # @return [Object, nil]
+    def last
+      count = @native.len
+      return nil if count.zero?
+
+      @native.get(count - 1)
+    end
+
+    # Reads the element at +index+, raising or defaulting past the end
+    # (mirrors +Array#fetch+). A +nil+ result is unambiguously "past the end"
+    # under the null ban.
+    #
+    # Divergence from +Array#fetch+: +index+ must be a single non-negative
+    # +Integer+ (this is a remote, forward-only deque). A negative or fractional
+    # index raises {TransientStateError}, matching {#get}'s domain — not the
+    # negative-from-the-end lookup +Array#fetch+ performs.
+    #
+    # @param index [Integer] zero-based front-relative position
+    # @param default [Object] returned when +index+ is out of range
+    # @yieldparam index [Integer] called (instead of +default+) when out of range
+    # @return [Object]
+    # @raise [IndexError] when out of range and no default or block is given
+    # @raise [TransientStateError] if +index+ is not a non-negative Integer
+    def fetch(index, *default, &block)
+      if default.length > 1
+        raise ArgumentError, "wrong number of arguments (given #{default.length + 1}, expected 1..2)"
+      end
+      unless index.is_a?(Integer) && index >= 0
+        raise TransientStateError, "fetch: index must be a non-negative Integer, got #{index.inspect}"
+      end
+      warn "warning: block supersedes default value argument" if block && !default.empty?
+
+      value = @native.get(index)
+      return value unless value.nil?
+      return block.call(index) if block
+      return default.first unless default.empty?
+
+      raise IndexError, "index #{index} outside deque bounds"
+    end
 
     private
 
