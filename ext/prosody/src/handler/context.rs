@@ -35,7 +35,6 @@ pub struct Context {
     ///
     /// This field is marked as hidden in debug output to prevent logging large
     /// data.
-    #[allow(dead_code)]
     #[educe(Debug(ignore))]
     inner: BoxEventContext<serde_json::Value>,
 
@@ -302,10 +301,10 @@ impl Context {
                 async move { inner.scheduled(TimerType::Application).await },
                 span,
             )?
-            .map_err(|e| {
+            .map_err(|error| {
                 Error::new(
                     ruby.exception_runtime_error(),
-                    format!("Failed to get scheduled times: {e}"),
+                    format!("Failed to get scheduled times: {error:#}"),
                 )
             })?;
 
