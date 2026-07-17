@@ -38,6 +38,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod context;
 mod message;
+mod state;
 mod trigger;
 
 /// A handler that bridges between Kafka messages and Ruby message processing
@@ -340,6 +341,7 @@ pub enum RubyHandlerError {
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     context::init(ruby)?;
     message::init(ruby)?;
+    state::init(ruby)?;
     trigger::init(ruby)?;
 
     Ok(())

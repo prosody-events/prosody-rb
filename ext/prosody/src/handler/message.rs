@@ -103,6 +103,19 @@ impl Message {
     fn payload(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         serialize(ruby, this.inner.payload())
     }
+
+    /// Clones the wrapped `ConsumerMessage` for a message-collection write.
+    ///
+    /// prosody-rb holds the real `ConsumerMessage` (unlike the JS binding, which
+    /// rebuilds one from a plain object), so a message write clones the inner
+    /// value directly — a cheap operation, and more faithful than a rebuild.
+    ///
+    /// # Returns
+    ///
+    /// An owned clone of the wrapped `ConsumerMessage`.
+    pub(crate) fn consumer_message(&self) -> ConsumerMessage<serde_json::Value> {
+        self.inner.clone()
+    }
 }
 
 impl From<ConsumerMessage<serde_json::Value>> for Message {

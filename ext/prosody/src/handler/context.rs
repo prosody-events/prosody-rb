@@ -5,6 +5,10 @@
 //! information from Kafka messages and schedule timer events.
 
 use crate::bridge::Bridge;
+use crate::handler::state::{
+    DequeStateVariant, MapStateVariant, NativeDequeState, NativeMapState, NativeValueState,
+    ValueStateVariant, state_error,
+};
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
@@ -318,6 +322,127 @@ impl Context {
 
         Ok(ruby_array.as_value())
     }
+
+    /// Vends the handle for the named JSON value collection.
+    ///
+    /// Vending verifies the collection's registration (core-side); no span is
+    /// opened here — vended handles outlive the call, and every operation opens
+    /// its own span.
+    ///
+    /// # Errors
+    ///
+    /// Returns a permanent state error if the name is unregistered or its
+    /// registered identity mismatches.
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn value_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeValueState, Error> {
+        let handle = this
+            .inner
+            .value_state(&name)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeValueState::new(
+            ValueStateVariant::Json(Arc::from(handle)),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
+    /// Vends the handle for the named JSON map collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn map_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeMapState, Error> {
+        let handle = this
+            .inner
+            .map_state(&name)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeMapState::new(
+            MapStateVariant::Json(Arc::from(handle)),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
+    /// Vends the handle for the named JSON deque collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn deque_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeDequeState, Error> {
+        let handle = this
+            .inner
+            .deque_state(&name)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeDequeState::new(
+            DequeStateVariant::Json(Arc::from(handle)),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
+    /// Vends the handle for the named Kafka-message value collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn message_value_state(
+        ruby: &Ruby,
+        this: &Self,
+        name: String,
+    ) -> Result<NativeValueState, Error> {
+        let handle = this
+            .inner
+            .message_value_state(&name)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeValueState::new(
+            ValueStateVariant::Message(Arc::from(handle)),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
+    /// Vends the handle for the named Kafka-message map collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn message_map_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeMapState, Error> {
+        let handle = this
+            .inner
+            .message_map_state(&name)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeMapState::new(
+            MapStateVariant::Message(Arc::from(handle)),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
+    /// Vends the handle for the named Kafka-message deque collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn message_deque_state(
+        ruby: &Ruby,
+        this: &Self,
+        name: String,
+    ) -> Result<NativeDequeState, Error> {
+        let handle = this
+            .inner
+            .message_deque_state(&name)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeDequeState::new(
+            DequeStateVariant::Message(Arc::from(handle)),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
 }
 
 /// Initializes the Context class in Ruby.
@@ -355,6 +480,23 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(Context::clear_scheduled, 0),
     )?;
     class.define_method(id!(ruby, "scheduled"), method!(Context::scheduled, 0))?;
+
+    // Keyed-state vend methods
+    class.define_method(id!(ruby, "value_state"), method!(Context::value_state, 1))?;
+    class.define_method(id!(ruby, "map_state"), method!(Context::map_state, 1))?;
+    class.define_method(id!(ruby, "deque_state"), method!(Context::deque_state, 1))?;
+    class.define_method(
+        id!(ruby, "message_value_state"),
+        method!(Context::message_value_state, 1),
+    )?;
+    class.define_method(
+        id!(ruby, "message_map_state"),
+        method!(Context::message_map_state, 1),
+    )?;
+    class.define_method(
+        id!(ruby, "message_deque_state"),
+        method!(Context::message_deque_state, 1),
+    )?;
 
     Ok(())
 }
