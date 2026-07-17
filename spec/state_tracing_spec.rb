@@ -161,7 +161,6 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
       Timeout.timeout(TestConfig::MESSAGE_TIMEOUT) { latch.pop }
 
       OpenTelemetry.tracer_provider.force_flush
-      sleep 6 # allow Rust core export + Tempo ingestion
     ensure
       client.unsubscribe if client.consumer_state == :running
     end
@@ -188,6 +187,10 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
       expect(span[:parent_id]).to eq(handler_span[:span_id]),
         "#{name} parent #{span[:parent_id].inspect} != rb.state.handler #{handler_span[:span_id].inspect}"
     end
+
+    # The Ruby handler span itself is parented into the propagated consumer chain
+    # (carrier extracted from the Kafka message), not a dangling root.
+    expect(handler_span[:parent_id]).not_to be_nil
 
     # Collection attribute carries the nonce name.
     expect(core_spans["value.set"][:attrs]["collection"]).to eq(value_def.name)

@@ -35,23 +35,6 @@ module KeyedStateSupport
       end
       collected
     end
-
-    # Drain the first observation the block accepts, discarding the rest, up to
-    # `timeout` total.
-    #
-    # @return [Object, nil] the matching observation, or nil on timeout
-    def wait_matching(timeout = TestConfig::MESSAGE_TIMEOUT)
-      deadline = Time.now + timeout
-      while Time.now < deadline
-        begin
-          observation = Timeout.timeout(0.2) { @queue.pop }
-        rescue Timeout::Error
-          next
-        end
-        return observation if yield(observation)
-      end
-      nil
-    end
   end
 
   # Builds a fresh observation sink.
@@ -97,8 +80,8 @@ RSpec.shared_context "keyed state integration" do
   after do
     @clients&.each do |client|
       client.unsubscribe if client.consumer_state == :running
-    rescue
-      # ignore
+    rescue => e
+      puts "Could not unsubscribe client: #{e.message}"
     end
     ([topic] + (@extra_topics || [])).each do |name|
       admin.delete_topic(name)
