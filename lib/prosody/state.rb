@@ -291,7 +291,10 @@ module Prosody
 
       scan = open_scan(direction)
       begin
-        while (pair = scan.next)
+        # `nil` is the exhaustion sentinel; terminate on it explicitly (a pair is
+        # always a truthy Array, so this matches the deque idiom rather than
+        # relying on the value's truthiness).
+        until (pair = scan.next).nil?
           yield pair[0], pair[1]
         end
       ensure
@@ -403,7 +406,11 @@ module Prosody
 
       scan = open_scan(direction)
       begin
-        while (item = scan.next)
+        # `nil` is the exhaustion sentinel (unambiguous under the null ban); a
+        # stored JSON `false` is a legal item, so terminate on `nil` explicitly
+        # rather than on falsiness, which would drop a `false` and the tail after
+        # it.
+        until (item = scan.next).nil?
           yield item
         end
       ensure

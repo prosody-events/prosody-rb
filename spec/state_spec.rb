@@ -10,8 +10,13 @@ RSpec.describe "Prosody keyed state" do
   # Builds a mock client and returns the raised exception, or nil on success.
   # Registration validation runs while building the consumer configuration,
   # before HighLevelClient::new, so every error path here is infra-free.
+  #
+  # A default `bootstrap_servers` is supplied so the accept cases (which reach
+  # past state validation into producer-config validation) do not depend on an
+  # ambient `PROSODY_BOOTSTRAP_SERVERS`; mock mode never connects to it. Callers
+  # may override it via `options`.
   def client_error(**options)
-    Prosody::Client.new(mock: true, group_id: "state-spec", **options)
+    Prosody::Client.new(mock: true, group_id: "state-spec", bootstrap_servers: "localhost:9094", **options)
     nil
   rescue => e
     e
@@ -302,6 +307,36 @@ RSpec.describe "Prosody keyed state" do
 
     it "passes a valid index through to the native handle" do
       expect(Prosody::DequeState.new(fake_deque).get(0)).to be_nil
+    end
+  end
+
+  describe "traversal over falsy items" do
+    # A stand-in native handle whose scan replays `items` and then returns nil
+    # (the exhaustion sentinel), so traversal can be exercised without a vended
+    # native handle.
+    def fake_scanning_native(items)
+      native = Object.new
+      native.define_singleton_method(:scan) do |_direction|
+        remaining = items.dup
+        scan = Object.new
+        scan.define_singleton_method(:next) { remaining.empty? ? nil : remaining.shift }
+        scan.define_singleton_method(:close) { nil }
+        scan
+      end
+      native
+    end
+
+    it "yields a stored false and everything after it in a deque" do
+      collected = []
+      Prosody::DequeState.new(fake_scanning_native([1, false, 2])).each { |item| collected << item }
+      expect(collected).to eq([1, false, 2])
+    end
+
+    it "yields a map pair whose value is false without dropping the tail" do
+      collected = []
+      native = fake_scanning_native([["a", false], ["b", 2]])
+      Prosody::MapState.new(native).each_pair { |key, value| collected << [key, value] }
+      expect(collected).to eq([["a", false], ["b", 2]])
     end
   end
 end
