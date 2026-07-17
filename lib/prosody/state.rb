@@ -124,9 +124,6 @@ module Prosody
 
   # Internal routing tables shared by the state wrappers.
   module State
-    # The scan directions accepted by traversal methods.
-    SCAN_DIRECTIONS = %i[forward backward].freeze
-
     # Maps a definition's `[kind, payload]` to the native vend method and the
     # public wrapper class that wraps the vended native handle.
     VEND = {
@@ -163,6 +160,33 @@ module Prosody
         end
         native = public_send(vend_method, definition.name)
         cache[cache_key] = Prosody.const_get(wrapper).new(native)
+      end
+    end
+
+    # Shared cursor-driving for the explicit-traversal handles. Folds the
+    # identical native-scan open/close/exhaustion loop; each handle supplies
+    # only the per-item yield shape through the block. Kept private (mixed into
+    # the handle classes) since it is not part of the public surface.
+    module Scanning
+      private
+
+      # Opens a native scan in `direction`, yields each item, and closes the
+      # scan via `ensure` on stop or exception. Direction validity is enforced
+      # by the native layer (an invalid token is rejected transient there); the
+      # public traversal methods only ever pass `:forward`/`:backward`.
+      def scan_each(direction)
+        scan = @native.scan(direction.to_s)
+        begin
+          # `nil` is the exhaustion sentinel (unambiguous under the null ban);
+          # terminate on it explicitly rather than on falsiness, so a legal
+          # stored `false` (or a `[key, false]` pair, always a truthy Array)
+          # does not stop iteration and drop the tail after it.
+          until (item = scan.next).nil?
+            yield item
+          end
+        ensure
+          scan.close
+        end
       end
     end
   end
@@ -214,6 +238,8 @@ module Prosody
   # methods are provided — they would silently materialize an unbounded remote
   # collection.
   class MapState
+    include State::Scanning
+
     # @param native [Prosody::NativeMapState] the vended native handle
     def initialize(native)
       @native = native
@@ -289,24 +315,7 @@ module Prosody
     def traverse(direction)
       return enum_for(:traverse, direction) unless block_given?
 
-      scan = open_scan(direction)
-      begin
-        # `nil` is the exhaustion sentinel; terminate on it explicitly (a pair is
-        # always a truthy Array, so this matches the deque idiom rather than
-        # relying on the value's truthiness).
-        until (pair = scan.next).nil?
-          yield pair[0], pair[1]
-        end
-      ensure
-        scan.close
-      end
-    end
-
-    def open_scan(direction)
-      unless State::SCAN_DIRECTIONS.include?(direction)
-        raise TransientStateError, "scan: direction must be :forward or :backward, got #{direction.inspect}"
-      end
-      @native.scan(direction.to_s)
+      scan_each(direction) { |pair| yield pair[0], pair[1] }
     end
   end
 
@@ -316,6 +325,8 @@ module Prosody
   # native scan, closing the scan via `ensure`. No aggregate-mixin methods are
   # provided.
   class DequeState
+    include State::Scanning
+
     # @param native [Prosody::NativeDequeState] the vended native handle
     def initialize(native)
       @native = native
@@ -404,25 +415,7 @@ module Prosody
     def traverse(direction)
       return enum_for(:traverse, direction) unless block_given?
 
-      scan = open_scan(direction)
-      begin
-        # `nil` is the exhaustion sentinel (unambiguous under the null ban); a
-        # stored JSON `false` is a legal item, so terminate on `nil` explicitly
-        # rather than on falsiness, which would drop a `false` and the tail after
-        # it.
-        until (item = scan.next).nil?
-          yield item
-        end
-      ensure
-        scan.close
-      end
-    end
-
-    def open_scan(direction)
-      unless State::SCAN_DIRECTIONS.include?(direction)
-        raise TransientStateError, "scan: direction must be :forward or :backward, got #{direction.inspect}"
-      end
-      @native.scan(direction.to_s)
+      scan_each(direction) { |item| yield item }
     end
   end
 

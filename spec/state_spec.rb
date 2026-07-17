@@ -300,11 +300,6 @@ RSpec.describe "Prosody keyed state" do
         .to raise_error(Prosody::TransientStateError, /index/)
     end
 
-    it "rejects an invalid scan direction" do
-      expect { Prosody::DequeState.new(fake_deque).send(:open_scan, :sideways) }
-        .to raise_error(Prosody::TransientStateError, /direction/)
-    end
-
     it "passes a valid index through to the native handle" do
       expect(Prosody::DequeState.new(fake_deque).get(0)).to be_nil
     end

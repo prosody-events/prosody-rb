@@ -106,9 +106,8 @@ impl Message {
 
     /// Clones the wrapped `ConsumerMessage` for a message-collection write.
     ///
-    /// prosody-rb holds the real `ConsumerMessage` (unlike the JS binding, which
-    /// rebuilds one from a plain object), so a message write clones the inner
-    /// value directly — a cheap operation, and more faithful than a rebuild.
+    /// The wrapper holds the real `ConsumerMessage`, so a message write clones
+    /// the inner value directly — a cheap operation.
     ///
     /// # Returns
     ///

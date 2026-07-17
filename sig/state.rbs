@@ -41,34 +41,16 @@ module Prosody
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
-  interface _MessageValueDefinition[P]
-    def name: () -> String
-    def kind: () -> "value"
-    def payload: () -> String
-    def to_state_config: () -> Hash[Symbol, untyped]
-  end
-
-  interface _MessageMapDefinition[P]
-    def name: () -> String
-    def kind: () -> "map"
-    def payload: () -> String
-    def to_state_config: () -> Hash[Symbol, untyped]
-  end
-
-  interface _MessageDequeDefinition[P]
-    def name: () -> String
-    def kind: () -> "deque"
-    def payload: () -> String
-    def to_state_config: () -> Hash[Symbol, untyped]
-  end
-
   # --- definition constructors --------------------------------------------
+  # The `message_*` siblings return the same structural definition interfaces as
+  # their JSON counterparts (the runtime object is one StateDefinition); the
+  # `[P]` type parameter is annotation-only, naming the message payload type.
   def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
   def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
   def self.deque: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
-  def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
-  def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
-  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageDequeDefinition[P]
+  def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[P]
+  def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[P]
+  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[P]
 
   # --- handles ------------------------------------------------------------
   # A single-value keyed-state handle. Reads return the stored value or nil.
@@ -86,6 +68,8 @@ module Prosody
 
   # A String-keyed ordered-map keyed-state handle.
   class MapState[V]
+    include State::Scanning
+
     def get: (String key) -> V?
     def get_many: (Array[String] keys) -> Array[V?]
     def set: (String key, V value) -> void
@@ -104,6 +88,8 @@ module Prosody
 
   # A deque keyed-state handle.
   class DequeState[T]
+    include State::Scanning
+
     def push: (T value) -> void
     def unshift: (T value) -> void
     def pop: () -> T?
@@ -168,7 +154,6 @@ module Prosody
 
   # --- internal routing module --------------------------------------------
   module State
-    SCAN_DIRECTIONS: Array[Symbol]
     VEND: Hash[Array[String], [ Symbol, Symbol ]]
 
     # Adds keyed-state vending to the native context.
@@ -176,9 +161,12 @@ module Prosody
       def state: [T] (_ValueDefinition[T]) -> ValueState[T]
                | [V] (_MapDefinition[V]) -> MapState[V]
                | [T] (_DequeDefinition[T]) -> DequeState[T]
-               | [P] (_MessageValueDefinition[P]) -> ValueState[P]
-               | [P] (_MessageMapDefinition[P]) -> MapState[P]
-               | [P] (_MessageDequeDefinition[P]) -> DequeState[P]
+    end
+
+    # Shared native-scan driving mixed into the traversal handles.
+    module Scanning
+      private
+      def scan_each: (Symbol direction) { (untyped) -> void } -> void
     end
   end
 

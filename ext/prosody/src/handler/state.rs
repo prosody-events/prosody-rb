@@ -484,8 +484,8 @@ impl NativeDequeState {
         }
     }
 
-    /// The number of live elements. Ruby Integers are unbounded, so `usize`
-    /// crosses with no cap (a divergence from the JS `u32` cap).
+    /// The number of live elements. Ruby Integers are unbounded, so the full
+    /// `usize` crosses uncapped.
     fn len(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         let len = match &this.state {
             DequeStateVariant::Json(handle) => run_op!(ruby, this, handle, len())?,
