@@ -22,53 +22,53 @@ module Prosody
   # satisfies every interface below; the type parameter is annotation-only.
   interface _ValueDefinition[T]
     def name: () -> String
-    def kind: () -> String
+    def kind: () -> "value"
     def payload: () -> String
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
   interface _MapDefinition[V]
     def name: () -> String
-    def kind: () -> String
+    def kind: () -> "map"
     def payload: () -> String
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
   interface _DequeDefinition[T]
     def name: () -> String
-    def kind: () -> String
+    def kind: () -> "deque"
     def payload: () -> String
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
   interface _MessageValueDefinition[P]
     def name: () -> String
-    def kind: () -> String
+    def kind: () -> "value"
     def payload: () -> String
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
   interface _MessageMapDefinition[P]
     def name: () -> String
-    def kind: () -> String
+    def kind: () -> "map"
     def payload: () -> String
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
   interface _MessageDequeDefinition[P]
     def name: () -> String
-    def kind: () -> String
+    def kind: () -> "deque"
     def payload: () -> String
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
   # --- definition constructors --------------------------------------------
-  def self.value: [T] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
-  def self.map: [V] (untyped name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
-  def self.deque: [T] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
-  def self.message_value: [P] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
-  def self.message_map: [P] (untyped name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
-  def self.message_deque: [P] (untyped name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageDequeDefinition[P]
+  def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
+  def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
+  def self.deque: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
+  def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
+  def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
+  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageDequeDefinition[P]
 
   # --- handles ------------------------------------------------------------
   # A single-value keyed-state handle. Reads return the stored value or nil.
@@ -81,7 +81,7 @@ module Prosody
     def rollback: () -> nil
 
     private
-    def initialize: (untyped native) -> void
+    def initialize: (NativeValueState native) -> void
   end
 
   # A String-keyed ordered-map keyed-state handle.
@@ -99,7 +99,7 @@ module Prosody
                          | () -> Enumerator[[ String, V ], void]
 
     private
-    def initialize: (untyped native) -> void
+    def initialize: (NativeMapState native) -> void
   end
 
   # A deque keyed-state handle.
@@ -121,7 +121,43 @@ module Prosody
                     | () -> Enumerator[T, void]
 
     private
-    def initialize: (untyped native) -> void
+    def initialize: (NativeDequeState native) -> void
+  end
+
+  # Native single-value handle (Prosody::NativeValueState), wrapped by ValueState.
+  class NativeValueState
+    def get: () -> untyped
+    def set: (untyped value) -> void
+    def clear: () -> void
+    def commit: () -> nil
+    def rollback: () -> nil
+  end
+
+  # Native ordered-map handle (Prosody::NativeMapState), wrapped by MapState.
+  class NativeMapState
+    def get: (String key) -> untyped
+    def get_many: (Array[String] keys) -> Array[untyped]
+    def set: (String key, untyped value) -> void
+    def remove: (String key) -> void
+    def clear: () -> void
+    def scan: (String direction) -> StateScan
+    def commit: () -> nil
+    def rollback: () -> nil
+  end
+
+  # Native deque handle (Prosody::NativeDequeState), wrapped by DequeState.
+  class NativeDequeState
+    def len: () -> Integer
+    def is_empty: () -> bool
+    def get: (Integer index) -> untyped
+    def push_back: (untyped value) -> void
+    def push_front: (untyped value) -> void
+    def pop_front: () -> untyped
+    def pop_back: () -> untyped
+    def clear: () -> void
+    def scan: (String direction) -> StateScan
+    def commit: () -> nil
+    def rollback: () -> nil
   end
 
   # Native scan cursor (Prosody::StateScan), driven by the wrapper traversal.
@@ -149,5 +185,12 @@ module Prosody
   # Reopened to add keyed-state vending (see lib/prosody/state.rb).
   class Context
     include State::Vending
+
+    def value_state: (String name) -> NativeValueState
+    def map_state: (String name) -> NativeMapState
+    def deque_state: (String name) -> NativeDequeState
+    def message_value_state: (String name) -> NativeValueState
+    def message_map_state: (String name) -> NativeMapState
+    def message_deque_state: (String name) -> NativeDequeState
   end
 end

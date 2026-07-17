@@ -16,7 +16,7 @@ RSpec.describe "keyed-state example" do
     config.state_collections = [CART, TOTALS, BACKLOG]
     serialized = config.to_hash[:state_collections]
     expect(serialized).to include(
-      hash_including(name: "cart", kind: "value", payload: "json"),
+      hash_including(name: "cart", kind: "value", payload: "json", ttl_seconds: 2_592_000),
       hash_including(name: "totals", kind: "map", payload: "json"),
       hash_including(name: "backlog", kind: "deque", payload: "message")
     )

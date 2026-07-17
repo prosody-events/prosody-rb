@@ -490,15 +490,16 @@ module Prosody
     # Buffers a write of the value.
     #
     # @param value [Object] the value to store
-    # @return [nil]
+    # @return [void]
     # @raise [NullValueError] if value is nil
+    # @raise [TransientStateError] if value cannot be represented
     def set(value)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
     # Buffers a clear of the value.
     #
-    # @return [nil]
+    # @return [void]
     def clear
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -519,7 +520,9 @@ module Prosody
   end
 
   # Native String-keyed ordered-map keyed-state handle, vended by the context and
-  # wrapped by {Prosody::MapState}. Every operation is fiber-yield async.
+  # wrapped by {Prosody::MapState}. Every operation is fiber-yield async, except
+  # +#scan+, which opens the cursor synchronously; each {StateScan#next} pull
+  # yields the fiber.
   #
   # @see ext/prosody/src/handler/state.rs for implementation
   class NativeMapState
@@ -548,8 +551,9 @@ module Prosody
     #
     # @param key [String] the map key
     # @param value [Object] the value to store
-    # @return [nil]
+    # @return [void]
     # @raise [NullValueError] if value is nil
+    # @raise [TransientStateError] if value cannot be represented
     def set(key, value)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -557,14 +561,14 @@ module Prosody
     # Removes a key.
     #
     # @param key [String] the map key
-    # @return [nil]
+    # @return [void]
     def remove(key)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
     # Removes every entry.
     #
-    # @return [nil]
+    # @return [void]
     def clear
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -573,6 +577,7 @@ module Prosody
     #
     # @param direction [String] "forward" or "backward"
     # @return [StateScan] the native cursor
+    # @raise [TransientStateError] if direction is not "forward"/"backward"
     def scan(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -593,7 +598,9 @@ module Prosody
   end
 
   # Native deque keyed-state handle, vended by the context and wrapped by
-  # {Prosody::DequeState}. Every operation is fiber-yield async.
+  # {Prosody::DequeState}. Every operation is fiber-yield async, except +#scan+,
+  # which opens the cursor synchronously; each {StateScan#next} pull yields the
+  # fiber.
   #
   # @see ext/prosody/src/handler/state.rs for implementation
   class NativeDequeState
@@ -627,8 +634,9 @@ module Prosody
     # Appends an element at the back.
     #
     # @param value [Object] the element
-    # @return [nil]
+    # @return [void]
     # @raise [NullValueError] if value is nil
+    # @raise [TransientStateError] if value cannot be represented
     def push_back(value)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -636,8 +644,9 @@ module Prosody
     # Prepends an element at the front.
     #
     # @param value [Object] the element
-    # @return [nil]
+    # @return [void]
     # @raise [NullValueError] if value is nil
+    # @raise [TransientStateError] if value cannot be represented
     def push_front(value)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -658,7 +667,7 @@ module Prosody
 
     # Removes every element.
     #
-    # @return [nil]
+    # @return [void]
     def clear
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -667,6 +676,7 @@ module Prosody
     #
     # @param direction [String] "forward" or "backward"
     # @return [StateScan] the native cursor
+    # @raise [TransientStateError] if direction is not "forward"/"backward"
     def scan(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -706,7 +716,7 @@ module Prosody
 
     # Closes the native cursor. Idempotent.
     #
-    # @return [nil]
+    # @return [void]
     def close
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
