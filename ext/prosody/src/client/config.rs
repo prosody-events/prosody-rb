@@ -9,6 +9,7 @@
 use magnus::{Error, Ruby, Value};
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
+use prosody::consumer::KeyedStateConfiguration;
 use prosody::consumer::SpanRelation;
 use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
@@ -19,11 +20,13 @@ use prosody::consumer::middleware::timeout::TimeoutConfigurationBuilder;
 use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
+use prosody::loader::KafkaLoaderConfiguration;
 use prosody::producer::ProducerConfigurationBuilder;
 use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 /// Configuration structure for the Prosody client that maps Ruby configuration
@@ -651,20 +654,8 @@ impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
             builder.failure_window(Duration::from_secs_f32(*failure_window));
         }
 
-        if let Some(cache_size) = &config.defer_cache_size {
-            builder.cache_size(*cache_size as usize);
-        }
-
         if let Some(store_cache_size) = &config.defer_store_cache_size {
             builder.store_cache_size(*store_cache_size as usize);
-        }
-
-        if let Some(seek_timeout) = &config.defer_seek_timeout {
-            builder.seek_timeout(Duration::from_secs_f32(*seek_timeout));
-        }
-
-        if let Some(discard_threshold) = &config.defer_discard_threshold {
-            builder.discard_threshold(*discard_threshold);
         }
 
         builder
@@ -713,8 +704,10 @@ impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
     fn from(config: &'a NativeConfiguration) -> Self {
         let mut builder = Self::default();
 
-        if let Some(cache_capacity) = &config.idempotence_cache_size {
-            builder.cache_capacity(*cache_capacity as usize);
+        if let Some(cache_capacity) = &config.idempotence_cache_size
+            && let Some(cache_capacity) = NonZeroUsize::new(*cache_capacity as usize)
+        {
+            builder.cache_capacity(cache_capacity);
         }
 
         if let Some(version) = &config.idempotence_version {
@@ -795,6 +788,8 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
     ///   environment variable contains an unparseable value).
     /// - `message_spans` or `timer_spans` contains an unrecognized value
     ///   (expected `"child"` or `"follows_from"`).
+    /// - The Kafka loader configuration cannot be built (e.g. a tuning value
+    ///   fails validation).
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut consumer: ConsumerConfigurationBuilder = config.into();
 
@@ -812,6 +807,30 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             consumer.timer_spans(relation);
         }
 
+        // The Kafka message loader that the defer middleware uses to reload
+        // failed messages is now consumer-wide configuration. Route the
+        // defer-loader tuning knobs onto the consumer builder's loader.
+        if config.defer_cache_size.is_some()
+            || config.defer_seek_timeout.is_some()
+            || config.defer_discard_threshold.is_some()
+        {
+            let mut loader = KafkaLoaderConfiguration::builder();
+
+            if let Some(cache_size) = &config.defer_cache_size {
+                loader.cache_size(*cache_size as usize);
+            }
+
+            if let Some(seek_timeout) = &config.defer_seek_timeout {
+                loader.seek_timeout(Duration::from_secs_f32(*seek_timeout));
+            }
+
+            if let Some(discard_threshold) = &config.defer_discard_threshold {
+                loader.discard_threshold(*discard_threshold);
+            }
+
+            consumer.loader(loader.build().map_err(|e| e.to_string())?);
+        }
+
         Ok(Self {
             consumer,
             retry: config.into(),
@@ -822,6 +841,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             timeout: config.into(),
             dedup: config.into(),
             emitter: config.try_into()?,
+            keyed_state: KeyedStateConfiguration::default(),
         })
     }
 }

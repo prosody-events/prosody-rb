@@ -37,7 +37,7 @@ pub struct Context {
     /// data.
     #[allow(dead_code)]
     #[educe(Debug(ignore))]
-    inner: BoxEventContext,
+    inner: BoxEventContext<serde_json::Value>,
 
     /// Bridge for handling async operations
     #[educe(Debug(ignore))]
@@ -57,7 +57,7 @@ impl Context {
     /// * `bridge` - The bridge for handling async operations
     /// * `propagator` - Shared OpenTelemetry propagator for distributed tracing
     pub fn new(
-        inner: BoxEventContext,
+        inner: BoxEventContext<serde_json::Value>,
         bridge: Bridge,
         propagator: Arc<TextMapCompositePropagator>,
     ) -> Self {

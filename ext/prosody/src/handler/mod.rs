@@ -117,7 +117,7 @@ impl FallibleHandler for RubyHandler {
         _demand_type: DemandType,
     ) -> Result<(), Self::Error>
     where
-        C: EventContext,
+        C: EventContext<Payload = Self::Payload>,
     {
         // Create a new span for the on_message operation as a child of the message's
         // span
@@ -207,7 +207,7 @@ impl FallibleHandler for RubyHandler {
         _demand_type: DemandType,
     ) -> Result<(), Self::Error>
     where
-        C: EventContext,
+        C: EventContext<Payload = Self::Payload>,
     {
         // Only process application timers; internal timers are handled by middleware
         if trigger.timer_type != TimerType::Application {

@@ -2,8 +2,8 @@ PATH
   remote: .
   specs:
     prosody (0.3.0)
-      async (~> 2.39)
-      opentelemetry-api (~> 1.9)
+      async (~> 2.42)
+      opentelemetry-api (~> 1.10)
       rb_sys (~> 0.9.128)
 
 GEM
