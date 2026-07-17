@@ -687,12 +687,21 @@ impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `DeduplicationConfigurationBuilder`.
     ///
     /// This takes the relevant deduplication settings from the configuration
     /// and sets them on a new `DeduplicationConfigurationBuilder` instance.
+    ///
+    /// Consumer deduplication is mandatory in the core (it is the keyed-state
+    /// commit oracle), so `cache_capacity` is `NonZeroUsize` and a zero
+    /// capacity is unrepresentable rather than a silent "disable". An explicit
+    /// `idempotence_cache_size` of `0` is therefore rejected here rather than
+    /// silently defaulting; this mirrors the sibling `prosody-js` binding and
+    /// the core's own rejection of `PROSODY_IDEMPOTENCE_CACHE_SIZE=0`.
     ///
     /// # Arguments
     ///
@@ -700,13 +709,18 @@ impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `DeduplicationConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `DeduplicationConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if `idempotence_cache_size` is explicitly set
+    /// to `0`.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
-        if let Some(cache_capacity) = &config.idempotence_cache_size
-            && let Some(cache_capacity) = NonZeroUsize::new(*cache_capacity as usize)
-        {
+        if let Some(cache_capacity) = &config.idempotence_cache_size {
+            let cache_capacity = NonZeroUsize::new(*cache_capacity as usize)
+                .ok_or_else(|| "idempotence_cache_size must be greater than 0".to_owned())?;
             builder.cache_capacity(cache_capacity);
         }
 
@@ -721,7 +735,7 @@ impl<'a> From<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
             builder.ttl(Duration::from_secs_f64(*ttl));
         }
 
-        builder
+        Ok(builder)
     }
 }
 
@@ -839,7 +853,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             monopolization: config.into(),
             defer: config.into(),
             timeout: config.into(),
-            dedup: config.into(),
+            dedup: config.try_into()?,
             emitter: config.try_into()?,
             keyed_state: KeyedStateConfiguration::default(),
         })

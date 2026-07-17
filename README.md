@@ -192,7 +192,7 @@ Configure via constructor options or environment variables. Options fall back to
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks (nil to disable)         | 8000                   |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
-| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Global shared cache capacity across all partitions for message deduplication (0 disables the entire deduplication middleware, both in-memory and persistent) | 8192 |
+| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Global shared cache capacity across all partitions for message deduplication. Consumer deduplication is mandatory and cannot be disabled, so this must be at least 1; setting it to 0 in the client configuration is rejected | 8192 |
 | `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
 | `idempotence_ttl` / `PROSODY_IDEMPOTENCE_TTL`         | TTL for dedup records in Cassandra            | 7d (604800 seconds) |
 | `slab_size` / `PROSODY_SLAB_SIZE`       | Timer storage granularity (rarely needs changing)    | 1h                     |
@@ -491,21 +491,22 @@ client.send_message("my-topic", "key2", {
 })
 ```
 
-Setting `idempotence_cache_size` to `0` disables the **entire** deduplication middleware (both the in-memory cache and the Cassandra-backed persistent store):
+Consumer deduplication is **mandatory** — it is the commit oracle that makes
+keyed state correct — so it cannot be disabled. `idempotence_cache_size` must be
+at least 1; setting it to `0` in the client configuration raises an
+`ArgumentError`:
 
 ```ruby
 client = Prosody::Client.new(
   group_id: "my-consumer-group",
   subscribed_topics: "my-topic",
-  idempotence_cache_size: 0  # Disable all deduplication (both in-memory and persistent)
+  idempotence_cache_size: 0  # Rejected: consumer deduplication cannot be disabled
 )
 ```
 
-Or via environment variable:
-
-```bash
-PROSODY_IDEMPOTENCE_CACHE_SIZE=0
-```
+(The `PROSODY_IDEMPOTENCE_CACHE_SIZE=0` environment variable is only meaningful
+for a producer-only client, where it disables the producer's idempotence cache;
+a consumer built with it still reports a configuration error.)
 
 To invalidate all previously recorded dedup entries (e.g. after a data migration), change the version string:
 
