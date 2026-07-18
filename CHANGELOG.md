@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.3.0...prosody/v0.4.0)
+
+
+### Features
+
+* **state:** cheap `key?` presence (and `has_key?`/`include?`/`member?`) that skips value decode and the resolver — a message-backed map answers presence with zero Kafka fetches
+* **state:** `MapState#each_key` / `#reverse_each_key` — key-only iteration that skips value decode and the resolver
+* **state:** `DequeState#first` / `#last` read the endpoint slot in one round trip (no length read)
+* **state:** `DequeState#get` / `#fetch` accept negative indices, resolving Array-style (`-1` is the back element)
+* **state:** bounded deque via `Prosody.deque(name, capacity:)` / `Prosody.message_deque(name, capacity:)` — a runtime-only window bound enforced lazily on push (evicts the opposite end), mutable across deploys and never persisted
+
+
+### Behavior Changes
+
+* **state:** `DequeState#get(-n)` / `#fetch(-n)` now resolve Array-style instead of raising `TransientStateError` (only fractional/non-Integer indices remain rejected)
+* **state:** `MapState#key?` on a message-backed map now answers presence **without** resolving the Kafka message — it returns `true` for a present-but-unfetchable cell and no longer runs the resolver
+
 ## [0.3.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.2.1...prosody/v0.3.0) (2026-05-18)
 
 

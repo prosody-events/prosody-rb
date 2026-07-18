@@ -8,9 +8,9 @@ require "prosody"
 # never the thread.
 
 # Definitions: declared once, reused for registration and binding.
-CART = Prosody.value("cart", ttl: 30 * 24 * 3600) # ValueState
-TOTALS = Prosody.map("totals")                     # keys are always String
-BACKLOG = Prosody.message_deque("backlog")         # deque of Prosody::Message
+CART = Prosody.value("cart", ttl: 30 * 24 * 3600)      # ValueState
+TOTALS = Prosody.map("totals")                          # keys are always String
+BACKLOG = Prosody.message_deque("backlog", capacity: 100) # bounded window of messages
 
 class KeyedStateHandler < Prosody::EventHandler
   def on_message(context, message)
