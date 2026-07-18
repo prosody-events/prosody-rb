@@ -28,4 +28,9 @@ task :rbs do
   sh "rbs -r logger -I sig validate"
 end
 
-task default: %i[compile spec standard rbs]
+desc "Type-check the Ruby implementation against its RBS signatures"
+task :steep do
+  sh "steep check --severity-level=error"
+end
+
+task default: %i[compile spec standard rbs steep]

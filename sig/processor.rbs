@@ -40,13 +40,17 @@ module Prosody
       # OpenTelemetry context carrier for trace propagation
       attr_reader carrier: Hash[String, String]
 
+      # Structured event fields for error reporting
+      attr_reader event_context: Hash[Symbol, untyped]
+
       # Creates a new execute command with all required parameters
       def initialize: (
-          task_id: String,
-          carrier: Hash[String, String],
-          block: ^() -> void,
-          callback: ^(bool, untyped) -> bool,
-          token: CancellationToken
+          String task_id,
+          Hash[String, String] carrier,
+          Hash[Symbol, untyped] event_context,
+          ^() -> untyped block,
+          ^(bool, untyped) -> untyped callback,
+          CancellationToken token
         ) -> void
     end
 
@@ -82,19 +86,31 @@ module Prosody
     # @yield the block to execute asynchronously
     # @return token that can be used to cancel the task
     def submit: (
-        task_id: String,
-        carrier: Hash[String, String],
-        callback: ^(bool, untyped) -> bool
+        String task_id,
+        Hash[String, String] carrier,
+        Hash[String | Symbol, untyped] event_context,
+        ^(bool, untyped) -> untyped callback
       ) { () -> untyped } -> CancellationToken
 
     private
 
+    def running?: () -> bool?
+
     # Main processing loop for the async thread
     def process_commands: () -> void
 
-    # Handles execution of a task with proper context propagation and error handling
-    # @param command the command containing task details
-    # @param barrier barrier for tracking active tasks
-    def handle_execute: (Commands::Execute, Async::Barrier) -> void
+    # Handles execution of a task with proper context propagation and error handling.
+    # The barrier belongs to the external async gem and is intentionally kept
+    # untyped rather than publishing a partial signature for that dependency.
+    def handle_execute: (Commands::Execute, untyped) -> void
+
+    def run_with_cancellation: (
+      String,
+      CancellationToken,
+      ^() -> untyped,
+      ^(bool, untyped) -> untyped,
+      untyped,
+      Hash[Symbol, untyped]
+    ) -> void
   end
 end

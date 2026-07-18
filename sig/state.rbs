@@ -17,6 +17,19 @@ module Prosody
   class NullValueError < TransientStateError
   end
 
+  # Concrete immutable definition object returned by the constructor helpers.
+  class StateDefinition < Data
+    attr_reader name: String
+    attr_reader kind: String
+    attr_reader payload: String
+    attr_reader ttl_seconds: Integer?
+    attr_reader read_uncommitted: bool?
+    attr_reader keyset_limit: Integer?
+    attr_reader capacity: Integer?
+
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
   # --- definition interfaces (phantom-typed over the payload) --------------
   # The runtime returns a single frozen StateDefinition (Data) that structurally
   # satisfies every interface below; the type parameter is annotation-only.
@@ -111,6 +124,10 @@ module Prosody
 
     private
     def initialize: (NativeMapState native) -> void
+    def traverse: (Symbol direction) { (String, V) -> void } -> void
+                | (Symbol direction) -> Enumerator[[ String, V ], void]
+    def traverse_keys: (Symbol direction) { (String) -> void } -> void
+                     | (Symbol direction) -> Enumerator[String, void]
   end
 
   # A deque keyed-state handle.
@@ -148,6 +165,9 @@ module Prosody
 
     private
     def initialize: (NativeDequeState native) -> void
+    def at_negative: (Integer index) -> T?
+    def traverse: (Symbol direction) { (T) -> void } -> void
+                | (Symbol direction) -> Enumerator[T, void]
   end
 
   # Native single-value handle (Prosody::NativeValueState), wrapped by ValueState.

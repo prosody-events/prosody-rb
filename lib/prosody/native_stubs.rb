@@ -781,7 +781,7 @@ module Prosody
     end
 
     # @private
-    def submit(task_id, carrier, callback, &block)
+    def submit(task_id, carrier, event_context, callback, &block)
       # Actual implementation is in lib/prosody/processor.rb
     end
   end

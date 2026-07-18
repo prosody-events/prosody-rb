@@ -26,7 +26,7 @@ module Prosody
 
   # Mixin providing class-level methods to wrap instance methods so that
   # specified exceptions are re-wrapped as PermanentError or TransientError.
-  module ErrorClassification
+  module ErrorClassification : Module
     # Wraps the given instance method so that specified exception types
     # are caught and re-raised as Prosody::PermanentError.
     #

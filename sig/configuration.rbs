@@ -24,7 +24,8 @@ module Prosody
     # Create a new configuration with initial values
     #
     # @param kwargs Initial configuration values
-    def initialize: (?Hash[Symbol, untyped] kwargs) ?{ (Configuration) -> void } -> void
+    def initialize: (?Hash[Symbol, untyped] options) ?{ (Configuration) -> void } -> void
+                  | (**untyped options) ?{ (Configuration) -> void } -> void
 
     # Kafka bootstrap server addresses
     def bootstrap_servers: () -> Array[String]?

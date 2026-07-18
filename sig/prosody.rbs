@@ -118,6 +118,7 @@ module Prosody
     # @raise [ArgumentError] If the configuration is invalid
     # @raise [RuntimeError] If client initialization fails
     def self.new: (Hash[Symbol, untyped] | Configuration config) -> Client
+                | (**untyped options) -> Client
 
     # Returns the current state of the consumer.
     #

@@ -1,6 +1,0 @@
-# Minimal stub for the external async gem, which ships no RBS signatures.
-# Only the surface referenced by sig/processor.rbs is declared.
-module Async
-  class Barrier
-  end
-end

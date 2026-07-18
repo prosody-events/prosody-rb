@@ -76,6 +76,20 @@ jobs:
           PROSODY_BOOTSTRAP_SERVERS: localhost:9094
           PROSODY_CASSANDRA_NODES: localhost:9042
           RUST_BACKTRACE: "1"
+
+  types:
+    name: Type checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - name: Validate signatures and type-check Ruby
+        run: bundle exec rake rbs steep
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -100,8 +114,6 @@ jobs:
         run: taplo fmt --check
       - name: Enforce Ruby formatting
         run: bundle exec standardrb
-      - name: Validate RBS signatures
-        run: bundle exec rbs -r logger -I sig validate
 
   dependencies:
     name: Dependencies

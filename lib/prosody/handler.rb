@@ -114,7 +114,7 @@ module Prosody
           super(*args, &block)
         rescue *exception_classes => e
           # The new exception's #cause will be set automatically
-          raise error_class.new(e.message)
+          Kernel.raise error_class.new(e.message)
         end
       end
 

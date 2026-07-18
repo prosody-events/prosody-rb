@@ -1,0 +1,6 @@
+module Prosody
+  module SentryIntegration
+    def self.enabled?: () -> bool
+    def self.capture_exception: (Exception exception, ?Hash[Symbol, untyped] context) -> untyped
+  end
+end

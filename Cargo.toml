@@ -15,7 +15,9 @@ magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
 # TODO: restore registry pin once core releases
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "454361285d1b984baee4ae9b19b91bf8e86d6356", features = ["libz-static"] }
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "454361285d1b984baee4ae9b19b91bf8e86d6356", features = [
+    "libz-static",
+] }
 rb-sys = "0.9"
 serde = "1.0"
 serde-untagged = "0.1"
