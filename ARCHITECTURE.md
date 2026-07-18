@@ -110,8 +110,10 @@ graph TD
 
 1. **Ruby Interface Layer**: The classes you interact with directly
     - `Prosody::Client`: The main entry point for applications
-    - `Prosody::EventHandler`: Base class for handling messages
-    - `Prosody::Message`: Represents a Kafka message
+    - `Prosody::EventHandler[Payload]`: Base class whose RBS payload parameter
+      is propagated to each handled message
+    - `Prosody::Message[Payload]`: Represents a Kafka message with a statically
+      typed JSON payload (`Prosody::json_value` by default)
 
 2. **Bridge**: The crucial connection between Ruby and Rust
     - Enables safe communication between languages

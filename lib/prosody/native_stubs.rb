@@ -264,7 +264,9 @@ module Prosody
   # Represents a Kafka message with its metadata and payload.
   #
   # Instances of this class are created by the native code and passed to your
-  # EventHandler's #on_message method.
+  # EventHandler's #on_message method. In RBS, +Message[Payload]+ carries the
+  # statically declared payload shape; bare +Message+ defaults to
+  # +Prosody::json_value+. This annotation does not add runtime validation.
   #
   # @see ext/prosody/src/handler/message.rs for implementation
   class Message
@@ -307,7 +309,7 @@ module Prosody
     #
     # The payload is automatically deserialized from JSON to Ruby objects.
     #
-    # @return [Object] The message content
+    # @return [Payload] The message content
     def payload
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -412,12 +414,14 @@ module Prosody
     #
     # @param topic [String] The destination topic name
     # @param key [String] The message key for partitioning
-    # @param payload [Object] The message payload (will be serialized to JSON)
+    # @param payload [Prosody::json_value] The JSON-compatible message payload
     # @return [void]
     # @raise [RuntimeError] If the message cannot be sent
     #
     # @example Sending a simple message
-    #   client.send_message("my-topic", "user-123", { event: "login", timestamp: Time.now })
+    #   client.send_message("my-topic", "user-123", {
+    #     "event" => "login", "timestamp" => Time.now.to_i
+    #   })
     def send_message(topic, key, payload)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -425,7 +429,7 @@ module Prosody
     # Subscribes to Kafka topics using the provided handler.
     # The handler must implement an `on_message(context, message)` method.
     #
-    # @param handler [EventHandler] A handler object that processes messages
+    # @param handler [EventHandler<untyped>] A handler object that processes messages
     # @return [void]
     # @raise [RuntimeError] If subscription fails
     #

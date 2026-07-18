@@ -33,24 +33,45 @@ module Prosody
   # --- definition interfaces (phantom-typed over the payload) --------------
   # The runtime returns a single frozen StateDefinition (Data) that structurally
   # satisfies every interface below; the type parameter is annotation-only.
-  interface _ValueDefinition[T]
+  interface _ValueDefinition[T = json_value]
     def name: () -> String
     def kind: () -> "value"
-    def payload: () -> String
+    def payload: () -> "json"
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
-  interface _MapDefinition[V]
+  interface _MapDefinition[V = json_value]
     def name: () -> String
     def kind: () -> "map"
-    def payload: () -> String
+    def payload: () -> "json"
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
-  interface _DequeDefinition[T]
+  interface _DequeDefinition[T = json_value]
     def name: () -> String
     def kind: () -> "deque"
-    def payload: () -> String
+    def payload: () -> "json"
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MessageValueDefinition[P = json_value]
+    def name: () -> String
+    def kind: () -> "value"
+    def payload: () -> "message"
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MessageMapDefinition[P = json_value]
+    def name: () -> String
+    def kind: () -> "map"
+    def payload: () -> "message"
+    def to_state_config: () -> Hash[Symbol, untyped]
+  end
+
+  interface _MessageDequeDefinition[P = json_value]
+    def name: () -> String
+    def kind: () -> "deque"
+    def payload: () -> "message"
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
@@ -61,14 +82,14 @@ module Prosody
   def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
   def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
   def self.deque: [T] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
-  def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[P]
-  def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[P]
-  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[P]
+  def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
+  def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
+  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _MessageDequeDefinition[P]
 
   # --- handles ------------------------------------------------------------
   # A single-value keyed-state handle. Reads return the stored value or nil.
   # Every op is fiber-yield async: it looks blocking but never blocks the thread.
-  class ValueState[T]
+  class ValueState[T = json_value]
     def get: () -> T?
     def set: (T value) -> void
     def clear: () -> void
@@ -84,7 +105,7 @@ module Prosody
   end
 
   # A String-keyed ordered-map keyed-state handle.
-  class MapState[V]
+  class MapState[V = json_value]
     include State::Scanning
 
     def get: (String key) -> V?
@@ -131,7 +152,7 @@ module Prosody
   end
 
   # A deque keyed-state handle.
-  class DequeState[T]
+  class DequeState[T = json_value]
     include State::Scanning
 
     def push: (T value) -> void
@@ -225,6 +246,9 @@ module Prosody
       def state: [T] (_ValueDefinition[T]) -> ValueState[T]
                | [V] (_MapDefinition[V]) -> MapState[V]
                | [T] (_DequeDefinition[T]) -> DequeState[T]
+               | [P] (_MessageValueDefinition[P]) -> ValueState[Message[P]]
+               | [P] (_MessageMapDefinition[P]) -> MapState[Message[P]]
+               | [P] (_MessageDequeDefinition[P]) -> DequeState[Message[P]]
     end
 
     # Shared native-scan driving mixed into the traversal handles.

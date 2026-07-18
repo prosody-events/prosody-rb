@@ -74,7 +74,7 @@ end
 client.subscribe(MyHandler.new)
 
 # Send a message to a topic
-client.send_message("my-topic", "message-key", { content: "Hello, Kafka!" })
+client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 
 # Ensure proper shutdown when done
 client.unsubscribe
@@ -501,18 +501,18 @@ The deduplication system uses:
 ```ruby
 # Messages with IDs are deduplicated per key
 client.send_message("my-topic", "key1", {
-  id: "msg-123",      # Message will be processed
-  content: "Hello!"
+  "id" => "msg-123",      # Message will be processed
+  "content" => "Hello!"
 })
 
 client.send_message("my-topic", "key1", {
-  id: "msg-123",      # Message will be skipped (duplicate)
-  content: "Hello again!"
+  "id" => "msg-123",      # Message will be skipped (duplicate)
+  "content" => "Hello again!"
 })
 
 client.send_message("my-topic", "key2", {
-  id: "msg-123",      # Message will be processed (different key)
-  content: "Hello!"
+  "id" => "msg-123",      # Message will be processed (different key)
+  "content" => "Hello!"
 })
 ```
 
@@ -1113,7 +1113,8 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 ### Prosody::EventHandler
 
-A base class for user-defined handlers:
+A base class for user-defined handlers. Its RBS payload parameter flows into
+`Message#payload`; a bare handler defaults to `Prosody::json_value`.
 
 ```ruby
 class MyHandler < Prosody::EventHandler
@@ -1133,14 +1134,36 @@ end
 
 ### Prosody::Message
 
-Represents a Kafka message with the following attributes:
+`Prosody::Message[Payload]` represents a Kafka message. `Payload` defaults to
+`Prosody::json_value` (`nil`, booleans, numbers, strings, arrays, and
+string-keyed hashes, recursively). The parameter is static documentation and
+does not perform runtime validation.
+
+For a type-safe handler, describe the JSON record and specialize the handler in
+your application's RBS:
+
+```rbs
+type order_event = { "order_id" => String, "total" => Integer }
+
+class OrderHandler < Prosody::EventHandler[order_event]
+  def on_message: (Prosody::Context, Prosody::Message[order_event]) -> void
+end
+```
+
+Ruby can then use `message.payload["order_id"]` as a `String` and
+`message.payload["total"]` as an `Integer`. See
+[`examples/keyed_state.rb`](examples/keyed_state.rb) and its companion
+[`examples/keyed_state.rbs`](examples/keyed_state.rbs) for payload typing that
+also flows through message-backed state.
+
+Messages have the following attributes:
 
 - `topic` (String): The name of the topic.
 - `partition` (Integer): The partition number.
 - `offset` (Integer): The message offset within the partition.
 - `timestamp` (Time): The timestamp when the message was created or sent.
 - `key` (String): The message key.
-- `payload` (Hash/Array/String): The message payload as a JSON-deserializable value.
+- `payload` (`Payload`): The JSON-deserialized message payload.
 
 ### Prosody::Context
 

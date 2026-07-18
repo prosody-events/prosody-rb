@@ -1,0 +1,18 @@
+type keyed_state_cart = { "items" => Array[String] }
+type keyed_state_order_event = { "order_id" => String, "total" => Integer }
+
+CART: Prosody::_ValueDefinition[keyed_state_cart]
+TOTALS: Prosody::_MapDefinition[Integer]
+BACKLOG: Prosody::_MessageDequeDefinition[keyed_state_order_event]
+
+class KeyedStateHandler < Prosody::EventHandler[keyed_state_order_event]
+  @logger: Logger
+
+  def initialize: (logger: Logger) -> void
+  def on_message: (Prosody::Context context, Prosody::Message[keyed_state_order_event] message) -> void
+
+  private
+
+  def format_total: (String key, Integer total) -> String
+  def format_order_id: (String order_id) -> String
+end

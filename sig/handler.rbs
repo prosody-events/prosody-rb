@@ -58,7 +58,7 @@ module Prosody
 
   # Abstract base class for handling incoming messages from Prosody.
   # Subclasses must implement `#on_message` to process received messages.
-  class EventHandler
+  class EventHandler[Payload = json_value]
     extend ErrorClassification
 
     # Process a single message received from Prosody.
@@ -68,7 +68,7 @@ module Prosody
     # @param context the message context containing metadata and control capabilities
     # @param message the message content with payload and metadata
     # @raise [NotImplementedError] if not overridden by subclass
-    def on_message: (Context context, Message message) -> void
+    def on_message: (Context context, Message[Payload] message) -> void
 
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.

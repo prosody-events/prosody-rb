@@ -127,6 +127,10 @@ module Prosody
   # --------------------------------------------------------------------------
 
   # Abstract base class for handling incoming messages and timers from Prosody.
+  # The RBS type parameter describes the JSON payload delivered in each
+  # {Message}; it defaults to +Prosody::json_value+. Declare a narrower payload
+  # shape in your application's RBS (for example,
+  # +EventHandler[order_event]+) to type-check payload access.
   # Subclasses **must** implement `#on_message` to process received messages.
   # Subclasses **may** implement `#on_timer` to process timer events.
   # They may also use `permanent` or `transient` decorators to control retry logic.
@@ -156,7 +160,7 @@ module Prosody
     # custom message handling logic.
     #
     # @param [Context] context the message context
-    # @param [Message] message the message payload
+    # @param [Message<Payload>] message the message and its typed JSON payload
     # @raise [NotImplementedError] if not overridden by subclass
     # @return [void]
     def on_message(context, message)

@@ -100,6 +100,11 @@ impl Message {
     /// # Errors
     ///
     /// Returns an error if payload deserialization fails.
+    ///
+    /// The public RBS exposes this JSON value as `Message[Payload]#payload`.
+    /// That generic parameter is static-only: this native boundary continues
+    /// to deserialize JSON into ordinary Ruby objects without runtime schema
+    /// validation.
     fn payload(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         serialize(ruby, this.inner.payload())
     }
