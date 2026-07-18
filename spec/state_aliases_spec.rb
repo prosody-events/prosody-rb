@@ -53,6 +53,7 @@ RSpec.describe "keyed-state idiomatic aliases" do
     Class.new do
       define_method(:initialize) { |hash = {}| @hash = hash }
       def get(key) = @hash[key]
+      def contains_key(key) = @hash.key?(key)
       def get_many(keys) = keys.map { |key| @hash[key] }
 
       def set(key, value)
@@ -78,6 +79,12 @@ RSpec.describe "keyed-state idiomatic aliases" do
         pairs = pairs.reverse if direction == "backward"
         cursor_class.new(pairs.map { |key, value| [key, value] })
       end
+
+      define_method(:keys) do |direction|
+        keys = @hash.keys.sort
+        keys = keys.reverse if direction == "backward"
+        cursor_class.new(keys)
+      end
     end
   end
 
@@ -99,6 +106,8 @@ RSpec.describe "keyed-state idiomatic aliases" do
         nil
       end
 
+      def peek_front = @array.first
+      def peek_back = @array.last
       def pop_back = @array.pop
       def pop_front = @array.shift
 
@@ -203,11 +212,34 @@ RSpec.describe "keyed-state idiomatic aliases" do
       end
     end
 
-    it "answers presence with #key? and its aliases (single read)" do
+    it "answers presence via #contains_key (not #get) with #key? and aliases" do
+      native = map_native.new({"a" => 1})
+      presence = Prosody::MapState.new(native)
+      # The cheap presence path must never decode a value: assert it never reads.
+      expect(native).not_to receive(:get)
       %i[key? has_key? include? member?].each do |predicate|
-        expect(map.public_send(predicate, "a")).to be(true)
-        expect(map.public_send(predicate, "z")).to be(false)
+        expect(presence.public_send(predicate, "a")).to be(true)
+        expect(presence.public_send(predicate, "z")).to be(false)
       end
+    end
+
+    it "yields keys in order with #each_key and reversed with #reverse_each_key" do
+      native = map_native.new({"a" => 1, "b" => 2, "c" => 3})
+      keys = Prosody::MapState.new(native)
+      # The key scan must use the key-only cursor, never the value scan.
+      expect(native).not_to receive(:scan)
+      forward = []
+      keys.each_key { |key| forward << key }
+      expect(forward).to eq(%w[a b c])
+      backward = []
+      keys.reverse_each_key { |key| backward << key }
+      expect(backward).to eq(%w[c b a])
+    end
+
+    it "returns an Enumerator from #each_key / #reverse_each_key without a block" do
+      expect(map.each_key).to be_a(Enumerator)
+      expect(map.each_key.to_a).to eq(%w[a b])
+      expect(map.reverse_each_key.to_a).to eq(%w[b a])
     end
 
     it "digs into a nested value with #dig" do
@@ -261,12 +293,40 @@ RSpec.describe "keyed-state idiomatic aliases" do
       expect(deque.get(5)).to eq(60)
     end
 
-    it "reads the ends with #first and #last" do
-      expect(deque.first).to eq(10)
-      expect(deque.last).to eq(30)
+    it "reads the ends with #first and #last via peeks (no len or get)" do
+      native = deque_native.new([10, 20, 30])
+      ends = Prosody::DequeState.new(native)
+      # Endpoint peeks take one round trip each: no length read, no indexed get.
+      expect(native).not_to receive(:len)
+      expect(native).not_to receive(:get)
+      expect(ends.first).to eq(10)
+      expect(ends.last).to eq(30)
       empty = Prosody::DequeState.new(deque_native.new([]))
       expect(empty.first).to be_nil
       expect(empty.last).to be_nil
+    end
+
+    describe "Array-style negative indexing" do
+      it "resolves a negative #get against the length, nil before the front" do
+        expect(deque.get(-1)).to eq(30)
+        expect(deque.get(-3)).to eq(10)
+        expect(deque.get(-4)).to be_nil
+      end
+
+      it "resolves a negative #fetch, defaulting or raising before the front" do
+        expect(deque.fetch(-1)).to eq(30)
+        expect(deque.fetch(-4, :default)).to eq(:default)
+        expect { deque.fetch(-4) }.to raise_error(IndexError, /-4/)
+      end
+
+      it "fast-paths -1 through peek_back with no length read" do
+        native = deque_native.new([10, 20, 30])
+        fast = Prosody::DequeState.new(native)
+        expect(native).not_to receive(:len)
+        expect(native).not_to receive(:get)
+        expect(fast.get(-1)).to eq(30)
+        expect(fast.fetch(-1)).to eq(30)
+      end
     end
 
     describe "#fetch" do
@@ -286,9 +346,9 @@ RSpec.describe "keyed-state idiomatic aliases" do
         expect { deque.fetch(9) }.to raise_error(IndexError, /9/)
       end
 
-      it "raises TransientStateError for a non-Integer or negative index" do
-        expect { deque.fetch(-1) }.to raise_error(Prosody::TransientStateError)
+      it "raises TransientStateError for a non-Integer index (negatives now valid)" do
         expect { deque.fetch(1.5) }.to raise_error(Prosody::TransientStateError)
+        expect { deque.fetch("x") }.to raise_error(Prosody::TransientStateError)
       end
 
       it "raises ArgumentError for more than one default" do

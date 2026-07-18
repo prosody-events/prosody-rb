@@ -539,6 +539,16 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Answers whether a stored cell exists for a key. No value decode and no
+    # resolver run (a message-backed map answers with zero Kafka fetches), but
+    # not no-I/O: a cache miss still reads the store.
+    #
+    # @param key [String] the map key
+    # @return [Boolean] whether a live cell exists for the key
+    def contains_key(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Reads several keys in a single isolated batch.
     #
     # @param keys [Array<String>] the keys to read, in order
@@ -579,6 +589,17 @@ module Prosody
     # @return [StateScan] the native cursor
     # @raise [TransientStateError] if direction is not "forward"/"backward"
     def scan(direction)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Opens a native ordered scan over the live keys only, yielding bare keys.
+    # Skips value decode and the resolver (a message-backed map enumerates keys
+    # with zero Kafka fetches), though not no-I/O.
+    #
+    # @param direction [String] "forward" or "backward"
+    # @return [StateScan] the native key cursor
+    # @raise [TransientStateError] if direction is not "forward"/"backward"
+    def keys(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -628,6 +649,23 @@ module Prosody
     # @param index [Integer] the zero-based position from the front
     # @return [Object, nil] the element, or nil past the end
     def get(index)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Reads the front endpoint slot, or nil when empty. One round trip, no
+    # length read; an expired endpoint slot under a TTL yields nil even when
+    # live interior elements remain (a peek never searches inward).
+    #
+    # @return [Object, nil] the front element, or nil when empty
+    def peek_front
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Reads the back endpoint slot, or nil when empty. Same endpoint-slot
+    # semantics as #peek_front.
+    #
+    # @return [Object, nil] the back element, or nil when empty
+    def peek_back
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 

@@ -40,7 +40,7 @@ module Prosody
   # both serializes into `Configuration#state_collections` (via
   # {#to_state_config}) so the collection is registered before subscribe, and
   # drives {Prosody::Context#state} to vend the matching typed handle.
-  StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted, :keyset_limit) do
+  StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted, :keyset_limit, :capacity) do
     # Serializes this definition into the native-registration hash, omitting
     # unset optionals so they fall back to the core defaults.
     #
@@ -50,6 +50,7 @@ module Prosody
       config[:ttl_seconds] = ttl_seconds unless ttl_seconds.nil?
       config[:read_uncommitted] = read_uncommitted unless read_uncommitted.nil?
       config[:keyset_limit] = keyset_limit unless keyset_limit.nil?
+      config[:capacity] = capacity unless capacity.nil?
       config
     end
   end
@@ -62,7 +63,7 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.value(name, ttl: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: nil)
   end
 
   # Defines a `String`-keyed ordered map JSON collection.
@@ -74,18 +75,21 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: keyset_limit)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: keyset_limit, capacity: nil)
   end
 
   # Defines a deque JSON collection.
   #
   # @param name [#to_s] the collection name (unique within the client)
   # @param ttl [Integer, nil] optional per-write TTL in whole seconds
+  # @param capacity [Integer, nil] optional window bound (at least 1); the
+  #   deque keeps at most this many slots, enforced lazily on push. Runtime-only
+  #   and mutable across deploys, never persisted (see {DequeState#push}).
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
-  def self.deque(name, ttl: nil, read_uncommitted: nil)
+  def self.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: capacity)
   end
 
   # Defines a single-value Kafka-message collection (items are full messages).
@@ -96,7 +100,7 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.message_value(name, ttl: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: nil)
   end
 
   # Defines a `String`-keyed ordered map Kafka-message collection.
@@ -108,18 +112,21 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: keyset_limit)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: keyset_limit, capacity: nil)
   end
 
   # Defines a deque Kafka-message collection.
   #
   # @param name [#to_s] the collection name (unique within the client)
   # @param ttl [Integer, nil] optional per-write TTL in whole seconds
+  # @param capacity [Integer, nil] optional window bound (at least 1); the
+  #   deque keeps at most this many slots, enforced lazily on push. Runtime-only
+  #   and mutable across deploys, never persisted (see {DequeState#push}).
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
-  def self.message_deque(name, ttl: nil, read_uncommitted: nil)
+  def self.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: capacity)
   end
 
   # Internal routing tables shared by the state wrappers.
@@ -173,9 +180,11 @@ module Prosody
       # Opens a native scan in `direction`, yields each item, and closes the
       # scan via `ensure` on stop or exception. Direction validity is enforced
       # by the native layer (an invalid token is rejected transient there); the
-      # public traversal methods only ever pass `:forward`/`:backward`.
-      def scan_each(direction)
-        scan = @native.scan(direction.to_s)
+      # public traversal methods only ever pass `:forward`/`:backward`. `opener`
+      # selects the native cursor seam — the default `:scan` yields values (or
+      # `[key, value]` pairs), `:keys` yields bare map keys.
+      def scan_each(direction, opener = :scan)
+        scan = @native.public_send(opener, direction.to_s)
         begin
           # `nil` is the exhaustion sentinel (unambiguous under the null ban);
           # terminate on it explicitly rather than on falsiness, so a legal
@@ -322,6 +331,24 @@ module Prosody
     # @return [Enumerator, void]
     def reverse_each_pair(&block) = traverse(:backward, &block)
 
+    # Traverses the live keys in key order, yielding each key (mirrors
+    # +Hash#each_key+). The key scan skips value decode and the resolver — a
+    # message-backed map yields keys with zero Kafka fetches, though not
+    # zero-I/O. Without a block, returns a demand-driven {Enumerator}; there is
+    # deliberately no eager +keys+ array (it would materialize the whole remote
+    # keyset). Mirrors {#each_pair}'s block-form return (+nil+), not stdlib's
+    # +self+, for in-repo sibling consistency.
+    #
+    # @yieldparam key [String]
+    # @return [Enumerator, void]
+    def each_key(&block) = traverse_keys(:forward, &block)
+
+    # Traverses the live keys in reverse key order, yielding each key.
+    #
+    # @yieldparam key [String]
+    # @return [Enumerator, void]
+    def reverse_each_key(&block) = traverse_keys(:backward, &block)
+
     # --- idiomatic Hash-style aliases and conveniences ------------------
     # Each is composed from the canonical ops above and adds no capability
     # the naming matrix lacks. Bounded reads only: there is deliberately no
@@ -380,11 +407,15 @@ module Prosody
       raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
     end
 
-    # Whether +key+ has a live value (mirrors +Hash#key?+). Performs one read.
+    # Whether +key+ has a live value (mirrors +Hash#key?+). A presence check:
+    # no value decode and no resolver run (not no-I/O). A message-backed map
+    # answers presence with zero Kafka fetches — +true+ even for a
+    # present-but-unfetchable cell — though a cache miss may still touch the
+    # store.
     #
     # @param key [String]
     # @return [Boolean]
-    def key?(key) = !@native.get(key).nil?
+    def key?(key) = @native.contains_key(key)
     alias_method :has_key?, :key?
     alias_method :include?, :key?
     alias_method :member?, :key?
@@ -446,6 +477,12 @@ module Prosody
       # a two-parameter block auto-splats it (|k, v|), a one-parameter block
       # receives the pair (|pair|), and the no-block Enumerator yields pairs.
       scan_each(direction) { |pair| yield pair }
+    end
+
+    def traverse_keys(direction)
+      return enum_for(:traverse_keys, direction) unless block_given?
+
+      scan_each(direction, :keys) { |key| yield key }
     end
   end
 
@@ -513,16 +550,21 @@ module Prosody
     # @return [nil]
     def rollback = @native.rollback
 
-    # Reads the element at front-relative position `index`.
+    # Reads the element at `index`, resolving negatives Array-style (mirrors
+    # +Array#[]+'s read domain, without the indexer). A non-negative index
+    # reads from the front; `-1` is the back element, `-n` the nth from the end.
+    # `-1` fast-paths through {#last} (no length read); other negatives resolve
+    # against the current length (one length read + one element read),
+    # consistent because the deque has a single writer per attempt.
     #
-    # @param index [Integer] the zero-based position from the front
-    # @return [Object, nil] the element, or `nil` past the end
-    # @raise [TransientStateError] if `index` is not a non-negative Integer
+    # @param index [Integer] the position (negative counts from the back)
+    # @return [Object, nil] the element, or `nil` outside the bounds
+    # @raise [TransientStateError] if `index` is not an Integer
     def get(index)
-      unless index.is_a?(Integer) && index >= 0
-        raise TransientStateError, "get: index must be a non-negative Integer, got #{index.inspect}"
+      unless index.is_a?(Integer)
+        raise TransientStateError, "get: index must be an Integer, got #{index.inspect}"
       end
-      @native.get(index)
+      index.negative? ? at_negative(index) : @native.get(index)
     end
 
     # Traverses the live elements in index order.
@@ -544,11 +586,11 @@ module Prosody
     # Composed from the canonical ops above; bounded reads only (no +to_a+,
     # +map+, +sort+, or +Enumerable+ that would materialize the whole deque).
     #
-    # Deliberately NOT provided: +[]+ and +at+. This is a remote, forward-only
-    # deque — it supports a single non-negative +Integer+ index and neither
-    # negative indices nor ranges. Wearing +Array+'s +[]+/+at+ would invite
-    # +deque[-1]+/+deque[0..2]+, which cannot be honored; use the explicit
-    # {#get}, or {#first}/{#last} for the ends.
+    # Deliberately NOT provided: +[]+ and +at+. This is a remote deque; +get+
+    # and +fetch+ accept a single +Integer+ index (negatives resolve from the
+    # back, Array-style), but wearing +Array+'s +[]+/+at+ would invite a range
+    # read (+deque[0..2]+) that cannot be honored. Use the explicit {#get}, or
+    # {#first}/{#last} for the ends.
 
     # Prepends +value+, returning +self+ for chaining (mirrors +Array#prepend+).
     # A wrapper, not an alias: the native write returns +nil+.
@@ -580,49 +622,43 @@ module Prosody
       self
     end
 
-    # The front element, or +nil+ when empty (mirrors +Array#first+).
+    # The front element, or +nil+ when empty (mirrors +Array#first+). An
+    # endpoint-slot read in one round trip (no length read). Under a TTL an
+    # expired front slot yields +nil+ even when live interior elements remain —
+    # a peek never searches inward.
     #
     # @return [Object, nil]
-    def first = @native.get(0)
+    def first = @native.peek_front
 
-    # The back element, or +nil+ when empty (mirrors +Array#last+). Performs
-    # two reads (length, then the last element); they are consistent because
-    # keyed state is single-owner within one handler attempt, so no concurrent
-    # writer can mutate the deque between them.
+    # The back element, or +nil+ when empty (mirrors +Array#last+). An
+    # endpoint-slot read in one round trip (no length read); same TTL-hole
+    # semantics as {#first}.
     #
     # @return [Object, nil]
-    def last
-      count = @native.len
-      return nil if count.zero?
+    def last = @native.peek_back
 
-      @native.get(count - 1)
-    end
-
-    # Reads the element at +index+, raising or defaulting past the end
-    # (mirrors +Array#fetch+). A +nil+ result is unambiguously "past the end"
-    # under the null ban.
+    # Reads the element at +index+, raising or defaulting when out of range
+    # (mirrors +Array#fetch+). A +nil+ result is unambiguously "out of range"
+    # under the null ban. Negatives resolve Array-style like {#get} — +-1+ is
+    # the back element, +-n+ the nth from the end; a fractional or non-Integer
+    # index is a caller mistake, rejected {TransientStateError}.
     #
-    # Divergence from +Array#fetch+: +index+ must be a single non-negative
-    # +Integer+ (this is a remote, forward-only deque). A negative or fractional
-    # index raises {TransientStateError}, matching {#get}'s domain — not the
-    # negative-from-the-end lookup +Array#fetch+ performs.
-    #
-    # @param index [Integer] zero-based front-relative position
+    # @param index [Integer] the position (negative counts from the back)
     # @param default [Object] returned when +index+ is out of range
     # @yieldparam index [Integer] called (instead of +default+) when out of range
     # @return [Object]
     # @raise [IndexError] when out of range and no default or block is given
-    # @raise [TransientStateError] if +index+ is not a non-negative Integer
+    # @raise [TransientStateError] if +index+ is not an Integer
     def fetch(index, *default, &block)
       if default.length > 1
         raise ArgumentError, "wrong number of arguments (given #{default.length + 1}, expected 1..2)"
       end
-      unless index.is_a?(Integer) && index >= 0
-        raise TransientStateError, "fetch: index must be a non-negative Integer, got #{index.inspect}"
+      unless index.is_a?(Integer)
+        raise TransientStateError, "fetch: index must be an Integer, got #{index.inspect}"
       end
       warn "warning: block supersedes default value argument" if block && !default.empty?
 
-      value = @native.get(index)
+      value = index.negative? ? at_negative(index) : @native.get(index)
       return value unless value.nil?
       return block.call(index) if block
       return default.first unless default.empty?
@@ -631,6 +667,17 @@ module Prosody
     end
 
     private
+
+    # Resolves a negative Array-style index against the current length: +-1+
+    # fast-paths through {#last} (no length read), other negatives read the
+    # length and index from the front. Returns +nil+ when the index resolves
+    # before the front (past the far end of the deque).
+    def at_negative(index)
+      return @native.peek_back if index == -1
+
+      resolved = @native.len + index
+      resolved.negative? ? nil : @native.get(resolved)
+    end
 
     def traverse(direction)
       return enum_for(:traverse, direction) unless block_given?

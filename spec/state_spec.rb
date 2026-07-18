@@ -103,6 +103,41 @@ RSpec.describe "Prosody keyed state" do
       expect(error).to be_nil
     end
 
+    it "accepts a positive capacity on a deque" do
+      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 100}])
+      expect(error).to be_nil
+    end
+
+    it "rejects capacity on a non-deque collection" do
+      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", capacity: 100}])
+      expect(error.message).to match(/capacity.*only valid for deque/)
+    end
+
+    it "rejects a zero capacity on a deque" do
+      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 0}])
+      expect(error.message).to match(/capacity.*whole number/)
+    end
+
+    it "rejects a negative capacity on a deque" do
+      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: -1}])
+      expect(error.message).to match(/capacity.*whole number/)
+    end
+
+    it "rejects a fractional capacity on a deque" do
+      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 1.5}])
+      expect(error.message).to match(/capacity.*whole number/)
+    end
+
+    it "rejects a NaN capacity on a deque" do
+      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::NAN}])
+      expect(error.message).to match(/capacity.*whole number/)
+    end
+
+    it "rejects an infinite capacity on a deque" do
+      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::INFINITY}])
+      expect(error.message).to match(/capacity.*whole number/)
+    end
+
     it "rejects an unknown kind token" do
       error = client_error(state_collections: [{name: "c", kind: "set", payload: "json"}])
       expect(error.message).to match(/state_collections\[0\]\.kind.*expected/)
@@ -187,6 +222,21 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody.deque("events").kind).to eq("deque")
     end
 
+    it "carries a deque window capacity on deque and message_deque" do
+      expect(Prosody.deque("d", capacity: 100).capacity).to eq(100)
+      expect(Prosody.message_deque("d", capacity: 50).capacity).to eq(50)
+    end
+
+    it "serializes capacity only when set" do
+      expect(Prosody.deque("d", capacity: 100).to_state_config).to include(capacity: 100)
+      expect(Prosody.deque("d").to_state_config).not_to include(:capacity)
+    end
+
+    it "rejects capacity on non-deque constructors (no such kwarg)" do
+      expect { Prosody.value("v", capacity: 10) }.to raise_error(ArgumentError)
+      expect { Prosody.map("m", capacity: 10) }.to raise_error(ArgumentError)
+    end
+
     it "builds message-payload definitions" do
       expect(Prosody.message_value("v").payload).to eq("message")
       expect(Prosody.message_map("m").payload).to eq("message")
@@ -264,7 +314,7 @@ RSpec.describe "Prosody keyed state" do
       fake = build_fake_context([])
       definition = Prosody::StateDefinition.new(
         name: "x", kind: "set", payload: "json",
-        ttl_seconds: nil, read_uncommitted: nil, keyset_limit: nil
+        ttl_seconds: nil, read_uncommitted: nil, keyset_limit: nil, capacity: nil
       )
       expect { fake.state(definition) }.to raise_error(Prosody::TransientStateError, /unknown collection/)
     end
@@ -272,10 +322,13 @@ RSpec.describe "Prosody keyed state" do
 
   describe "Ruby-side guards" do
     # A stand-in native deque that returns nil for reads and a no-op scan, so the
-    # Ruby guards fire before any real native call.
+    # Ruby guards fire before any real native call. `len`/`peek_back` back the
+    # Array-style negative-index resolution (both yield "empty").
     def fake_deque
       native = Object.new
       native.define_singleton_method(:get) { |_index| nil }
+      native.define_singleton_method(:len) { 0 }
+      native.define_singleton_method(:peek_back) { nil }
       native.define_singleton_method(:scan) do |_direction|
         scan = Object.new
         scan.define_singleton_method(:next) { nil }
@@ -285,9 +338,10 @@ RSpec.describe "Prosody keyed state" do
       native
     end
 
-    it "rejects a negative deque index" do
-      expect { Prosody::DequeState.new(fake_deque).get(-1) }
-        .to raise_error(Prosody::TransientStateError, /index/)
+    it "resolves a negative deque index Array-style (no longer rejected)" do
+      # -1 fast-paths peek_back; both reach the native handle rather than raising.
+      expect(Prosody::DequeState.new(fake_deque).get(-1)).to be_nil
+      expect(Prosody::DequeState.new(fake_deque).get(-2)).to be_nil
     end
 
     it "rejects a fractional deque index" do

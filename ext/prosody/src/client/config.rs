@@ -26,7 +26,7 @@ use prosody::loader::KafkaLoader;
 use prosody::loader::KafkaLoaderConfiguration;
 use prosody::producer::ProducerConfigurationBuilder;
 use prosody::state::descriptor::{
-    MapDescriptor, StateDescriptor, deque_state, map_state, value_state,
+    DequeDescriptor, MapDescriptor, StateDescriptor, deque_state, map_state, value_state,
 };
 use prosody::state::order_codec::Utf8KeyCodec;
 use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
@@ -252,6 +252,11 @@ struct StateCollectionConfig {
     /// Optional map-only keyset bound (`0..=4096`). Crosses as `f64` so
     /// fractional/negative/non-finite values reach the whole-number guard.
     keyset_limit: Option<f64>,
+
+    /// Optional deque-only window capacity (`>= 1`). Runtime-only and not
+    /// persisted. Crosses as `f64` so fractional/negative/non-finite values
+    /// reach the whole-number guard.
+    capacity: Option<f64>,
 }
 
 /// Configuration for the health probe port.
@@ -879,8 +884,8 @@ fn parse_payload(index: usize, payload: &str) -> Result<CollectionPayload, Strin
 /// Validates a numeric field as a whole number within `min..=max`.
 ///
 /// The field arrives as an `f64` (the raw Ruby number, un-coerced) so that
-/// fractional, negative, and non-finite values reach this guard instead of being
-/// silently truncated or wrapped by an earlier integer conversion.
+/// fractional, negative, and non-finite values reach this guard instead of
+/// being silently truncated or wrapped by an earlier integer conversion.
 ///
 /// # Errors
 ///
@@ -921,6 +926,17 @@ fn with_keyset<KC, V>(
 ) -> MapDescriptor<KC, V> {
     match keyset_limit {
         Some(limit) => descriptor.keyset_limit(limit as usize),
+        None => descriptor,
+    }
+}
+
+/// Applies the deque-only window capacity when configured.
+fn with_capacity<T>(
+    descriptor: DequeDescriptor<T>,
+    capacity: Option<NonZeroUsize>,
+) -> DequeDescriptor<T> {
+    match capacity {
+        Some(cap) => descriptor.capacity(cap),
         None => descriptor,
     }
 }
@@ -973,6 +989,24 @@ fn register_state_collection(
         None => None,
     };
 
+    let capacity = match collection.capacity {
+        Some(value) => {
+            if !matches!(kind, CollectionKind::Deque) {
+                return Err(format!(
+                    "state_collections[{index}].capacity: only valid for deque collections"
+                ));
+            }
+            let n = whole_number_field(
+                value,
+                &format!("state_collections[{index}].capacity"),
+                1,
+                u32::MAX,
+            )?;
+            NonZeroUsize::new(n as usize)
+        }
+        None => None,
+    };
+
     let read_uncommitted = collection.read_uncommitted;
     let name = collection.name.as_str();
     match (kind, payload) {
@@ -992,11 +1026,12 @@ fn register_state_collection(
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
         (CollectionKind::Deque, CollectionPayload::Json) => {
-            let _ = keyed.register(with_def(
+            let descriptor = with_def(
                 deque_state::<JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
-            ));
+            );
+            let _ = keyed.register(with_capacity(descriptor, capacity));
         }
         (CollectionKind::Value, CollectionPayload::Message) => {
             let _ = keyed.register(with_def(
@@ -1014,11 +1049,12 @@ fn register_state_collection(
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
         (CollectionKind::Deque, CollectionPayload::Message) => {
-            let _ = keyed.register(with_def(
+            let descriptor = with_def(
                 message_deque_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
-            ));
+            );
+            let _ = keyed.register(with_capacity(descriptor, capacity));
         }
     }
 

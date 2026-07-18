@@ -3,16 +3,17 @@
 //! Wraps the boxed erased handles from [`prosody::consumer::event_context`] as
 //! Magnus classes. Collections are addressed by name; JSON payloads cross as
 //! `serde_json::Value` via `serde_magnus` (exactly like [`Message`] payloads),
-//! and Kafka-message items cross as the same [`Message`] object handlers already
-//! receive.
+//! and Kafka-message items cross as the same [`Message`] object handlers
+//! already receive.
 //!
 //! Every operation flows through [`Bridge::wait_for`]: the calling fiber yields
 //! (via the fiber-scheduler-integrated `Queue#pop`) while tokio drives the
 //! erased future, so the call looks blocking but never blocks the thread. The
-//! extracted Ruby OpenTelemetry carrier is activated (`FutureExt::with_context`)
-//! while core polls, so core's one semantic collection span joins the event
-//! trace with no binding span. Ruby↔`serde_json::Value` conversion runs on the
-//! Ruby thread *after* `wait_for` returns, mirroring [`Message::payload`].
+//! extracted Ruby OpenTelemetry carrier is activated
+//! (`FutureExt::with_context`) while core polls, so core's one semantic
+//! collection span joins the event trace with no binding span.
+//! Ruby↔`serde_json::Value` conversion runs on the Ruby thread *after*
+//! `wait_for` returns, mirroring [`Message::payload`].
 //!
 //! Errors are STRUCTURAL: [`ErasedStateError::category`] selects the Ruby class
 //! directly, and because [`crate::PermanentStateError`]/`TransientStateError`
@@ -25,12 +26,13 @@
 //! # Cancellation honesty
 //!
 //! `Async::Stop` may unwind the waiting fiber while the dispatched tokio op
-//! completes detached — its effect landed before the boundary or is epoch-fenced
-//! by core, and the result channel is simply dropped. For a [`StateScan`] pull,
-//! the orphaned chunk is lost, but on cancellation the whole attempt aborts and
-//! the scan is closed via the Ruby `ensure`, so the dropped chunk is moot.
-//! Adding an in-flight replay slot would be new architecture and would
-//! reimplement cancellation safety the contract assigns to core.
+//! completes detached — its effect landed before the boundary or is
+//! epoch-fenced by core, and the result channel is simply dropped. For a
+//! [`StateScan`] pull, the orphaned chunk is lost, but on cancellation the
+//! whole attempt aborts and the scan is closed via the Ruby `ensure`, so the
+//! dropped chunk is moot. Adding an in-flight replay slot would be new
+//! architecture and would reimplement cancellation safety the contract assigns
+//! to core.
 
 use crate::bridge::{Bridge, QUEUE_CLASS};
 use crate::handler::message::Message;
@@ -360,6 +362,18 @@ impl NativeMapState {
         }
     }
 
+    /// Answers whether a stored cell exists for `key`, read through the event's
+    /// dirty overlay. No value decode and no resolver run — a message-backed
+    /// map answers presence with zero Kafka fetches — but not no-I/O: a
+    /// cache miss still reads the store.
+    fn contains_key(ruby: &Ruby, this: &Self, key: String) -> Result<Value, Error> {
+        let present = match &this.state {
+            MapStateVariant::Json(handle) => run_op!(ruby, this, handle, contains_key(key))?,
+            MapStateVariant::Message(handle) => run_op!(ruby, this, handle, contains_key(key))?,
+        };
+        Ok(present.into_value_with(ruby))
+    }
+
     /// Reads several keys as one isolated batch, one result per input key.
     fn get_many(ruby: &Ruby, this: &Self, keys: Vec<String>) -> Result<Value, Error> {
         match &this.state {
@@ -430,6 +444,35 @@ impl NativeMapState {
             },
             MapStateVariant::Message(handle) => ScanInner::MapMessage {
                 cursor: Arc::from(handle.scan(dir)),
+                buffer: VecDeque::new(),
+                done: false,
+            },
+        };
+        StateScan::new(
+            ruby,
+            inner,
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        )
+    }
+
+    /// Opens a cursor over the live keys in key order, yielding bare `String`
+    /// keys. Like [`scan`](Self::scan) but skips value decode and the resolver
+    /// — a message-backed map enumerates keys with zero Kafka fetches, though
+    /// not no-I/O. Synchronous; the carrier is active while core constructs the
+    /// stream span.
+    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
+    fn keys(ruby: &Ruby, this: &Self, direction: String) -> Result<StateScan, Error> {
+        let dir = parse_direction(ruby, &direction)?;
+        let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
+        let inner = match &this.state {
+            MapStateVariant::Json(handle) => ScanInner::MapKeys {
+                cursor: Arc::from(handle.keys(dir)),
+                buffer: VecDeque::new(),
+                done: false,
+            },
+            MapStateVariant::Message(handle) => ScanInner::MapKeys {
+                cursor: Arc::from(handle.keys(dir)),
                 buffer: VecDeque::new(),
                 done: false,
             },
@@ -515,7 +558,36 @@ impl NativeDequeState {
         }
     }
 
-    /// Appends an element at the back. Rejects JSON null and item-shape mismatch.
+    /// Reads the front endpoint slot (`get(0)` without the length round trip),
+    /// `nil` when empty. Under a TTL an expired endpoint slot yields `nil` even
+    /// when live interior elements remain — a peek never searches inward.
+    fn peek_front(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+        match &this.state {
+            DequeStateVariant::Json(handle) => {
+                json_or_nil(ruby, run_op!(ruby, this, handle, peek_front())?)
+            }
+            DequeStateVariant::Message(handle) => {
+                message_or_nil(ruby, run_op!(ruby, this, handle, peek_front())?)
+            }
+        }
+    }
+
+    /// Reads the back endpoint slot (`get(len - 1)` without the length round
+    /// trip), `nil` when empty. Same endpoint-slot TTL semantics as
+    /// [`peek_front`](Self::peek_front).
+    fn peek_back(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+        match &this.state {
+            DequeStateVariant::Json(handle) => {
+                json_or_nil(ruby, run_op!(ruby, this, handle, peek_back())?)
+            }
+            DequeStateVariant::Message(handle) => {
+                message_or_nil(ruby, run_op!(ruby, this, handle, peek_back())?)
+            }
+        }
+    }
+
+    /// Appends an element at the back. Rejects JSON null and item-shape
+    /// mismatch.
     fn push_back(ruby: &Ruby, this: &Self, value: Value) -> Result<Value, Error> {
         match &this.state {
             DequeStateVariant::Json(handle) => {
@@ -530,7 +602,8 @@ impl NativeDequeState {
         Ok(ruby.qnil().as_value())
     }
 
-    /// Prepends an element at the front. Rejects JSON null and item-shape mismatch.
+    /// Prepends an element at the front. Rejects JSON null and item-shape
+    /// mismatch.
     fn push_front(ruby: &Ruby, this: &Self, value: Value) -> Result<Value, Error> {
         match &this.state {
             DequeStateVariant::Json(handle) => {
@@ -626,9 +699,9 @@ impl NativeDequeState {
 
 /// The four cursor flavours a scan yields, one per (collection, payload) pair.
 ///
-/// Each retains a `buffer` of the items pulled in the current ready-chunk plus a
-/// `done` flag; the erased [`StateCursor`] behind the [`Arc`] owns exhaustion,
-/// error ordering, and close-idempotence.
+/// Each retains a `buffer` of the items pulled in the current ready-chunk plus
+/// a `done` flag; the erased [`StateCursor`] behind the [`Arc`] owns
+/// exhaustion, error ordering, and close-idempotence.
 enum ScanInner {
     /// A deque JSON scan yielding values.
     DequeJson {
@@ -663,6 +736,15 @@ enum ScanInner {
         cursor: Arc<StateCursor<(String, ConsumerMessage<JsonValue>)>>,
         /// Items pulled but not yet yielded.
         buffer: VecDeque<(String, ConsumerMessage<JsonValue>)>,
+        /// Whether the cursor is exhausted.
+        done: bool,
+    },
+    /// A map key-only scan yielding bare keys (payload-agnostic).
+    MapKeys {
+        /// The erased cursor.
+        cursor: Arc<StateCursor<String>>,
+        /// Keys pulled but not yet yielded.
+        buffer: VecDeque<String>,
         /// Whether the cursor is exhausted.
         done: bool,
     },
@@ -732,13 +814,13 @@ macro_rules! close_scan {
 ///
 /// `StateScan#next` yields individual items, pulling a fresh ready-chunk from
 /// core when the buffer drains and returning `nil` at exhaustion (unambiguous
-/// under the null ban). A single fiber-aware permit (a one-token `Thread::Queue`
-/// held through [`ThreadSafeValue`]) serializes `#next` and `#close` in
-/// invocation order across chunks: concurrent fibers block on the permit rather
-/// than racing the buffer, an exception does not poison cleanup (the permit is
-/// released on every path), and `#close` cannot run under an active `#next`.
-/// `#close` is idempotent (core-owned) and wired into every traversal path via
-/// the Ruby `ensure`.
+/// under the null ban). A single fiber-aware permit (a one-token
+/// `Thread::Queue` held through [`ThreadSafeValue`]) serializes `#next` and
+/// `#close` in invocation order across chunks: concurrent fibers block on the
+/// permit rather than racing the buffer, an exception does not poison cleanup
+/// (the permit is released on every path), and `#close` cannot run under an
+/// active `#next`. `#close` is idempotent (core-owned) and wired into every
+/// traversal path via the Ruby `ensure`.
 #[magnus::wrap(class = "Prosody::StateScan")]
 pub struct StateScan {
     inner: RefCell<ScanInner>,
@@ -821,6 +903,13 @@ impl StateScan {
                 let (key, message) = item;
                 Ok((key, Message::from(message)).into_value_with(ruby))
             }),
+            ScanInner::MapKeys {
+                cursor,
+                buffer,
+                done,
+            } => drive_scan!(ruby, this, cursor, buffer, done, |item| {
+                Ok(item.into_value_with(ruby))
+            }),
         }
     }
 
@@ -856,6 +945,11 @@ impl StateScan {
                 buffer,
                 done,
             } => close_scan!(ruby, this, cursor, buffer, done),
+            ScanInner::MapKeys {
+                cursor,
+                buffer,
+                done,
+            } => close_scan!(ruby, this, cursor, buffer, done),
         }
         Ok(ruby.qnil().as_value())
     }
@@ -881,11 +975,16 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
 
     let map = module.define_class(id!(ruby, "NativeMapState"), ruby.class_object())?;
     map.define_method(id!(ruby, "get"), method!(NativeMapState::get, 1))?;
+    map.define_method(
+        id!(ruby, "contains_key"),
+        method!(NativeMapState::contains_key, 1),
+    )?;
     map.define_method(id!(ruby, "get_many"), method!(NativeMapState::get_many, 1))?;
     map.define_method(id!(ruby, "set"), method!(NativeMapState::set, 2))?;
     map.define_method(id!(ruby, "remove"), method!(NativeMapState::remove, 1))?;
     map.define_method(id!(ruby, "clear"), method!(NativeMapState::clear, 0))?;
     map.define_method(id!(ruby, "scan"), method!(NativeMapState::scan, 1))?;
+    map.define_method(id!(ruby, "keys"), method!(NativeMapState::keys, 1))?;
     map.define_method(id!(ruby, "commit"), method!(NativeMapState::commit, 0))?;
     map.define_method(id!(ruby, "rollback"), method!(NativeMapState::rollback, 0))?;
 
@@ -896,6 +995,14 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(NativeDequeState::is_empty, 0),
     )?;
     deque.define_method(id!(ruby, "get"), method!(NativeDequeState::get, 1))?;
+    deque.define_method(
+        id!(ruby, "peek_front"),
+        method!(NativeDequeState::peek_front, 0),
+    )?;
+    deque.define_method(
+        id!(ruby, "peek_back"),
+        method!(NativeDequeState::peek_back, 0),
+    )?;
     deque.define_method(
         id!(ruby, "push_back"),
         method!(NativeDequeState::push_back, 1),

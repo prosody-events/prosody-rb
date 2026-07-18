@@ -47,10 +47,10 @@ module Prosody
   # `[P]` type parameter is annotation-only, naming the message payload type.
   def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
   def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
-  def self.deque: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
+  def self.deque: [T] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
   def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[P]
   def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[P]
-  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[P]
+  def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[P]
 
   # --- handles ------------------------------------------------------------
   # A single-value keyed-state handle. Reads return the stored value or nil.
@@ -85,6 +85,10 @@ module Prosody
                  | () -> Enumerator[[ String, V ], void]
     def reverse_each_pair: () { (String, V) -> void } -> void
                          | () -> Enumerator[[ String, V ], void]
+    def each_key: () { (String) -> void } -> void
+                | () -> Enumerator[String, void]
+    def reverse_each_key: () { (String) -> void } -> void
+                        | () -> Enumerator[String, void]
 
     # idiomatic Hash-style conveniences (bounded reads only)
     def []: (String key) -> V?                       # alias of #get
@@ -156,11 +160,13 @@ module Prosody
   # Native ordered-map handle (Prosody::NativeMapState), wrapped by MapState.
   class NativeMapState
     def get: (String key) -> untyped
+    def contains_key: (String key) -> bool
     def get_many: (Array[String] keys) -> Array[untyped]
     def set: (String key, untyped value) -> void
     def remove: (String key) -> void
     def clear: () -> void
     def scan: (String direction) -> StateScan
+    def keys: (String direction) -> StateScan
     def commit: () -> nil
     def rollback: () -> nil
   end
@@ -170,6 +176,8 @@ module Prosody
     def len: () -> Integer
     def is_empty: () -> bool
     def get: (Integer index) -> untyped
+    def peek_front: () -> untyped
+    def peek_back: () -> untyped
     def push_back: (untyped value) -> void
     def push_front: (untyped value) -> void
     def pop_front: () -> untyped
@@ -200,7 +208,7 @@ module Prosody
     # Shared native-scan driving mixed into the traversal handles.
     module Scanning
       private
-      def scan_each: (Symbol direction) { (untyped) -> void } -> void
+      def scan_each: (Symbol direction, ?Symbol opener) { (untyped) -> void } -> void
     end
   end
 
