@@ -272,9 +272,10 @@ RSpec.describe "keyed-state idiomatic aliases" do
   describe Prosody::DequeState do
     subject(:deque) { Prosody::DequeState.new(deque_native.new([10, 20, 30])) }
 
-    it "does not define Array's #[] or #at (remote, forward-only deque)" do
-      # These would imply negative indices and ranges the remote deque cannot
-      # honor; explicit #get / #first / #last are the honest accessors.
+    it "does not define Array's #[] or #at (remote deque)" do
+      # These would invite a range read the remote deque cannot honor; explicit
+      # #get / #first / #last are the honest accessors (negative indices resolve
+      # from the back via #get / #fetch).
       expect(deque).not_to respond_to(:[])
       expect(deque).not_to respond_to(:at)
       expect(deque.get(2)).to eq(30)

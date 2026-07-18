@@ -133,8 +133,10 @@ module Prosody
     def reverse_each: () { (T) -> void } -> void
                     | () -> Enumerator[T, void]
 
-    # idiomatic Array-style conveniences (bounded reads only). Deliberately no
-    # #[] or #at: this is a remote, forward-only, non-negative-index deque.
+    # idiomatic Array-style conveniences (bounded reads only). #get and #fetch
+    # take a single Integer index (negatives resolve from the back, Array-style);
+    # #[] and #at are deliberately absent because they would invite a range read
+    # the remote deque cannot honor.
     def prepend: (T value) -> self   # wrapper over #unshift
     def append: (T value) -> self    # wrapper over #push
     def <<: (T value) -> self
