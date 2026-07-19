@@ -30,3 +30,13 @@ target :typed_examples do
 
   library "logger"
 end
+
+# Deliberately-invalid consumer calls, checked against committed Steep
+# expectations. The gate fails if an expected diagnostic disappears.
+target :negative_types do
+  check "typecheck_negative"
+  signature "sig"
+  signature "typecheck_negative"
+
+  library "logger"
+end

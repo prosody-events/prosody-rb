@@ -30,7 +30,7 @@ end
 
 desc "Type-check the Ruby implementation against its RBS signatures"
 task :steep do
-  sh "steep check --severity-level=error"
+  sh "steep check --with-expectations --severity-level=error"
 end
 
 task default: %i[compile spec standard rbs steep]

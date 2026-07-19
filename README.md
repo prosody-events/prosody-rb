@@ -30,6 +30,12 @@ Or install directly:
 gem install prosody
 ```
 
+The gem ships RBS signatures for the public API. `Prosody::EventHandler[Payload]`
+carries an application payload type into `Prosody::Message[Payload]`, and keyed-
+state definitions carry their item types through `context.state`. A bare handler,
+message, definition, or state handle defaults to `Prosody::json_value`. See the
+[typed examples](examples/) for Ruby and companion RBS files checked by Steep.
+
 ## Quick Start
 
 ```ruby
@@ -625,6 +631,10 @@ class ActivityHandler < Prosody::EventHandler
 end
 ```
 
+The complete handler and its payload/state signatures are checked by Steep in
+[`examples/keyed_state_windowing.rb`](examples/keyed_state_windowing.rb) and
+[`examples/keyed_state_windowing.rbs`](examples/keyed_state_windowing.rbs).
+
 `window.get` returns `true` or `nil` (the flag is only ever set to `true` or cleared), so it reads as "is a batch open?". A `message_deque` stores whole Kafka messages and resolves each back on read, so draining it with the `each` scan resolves the saved messages **concurrently** — a `shift`-per-item loop would be one Kafka fetch *serially per element* (the anti-pattern the codebase forbids), so drain via the scan then `clear`, never a `shift` loop. `capacity: 100` bounds the buffer so one unusually active user can't grow it without limit; on overflow the **oldest saved** message drops — never the one already delivered. The `WINDOW` flag is only ever `true` or **absent** — close it with `clear`, never `set(false)`; the timer, not the flag, owns *when* the batch ends. Prosody runs at most one handler at a time per key, so a message and the timer for the same user never overlap. One honesty caveat: sending a notification is an outside effect that isn't undone if the event is retried, so a retry may resend it; a production notifier should use an idempotency key or an outbox.
 
 ### Definitions
@@ -1103,10 +1113,10 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 ### Prosody::Client
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
-- `send_message(topic, key, payload)`: Send a message to a specified topic.
+- `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `consumer_state`: Get the current state of the consumer (`:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
-- `subscribe(handler)`: Subscribe to messages using the provided handler.
+- `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
 - `unsubscribe`: Unsubscribe from messages and shut down the consumer.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
 - `is_stalled?`: Check if the consumer has stalled partitions.

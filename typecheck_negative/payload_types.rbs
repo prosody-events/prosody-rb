@@ -1,0 +1,8 @@
+type negative_event = { "amount" => Integer }
+
+NEGATIVE_TOTALS: Prosody::_MapDefinition[Integer]
+NEGATIVE_MESSAGES: Prosody::_MessageDequeDefinition[negative_event]
+
+class NegativeTypeChecks
+  def check: (Prosody::Client client, Prosody::Context context, Prosody::Message[negative_event] message) -> void
+end
