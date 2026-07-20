@@ -564,186 +564,98 @@ Note that the in-memory cache is best-effort. Duplicates can still occur across 
 
 ## Keyed State
 
-Prosody supports keyed state: per-key data that a handler reads and writes and that survives across events. State is partitioned by the message key, so each key has a single writer at a time, and by default writes settle atomically with the event — a handler that raises leaves no partial state. Values are either JSON payloads or the full Kafka `Prosody::Message` the handler received. Register collections on the client before subscribing, then bind them inside the handler with `context.state(definition)`. Every operation is fiber-yield async: it looks like an ordinary blocking call but yields the fiber (never the thread) while the Rust core drives it, exactly like the rest of Prosody (see [ARCHITECTURE.md](ARCHITECTURE.md)).
+Keyed state is durable working memory for a stream. Each Kafka key gets its own value, map, or deque, so a handler can relate the current event to earlier events for the same key. State survives restarts and rebalances. By default, Prosody saves a handler's changes only when the event succeeds.
 
-**Quickstart — one durable counter.** A `Value` gives every Kafka key durable local memory: update it in the handler, and Prosody publishes the new state only when that event succeeds — even across restarts and rebalances.
+Use keyed state for time-aware processing over each key in a stream: counters, deduplication data, rolling aggregates, pending work, and state machines. This work can be slow and expensive when it requires repeated relational database queries. Keyed state is not designed to be the source of truth for core business data or to provide relational operations such as joins. Keep that data in a relational database and use the right tool for each job.
+
+Give collections a TTL whenever the state does not need to live forever. Choose one comfortably longer than the configured recovery delay and the longest timer or workflow. This prevents inactive keys from accumulating state indefinitely.
+
+### A counter for each key
+
+Declare each collection once, register it on the client, and ask the event context for the current key's state:
 
 ```ruby
-COUNTER = Prosody.value("counter") # one ValueState per Kafka key
+COUNTER = Prosody.value("counter", ttl: 30 * 24 * 60 * 60)
 
 class CountHandler < Prosody::EventHandler
-  def on_message(context, message)
-    count = context.state(COUNTER)  # bound for this event
-    count.set((count.get || 0) + 1) # read-modify-write; settles atomically with the event
+  def on_message(context, _message)
+    count = context.state(COUNTER)
+    count.set((count.get || 0) + 1)
   end
 end
 
 client = Prosody::Client.new(
-  bootstrap_servers: "localhost:9092",
-  group_id: "counts",
+  group_id: "counters",
   subscribed_topics: "events",
   state_collections: [COUNTER]
 )
-client.subscribe(CountHandler.new)
 ```
 
-**Batch a burst of activity per user.** Your consumer reads a stream of activity events — likes, comments, follows — each tagged with the user it is about (the Kafka key). Notifying on every event spams an active user; what you want is to tell them the instant something happens, then, if more arrives right after, hold it and send a single summary a few minutes later.
+The TTL keeps counters for recently active keys for 30 days. Omit it only when indefinite retention is intentional.
 
-By hand this is fiddly: you need a durable place to stash pending events *per user*, a timer *per user* to send the summary, and all of it has to survive a restart or the work moving to another machine. Prosody gives you exactly those two things — durable per-key state and a per-key timer:
+### Window activity into one notification
 
-1. **First event for a user** → send it now, mark that a batch is open, and set a timer for 5 minutes out.
-2. **More events arrive before the timer fires** → don't notify again; just save each one.
-3. **Timer fires** → send one summary of everything saved, then close the batch so the next event starts fresh.
+This example sends a user's first activity immediately, saves further activity for five minutes, then sends one summary. The Kafka message key is the user ID.
 
 ```ruby
-# Declare the collections once; register both via state_collections: [WINDOW, PENDING].
-WINDOW  = Prosody.value("window")                          # is a batch open for this user?
-PENDING = Prosody.message_deque("pending", capacity: 100)  # keep the latest 100 messages
+WINDOW = Prosody.value("window", ttl: 24 * 60 * 60)
+PENDING = Prosody.message_deque("pending", capacity: 100, ttl: 24 * 60 * 60)
 
 class ActivityHandler < Prosody::EventHandler
-  # message.key = user id; message.payload = { "actor" => ..., "action" => ... }
   def on_message(context, message)
-    window  = context.state(WINDOW)   # bind THIS user's handles for THIS event
+    window = context.state(WINDOW)
     pending = context.state(PENDING)
+
     if window.get
-      pending.push(message)           # a batch is open → just save the message
-    else
-      notify(message.key, [message])  # first event → send it right away
-      window.set(true)
-      # clear_and_schedule (not schedule): timers are NOT rolled back with state,
-      # so a retried event must not stack a second timer — this keeps exactly one.
-      context.clear_and_schedule(Time.now + 5 * 60)
+      pending.push(message)
+      return
     end
+
+    notify(message.key, [message])
+    window.set(true)
+    context.clear_and_schedule(Time.now + 5 * 60)
   end
 
-  def on_timer(context, timer)        # fires ~5 minutes later, for timer.key
+  def on_timer(context, timer)
     pending = context.state(PENDING)
     batch = []
-    pending.each { |msg| batch << msg } # the scan resolves the saved messages concurrently
-    notify(timer.key, batch) unless batch.empty? # one summary of what actually happened
-    pending.clear                       # empty the buffer
-    context.state(WINDOW).clear         # close the batch; the next event opens a fresh one
-  end
+    pending.each { |message| batch << message }
 
-  # Your own delivery (push, email, …) — the only thing here you write.
-  def notify(user_id, activities)
-    # ...
+    notify(timer.key, batch) unless batch.empty?
+    pending.clear
+    context.state(WINDOW).clear
   end
 end
 ```
 
-The complete handler and its payload/state signatures are checked by Steep in
-[`examples/keyed_state_windowing.rb`](examples/keyed_state_windowing.rb) and
-[`examples/keyed_state_windowing.rbs`](examples/keyed_state_windowing.rbs).
+See the complete, Steep-checked example for signatures, client setup, and `notify`: [`examples/keyed_state_windowing.rb`](examples/keyed_state_windowing.rb) and [`examples/keyed_state_windowing.rbs`](examples/keyed_state_windowing.rbs).
 
-`window.get` returns `true` or `nil` (the flag is only ever set to `true` or cleared), so it reads as "is a batch open?". A `message_deque` stores whole Kafka messages and resolves each back on read, so draining it with the `each` scan resolves the saved messages **concurrently** — a `shift`-per-item loop would be one Kafka fetch *serially per element* (the anti-pattern the codebase forbids), so drain via the scan then `clear`, never a `shift` loop. `capacity: 100` bounds the buffer so one unusually active user can't grow it without limit; on overflow the **oldest saved** message drops — never the one already delivered. The `WINDOW` flag is only ever `true` or **absent** — close it with `clear`, never `set(false)`; the timer, not the flag, owns *when* the batch ends. Prosody runs at most one handler at a time per key, so a message and the timer for the same user never overlap. One honesty caveat: sending a notification is an outside effect that isn't undone if the event is retried, so a retry may resend it; a production notifier should use an idempotency key or an outbox.
+A few details matter:
 
-### Definitions
+- Register both definitions in `state_collections` before subscribing. Keyed state uses Cassandra unless `mock: true`.
+- Use `clear_and_schedule`, not `schedule`, so a retried event does not add another timer for the same key.
+- `capacity: 100` bounds each user's pending queue. Because this example only pushes at the back, overflow drops the oldest saved message.
+- A `message_deque` keeps references to Kafka messages and fetches them when read. Keep source-topic retention longer than the window; use a plain `deque` of payloads when that is not guaranteed.
+- Prosody runs one handler at a time for a key, so that key's message and timer handlers do not overlap.
+- Notifications are external effects: retrying an event can send one again. Use an idempotency key or an outbox when duplicates matter.
 
-A definition constructor declares one collection and returns a frozen definition object carrying its `name`, `kind`, and `payload`. Reference that definition both in `Configuration#state_collections` (registration) and in `context.state` (binding) — declare each collection once and reuse it. (Reuse is a convenience, not a requirement: binding matches a definition to a registered collection by its `name`/`kind`/`payload` fields, not by object identity, so a structurally-equal definition also works.) Three kinds, each with a JSON variant (values are your JSON payload) and a message variant (values are the full Kafka `Prosody::Message`):
+### Collections and handles
 
-- `Prosody.value(name, ttl:, read_uncommitted:)`: single value. Vends a `ValueState`.
-- `Prosody.map(name, ttl:, keyset_limit:, read_uncommitted:)`: ordered map with **String** keys. Vends a `MapState`.
-- `Prosody.deque(name, ttl:, capacity:, read_uncommitted:)`: double-ended queue. Vends a `DequeState`.
-- `Prosody.message_value(name, ...)`: single value holding a `Prosody::Message`. Vends a `ValueState`.
-- `Prosody.message_map(name, ...)`: ordered map of `Prosody::Message` (String keys). Vends a `MapState`.
-- `Prosody.message_deque(name, capacity:, ...)`: deque of `Prosody::Message`. Vends a `DequeState`.
+Definitions describe the collection; `context.state(definition)` returns the current key's handle. Create handles inside the handler and do not retain them or their iterators afterward. State operations look synchronous but yield the current fiber while Prosody performs the work.
 
-Every constructor accepts `ttl:` (whole seconds) and `read_uncommitted:`; maps also accept `keyset_limit:`, and deques accept `capacity:`. `capacity:` bounds the window to at most N slots, enforced lazily **on push** (an overflowing push evicts the opposite end first, decode-free). It is runtime-only and mutable across deploys — never persisted and not part of the collection's identity — so a shrunk deque reports its old length until the next push trims it toward the new bound. Payloads cross the boundary as plain JSON with no runtime validation, so a definition documents the intended shape but does not enforce one. Map keys are always `String`.
+| Collection | JSON payload | Kafka message | Main operations |
+| --- | --- | --- | --- |
+| Value | `Prosody.value` | `Prosody.message_value` | `get`, `set`, `clear` |
+| Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
+| Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
 
-### State Handles
+Map and deque scans return enumerators when called without a block. Map keys are strings. `nil` means absence and cannot be stored—use `clear` or `delete` instead.
 
-`context.state(definition)` vends a typed handle bound to the collection for the current event attempt. The handle — and any iterator it opens — is valid only within the handler invocation that created it; there is no post-handler read window. Binding an unregistered name raises a `PermanentStateError`; so does a definition whose `kind` or `payload` disagrees with what was durably registered under that name (a schema conflict across deploys, validated by core at first use — not a Ruby object-identity check).
+Every definition accepts `ttl:` and `read_uncommitted:`; maps also accept `keyset_limit:`, and deques accept `capacity:`. Collection names must be unique. Reuse the same definition for registration and access.
 
-`ValueState`:
+By default, writes from a successful handler become visible together; if the handler raises, they are discarded. `commit` publishes one collection's pending writes immediately, even if the event later fails. `rollback` discards that collection's writes since its last commit. Most handlers should rely on the default behavior.
 
-- `get`: reads the current value, or `nil` when absent.
-- `set(value)`: buffers a write. Writing `nil` is rejected — call `clear`.
-- `clear`: deletes the stored value.
-- `value` / `value=`: idiomatic aliases of `get` / `set`, so a value cell reads and writes like an attribute (`cart.value`, `cart.value = basket`).
-- `commit` / `rollback`: see [Commit and Rollback](#commit-and-rollback).
-
-`MapState` (keys are always `String`):
-
-- `get(key)`: reads the value for `key`, or `nil` when absent.
-- `get_many(keys)`: reads several keys in one isolated batch, returning one entry per key in the same order (`result[i]` is the value for `keys[i]`); a missing key is `nil`.
-- `set(key, value)`: inserts or overwrites. Writing `nil` is rejected — call `delete(key)`.
-- `delete(key)`: removes `key`. Deliberately returns `nil`, not the removed value or a "was present" flag (a documented divergence from `Hash#delete`; surfacing it would force a hidden read on every delete).
-- `clear`: removes every entry.
-- `each_pair` / `reverse_each_pair`: see [Scan Iteration](#scan-iteration).
-- `each_key` / `reverse_each_key`: yield each live key in key (or reverse-key) order; see [Scan Iteration](#scan-iteration). The key scan skips value decode and the resolver, so a message-backed map enumerates keys with **zero Kafka fetches** (not zero-I/O). There is deliberately no eager `keys` array, which would materialize the whole remote keyset.
-- `commit` / `rollback`.
-
-  Idiomatic `Hash`-style conveniences, each composed from the canonical ops above and doing only **bounded** reads (there is deliberately no `keys`/`values`/`to_h`/`count`, which would materialize the whole remote map):
-
-- `[]` / `[]=` / `store`: aliases of `get` / `set` (`store` mirrors `Hash#store`, returning the stored value).
-- `fetch(key, default)` / `fetch(key) { |key| ... }`: like `Hash#fetch` — the value when present, otherwise the block result, else the default, else a `KeyError`. One read.
-- `key?` (aliases `has_key?` / `include?` / `member?`): a presence check — no value decode and no resolver run (not no-I/O). A message-backed map answers presence with **zero Kafka fetches** (`true` even for a present-but-unfetchable cell).
-- `values_at(*keys)`: like `Hash#values_at`, in one batched read (`get_many`).
-- `fetch_values(*keys)` / `slice(*keys)`: like their `Hash` namesakes, each in one batched read.
-- `dig(key, *rest)`: like `Hash#dig` — one read for `key`, then digs into the returned local value.
-- `each`: alias of `each_pair`.
-
-`DequeState`:
-
-- `push(value)`: appends at the back. Writing `nil` is rejected.
-- `unshift(value)`: prepends at the front. Writing `nil` is rejected.
-- `pop`: removes and returns the back element, or `nil` when empty.
-- `shift`: removes and returns the front element, or `nil` when empty.
-- `length` (aliased `size`): number of live elements.
-- `empty?`: whether the deque holds no live elements.
-- `get(index)`: reads the element at `index`, or `nil` when out of range. A non-negative `index` reads from the front; a negative one resolves Array-style — `-1` is the back element, `-n` the nth from the end. A fractional or non-Integer value is a caller mistake, rejected with a `TransientStateError`.
-- `each` / `reverse_each`: see [Scan Iteration](#scan-iteration).
-- `commit` / `rollback`.
-
-  Idiomatic `Array`-style conveniences, composed from the canonical ops (bounded reads only — there is deliberately no `to_a`/`map`/`sort`, which would materialize the whole remote deque):
-
-- `<<` / `append` / `prepend`: append at the back (`<<`, `append`) or front (`prepend`), each returning `self` for chaining.
-- `first` / `last`: the front / back element, or `nil` when empty. Each is a single endpoint-slot read (one round trip, no length read). Under a TTL an expired endpoint slot reads `nil` even when live interior elements remain — a peek never searches inward.
-- `fetch(index, default)` / `fetch(index) { |index| ... }`: like `Array#fetch` — negatives resolve from the end (`-1` is the back element), a fractional or non-Integer index raises `TransientStateError`.
-- No `[]` or `at`: `get` and `fetch` take a single `Integer` index (negatives resolve from the back, Array-style), but the deque deliberately does not wear `Array`'s `[]`/`at`, which would invite a range read (`deque[0..2]`) that a remote deque cannot honor. Use `get`, or `first` / `last` for the ends.
-
-Writing a JSON `nil` to any handle raises `NullValueError` (a `TransientStateError`): `nil` is not storable because it is indistinguishable from absence, so the store is left untouched — use `clear`/`delete` to express deletion.
-
-### Scan Iteration
-
-Maps expose `each_pair` / `reverse_each_pair` (yielding `key, value`) and `each_key` / `reverse_each_key` (yielding keys only, skipping value decode and the resolver); deques expose `each` / `reverse_each` (yielding elements). The `reverse_*` variant is the backward direction — there is no direction argument. Called without a block, each returns an `Enumerator`; each step yields the fiber while the next chunk is fetched.
-
-Iterators are valid only within the attempt that opened them. Exiting the loop early — a `break`, `return`, or a raised exception — closes the underlying native cursor via `ensure`, so an early exit releases the scan promptly:
-
-```ruby
-context.state(totals).reverse_each_pair do |key, total|
-  break if total > 1000 # early exit closes the cursor
-  process(key, total)
-end
-```
-
-Ruby deliberately does **not** mix in `Enumerable`: its aggregate methods (`map`, `to_a`, `select`, ...) would silently materialize an unbounded remote collection. Traversal is explicit — iterate with the block form, or drive the returned `Enumerator` one step at a time.
-
-### Commit and Rollback
-
-Every handle exposes `commit` and `rollback`. By default a handler's writes are buffered and settle atomically when the event completes; commit and rollback are the explicit mid-handler escape hatch.
-
-- `commit` durably flushes this collection's buffered operations mid-handler. It is at-least-once: the flush becomes visible even if the event later fails and is redelivered, and it establishes a floor that a later `rollback` cannot cross.
-- `rollback` discards this collection's buffered uncommitted operations back to the last commit floor. It is infallible.
-
-Both return `nil`. The erased core seam deliberately drops the store outcome, so there is **no** `:applied` / `:noop` return — do not expect one.
-
-### Semantics
-
-- **Per-key single writer.** State is keyed by the message key; only one handler invocation writes a given key at a time.
-- **Transactional by default.** A handler's writes settle atomically with the event. A handler that raises leaves no partial state (unless you opted a collection into `read_uncommitted:`, or flushed explicitly with `commit`).
-- **At-least-once.** Redelivery re-runs the handler; reads reflect committed prior attempts. Keep handlers idempotent.
-- **Attempt-scoped.** The context, the handles it vends, and any iterators those handles open are valid only within the handler invocation that created them. Do not retain them past the handler.
-
-### Error Handling
-
-Keyed-state failures surface as structured errors that flow through the same handler-error bridge as everything else (the transient/permanent category is carried as data, never parsed from the message):
-
-- `TransientStateError` (subclasses `TransientError`): the default. A temporary store read/write failure, **and every caller mistake** — a rejected `nil`/unrepresentable write (use `clear`/`delete` instead), an item-shape mismatch, an out-of-range or non-Integer deque index, or an invalid scan direction. Caller mistakes are transient on purpose: a permanent error discards the in-flight message and can silently lose data, so a code error retries and stays visible (logs/metrics/lag) until you fix it. `NullValueError` is a `TransientStateError`.
-- `PermanentStateError` (subclasses `PermanentError`): reserved for failures a retry cannot resolve in-process — an unregistered or identity-mismatched collection, a duplicate registration, or a bad TTL. (A handler may also raise one explicitly to declare its own failure permanent.)
-
-State errors are never Terminal — the core folds Terminal into Transient. Because they subclass the existing `PermanentError` / `TransientError` hierarchy, rethrowing one from a handler classifies the event exactly like a plain permanent/transient error, with no bridge change.
+State failures use `TransientStateError` or `PermanentStateError`. Temporary store failures and invalid values are transient; registration or collection-definition conflicts are permanent. Writing `nil` raises the more specific `NullValueError`.
 
 ## Timer Functionality
 
