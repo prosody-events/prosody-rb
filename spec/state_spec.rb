@@ -4,7 +4,7 @@ require "spec_helper"
 
 # Infra-free unit/mock coverage for the keyed-state surface: the shared
 # registration validation table (raised through Client.new in mock mode, before
-# any network/fjall), the error-class hierarchy, the definition constructors and
+# any network or disk-cache I/O), the error-class hierarchy, the definition constructors and
 # their serialization/routing, and the Ruby-side index and direction guards.
 RSpec.describe "Prosody keyed state" do
   # Builds a mock client and returns the raised exception, or nil on success.
@@ -176,6 +176,11 @@ RSpec.describe "Prosody keyed state" do
     it "rejects an empty cache dir" do
       error = client_error(state_cache_dir: "")
       expect(error.message).to match(/state_cache_dir.*empty/)
+    end
+
+    it "rejects a zero in-memory block-cache size" do
+      error = client_error(state_cache_size_bytes: 0)
+      expect(error.message).to match(/state_cache_size_bytes.*greater than 0/)
     end
   end
 

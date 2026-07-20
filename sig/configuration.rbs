@@ -242,9 +242,15 @@ module Prosody
     def state_collections=: (untyped) -> Array[untyped]
 
     # Root directory for the local keyed-state cache. Falls back to
-    # PROSODY_FJALL_CACHE_DIR. Must not be an empty string.
+    # PROSODY_STATE_CACHE_DIR. Must not be an empty string.
     def state_cache_dir: () -> String?
     def state_cache_dir=: (_ToS) -> String
+
+    # Capacity of the in-memory keyed-state cache, in bytes. Must be positive.
+    # Falls back to
+    # PROSODY_STATE_CACHE_SIZE_BYTES, then the engine default.
+    def state_cache_size_bytes: () -> Integer?
+    def state_cache_size_bytes=: (Integer | _ToInt) -> Integer
 
     # Delay in whole seconds between staging a provisional cell and the recovery
     # sweep. Falls back to PROSODY_KEYED_STATE_RECOVERY_DELAY (read by core).

@@ -292,10 +292,15 @@ module Prosody
         list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
       }
 
-    # Root directory for the local keyed-state cache (the committed-value fjall
-    # workspace). Each live client needs its own directory. Falls back to the
-    # PROSODY_FJALL_CACHE_DIR environment variable. Must not be an empty string.
+    # Disk workspace for the local keyed-state cache. Each live client
+    # needs its own directory. Falls back to the
+    # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
     config_param :state_cache_dir, converter: lambda(&:to_s)
+
+    # Capacity of the in-memory keyed-state cache, in bytes. Falls back to
+    # PROSODY_STATE_CACHE_SIZE_BYTES, then
+    # the storage-engine default.
+    config_param :state_cache_size_bytes, converter: ->(v) { Integer(v) }
 
     # Delay in whole seconds between staging a provisional cell and the
     # keyed-state recovery sweep. Every registered TTL must strictly exceed this.

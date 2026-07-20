@@ -35,7 +35,7 @@ use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
 use std::collections::HashSet;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -222,6 +222,9 @@ pub struct NativeConfiguration {
 
     /// Root directory for the local keyed-state cache. Must not be empty.
     state_cache_dir: Option<String>,
+
+    /// Capacity of the in-memory keyed-state cache, in bytes.
+    state_cache_size_bytes: Option<u64>,
 
     /// Delay in whole seconds before the keyed-state recovery sweep.
     ///
@@ -1070,19 +1073,27 @@ fn register_state_collection(
 fn build_keyed_state_config(
     config: &NativeConfiguration,
 ) -> Result<KeyedStateConfiguration, String> {
-    let mut keyed = KeyedStateConfiguration::default();
+    let mut builder = KeyedStateConfiguration::builder();
 
     if let Some(dir) = &config.state_cache_dir {
         if dir.is_empty() {
             return Err("state_cache_dir: must not be an empty string".to_owned());
         }
-        keyed.cache_dir = PathBuf::from(dir);
+        builder.cache_dir(PathBuf::from(dir));
     }
 
     if let Some(seconds) = config.state_recovery_delay {
         let seconds = whole_number_field(seconds, "state_recovery_delay", 1, u32::MAX)?;
-        keyed.recovery_delay = CompactDuration::new(seconds);
+        builder.recovery_delay(CompactDuration::new(seconds));
     }
+
+    if let Some(bytes) = config.state_cache_size_bytes {
+        let bytes = NonZeroU64::new(bytes)
+            .ok_or_else(|| "state_cache_size_bytes: must be greater than 0".to_owned())?;
+        builder.cache_size_bytes(Some(bytes));
+    }
+
+    let mut keyed = builder.build().map_err(|error| error.to_string())?;
 
     if let Some(collections) = &config.state_collections {
         let mut seen = HashSet::with_capacity(collections.len());
