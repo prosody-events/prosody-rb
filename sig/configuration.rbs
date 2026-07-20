@@ -253,7 +253,7 @@ module Prosody
     def state_cache_size_bytes=: (Integer | _ToInt) -> Integer
 
     # Delay in whole seconds between staging a provisional cell and the recovery
-    # sweep. Falls back to PROSODY_KEYED_STATE_RECOVERY_DELAY (read by core).
+    # sweep. Falls back to PROSODY_STATE_RECOVERY_DELAY (read by core).
     def state_recovery_delay: () -> Float?
     def state_recovery_delay=: (Numeric) -> Float
 
