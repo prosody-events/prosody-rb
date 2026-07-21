@@ -1837,7 +1837,7 @@ dependencies = [
  "magnus",
  "mimalloc",
  "opentelemetry",
- "prosody 0.4.0",
+ "prosody 0.5.0",
  "rb-sys",
  "serde",
  "serde-untagged",
@@ -1853,8 +1853,9 @@ dependencies = [
 
 [[package]]
 name = "prosody"
-version = "0.4.0"
-source = "git+https://github.com/prosody-events/prosody?rev=454361285d1b984baee4ae9b19b91bf8e86d6356#454361285d1b984baee4ae9b19b91bf8e86d6356"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdbd9188c2e8982e1eff22d0ff5aa97a65dac98a02b3c6ec58c74073c8ea8c44"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1929,7 +1930,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",
