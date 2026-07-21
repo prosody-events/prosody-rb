@@ -5,6 +5,15 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      mode:
+        description: Release workflow mode
+        required: true
+        default: release-please
+        type: choice
+        options:
+          - release-please
+          - validate
+          - retry
       release_as:
         description: 'Force release version (e.g. 2.2.0.beta.1)'
         required: false
@@ -26,11 +35,12 @@ jobs:
     name: Release Please
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
+      release_created: ${{ inputs.mode == 'validate' || inputs.mode == 'retry' || steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v4
       - name: Release Please Action
+        if: inputs.mode == '' || inputs.mode == 'release-please'
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
@@ -225,7 +235,7 @@ jobs:
                      apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp sentry-ruby && \
-                     rspec /tmp/spec --tag ~tracing"
+                     rspec /tmp/spec --tag ~tracing --tag ~source_tree"
 
   test-linux-musl-x86_64:
     name: Test x86_64-linux-musl
@@ -293,7 +303,7 @@ jobs:
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
                    gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp sentry-ruby && \
-                   rspec /tmp/spec --tag ~tracing"
+                   rspec /tmp/spec --tag ~tracing --tag ~source_tree"
 
   test-linux-aarch64:
     name: Test aarch64-linux
@@ -362,7 +372,7 @@ jobs:
                      apt-get install -y build-essential && \
                      gem install /gems/*.gem && \
                      gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp sentry-ruby && \
-                     rspec /tmp/spec --tag ~tracing"
+                     rspec /tmp/spec --tag ~tracing --tag ~source_tree"
 
   test-linux-musl-aarch64:
     name: Test aarch64-linux-musl
@@ -430,7 +440,7 @@ jobs:
                    apk add --no-cache build-base && \
                    gem install /gems/*.gem && \
                    gem install rspec async-rspec opentelemetry-sdk opentelemetry-exporter-otlp sentry-ruby && \
-                   rspec /tmp/spec --tag ~tracing"
+                   rspec /tmp/spec --tag ~tracing --tag ~source_tree"
 
   release:
     name: Release
@@ -443,7 +453,7 @@ jobs:
       - test-linux-musl-x86_64
       - test-linux-aarch64
       - test-linux-musl-aarch64
-    if: needs.release-please.outputs.release_created == 'true'
+    if: needs.release-please.outputs.release_created == 'true' && inputs.mode != 'validate'
     environment: release
     permissions:
       id-token: write
