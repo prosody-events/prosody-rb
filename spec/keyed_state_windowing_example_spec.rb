@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe "keyed-state windowing example" do
+RSpec.describe "keyed-state windowing example", :source_tree do
   example_path = File.expand_path("../examples/keyed_state_windowing.rb", __dir__)
 
   it "parses as valid Ruby" do

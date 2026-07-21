@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe "keyed-state example" do
+RSpec.describe "keyed-state example", :source_tree do
   example_path = File.expand_path("../examples/keyed_state.rb", __dir__)
 
   it "parses as valid Ruby" do
