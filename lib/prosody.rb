@@ -40,3 +40,8 @@ begin
 rescue LoadError
   require_relative "prosody/prosody"
 end
+
+# Loaded last: the keyed-state surface reopens the native Prosody::Context and
+# subclasses the error hierarchy, so every native class and base error must
+# already exist.
+require_relative "prosody/state"

@@ -14,7 +14,7 @@ bumpalo = { workspace = true, features = ["collections"] }
 educe.workspace = true
 futures.workspace = true
 magnus = { workspace = true, default-features = false }
-mimalloc = { workspace = true, features = ["local_dynamic_tls"] }
+mimalloc = { workspace = true, features = ["local_dynamic_tls", "v2"] }
 opentelemetry.workspace = true
 prosody = { workspace = true }
 rb-sys.workspace = true

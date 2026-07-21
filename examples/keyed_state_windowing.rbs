@@ -1,0 +1,16 @@
+type activity_event = {
+  "actor" => String,
+  "action" => String
+}
+
+ACTIVITY_WINDOW: Prosody::_ValueDefinition[bool]
+PENDING_ACTIVITIES: Prosody::_MessageDequeDefinition[activity_event]
+
+class ActivityWindowHandler < Prosody::EventHandler[activity_event]
+  def on_message: (Prosody::Context context, Prosody::Message[activity_event] message) -> void
+  def on_timer: (Prosody::Context context, Prosody::Timer timer) -> void
+
+  private
+
+  def notify: (String user_id, Array[Prosody::Message[activity_event]] activities) -> void
+end

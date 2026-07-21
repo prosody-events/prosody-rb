@@ -1,0 +1,47 @@
+---
+- file: typecheck_negative/payload_types.rb
+  diagnostics:
+  - range:
+      start:
+        line: 10
+        character: 41
+      end:
+        line: 10
+        character: 51
+    severity: ERROR
+    message: |-
+      Cannot pass a value of type `::Object` as an argument of type `::Prosody::json_value`
+        ::Object <: ::Prosody::json_value
+          ::Object <: (nil | bool | ::Integer | ::Float | ::String | ::Array[::Prosody::json_value] | ::Hash[::String, ::Prosody::json_value])
+            ::Object <: nil
+    code: Ruby::ArgumentTypeMismatch
+  - range:
+      start:
+        line: 13
+        character: 22
+      end:
+        line: 13
+        character: 38
+    severity: ERROR
+    message: |-
+      Cannot pass a value of type `::String` as an argument of type `::Integer`
+        ::String <: ::Integer
+          ::Object <: ::Integer
+            ::BasicObject <: ::Integer
+    code: Ruby::ArgumentTypeMismatch
+  - range:
+      start:
+        line: 14
+        character: 42
+      end:
+        line: 14
+        character: 57
+    severity: ERROR
+    message: |-
+      Cannot pass a value of type `::negative_event` as an argument of type `::Prosody::Message[untyped]`
+        ::negative_event <: ::Prosody::Message[untyped]
+          { "amount" => ::Integer } <: ::Prosody::Message[untyped]
+            ::Hash["amount", ::Integer] <: ::Prosody::Message[untyped]
+              ::Object <: ::Prosody::Message[untyped]
+                ::BasicObject <: ::Prosody::Message[untyped]
+    code: Ruby::ArgumentTypeMismatch

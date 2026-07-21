@@ -100,8 +100,25 @@ impl Message {
     /// # Errors
     ///
     /// Returns an error if payload deserialization fails.
+    ///
+    /// The public RBS exposes this JSON value as `Message[Payload]#payload`.
+    /// That generic parameter is static-only: this native boundary continues
+    /// to deserialize JSON into ordinary Ruby objects without runtime schema
+    /// validation.
     fn payload(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
         serialize(ruby, this.inner.payload())
+    }
+
+    /// Clones the wrapped `ConsumerMessage` for a message-collection write.
+    ///
+    /// The wrapper holds the real `ConsumerMessage`, so a message write clones
+    /// the inner value directly — a cheap operation.
+    ///
+    /// # Returns
+    ///
+    /// An owned clone of the wrapped `ConsumerMessage`.
+    pub(crate) fn consumer_message(&self) -> ConsumerMessage<serde_json::Value> {
+        self.inner.clone()
     }
 }
 

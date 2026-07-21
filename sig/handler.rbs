@@ -1,4 +1,8 @@
 module Prosody
+  # Base error class for all Prosody errors (defined in lib/prosody/handler.rb).
+  class Error < ::StandardError
+  end
+
   # Abstract base for all errors raised by EventHandler methods.
   # Subclasses must implement `#permanent?` to indicate retry behavior.
   class EventHandlerError < Prosody::Error
@@ -22,7 +26,7 @@ module Prosody
 
   # Mixin providing class-level methods to wrap instance methods so that
   # specified exceptions are re-wrapped as PermanentError or TransientError.
-  module ErrorClassification
+  module ErrorClassification : Module
     # Wraps the given instance method so that specified exception types
     # are caught and re-raised as Prosody::PermanentError.
     #
@@ -54,7 +58,7 @@ module Prosody
 
   # Abstract base class for handling incoming messages from Prosody.
   # Subclasses must implement `#on_message` to process received messages.
-  class EventHandler
+  class EventHandler[Payload = json_value]
     extend ErrorClassification
 
     # Process a single message received from Prosody.
@@ -64,7 +68,7 @@ module Prosody
     # @param context the message context containing metadata and control capabilities
     # @param message the message content with payload and metadata
     # @raise [NotImplementedError] if not overridden by subclass
-    def on_message: (Context context, Message message) -> void
+    def on_message: (Context context, Message[Payload] message) -> void
 
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.

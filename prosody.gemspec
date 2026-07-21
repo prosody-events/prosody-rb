@@ -32,7 +32,9 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
-        f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
+        (f == "Steepfile") ||
+        !File.file?(File.join(__dir__, f)) ||
+        f.start_with?(*%w[bin/ test/ spec/ features/ sig-private/ .git .github appveyor Gemfile])
     end
   end
 
@@ -42,13 +44,13 @@ Gem::Specification.new do |spec|
   spec.extensions = ["ext/prosody/extconf.rb"]
 
   # Runtime dependencies
-  spec.add_dependency "async", "~> 2.39"
-  spec.add_dependency "opentelemetry-api", "~> 1.9"
+  spec.add_dependency "async", "~> 2.42"
+  spec.add_dependency "opentelemetry-api", "~> 1.10"
   spec.add_dependency "rb_sys", "~> 0.9.128"
 
   # Development dependencies
   spec.add_development_dependency "async-rspec", "~> 1.17"
-  spec.add_development_dependency "opentelemetry-sdk", "~> 1.11"
+  spec.add_development_dependency "opentelemetry-sdk", "~> 1.12"
   spec.add_development_dependency "opentelemetry-exporter-otlp", "~> 0.34"
-  spec.add_development_dependency "sentry-ruby", "~> 6.5"
+  spec.add_development_dependency "sentry-ruby", "~> 6.6"
 end

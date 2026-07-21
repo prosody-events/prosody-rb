@@ -281,6 +281,32 @@ module Prosody
     # Overrides the PROSODY_TIMER_SPANS environment variable. Default: "follows_from".
     config_param :timer_spans, converter: ->(v) { v.to_s }
 
+    # Keyed-state collections to register before subscribe.
+    #
+    # Accepts an array of StateDefinition objects (from Prosody.value/map/deque
+    # and their message_* siblings) or already-serialized registration hashes.
+    # Duplicate names within the set are rejected by the native layer.
+    config_param :state_collections,
+      converter: lambda { |v|
+        list = v.is_a?(Hash) ? [v] : Array(v)
+        list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
+      }
+
+    # Disk workspace for the local keyed-state cache. Each live client
+    # needs its own directory. Falls back to the
+    # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
+    config_param :state_cache_dir, converter: lambda(&:to_s)
+
+    # Capacity of the in-memory keyed-state cache, in bytes. Falls back to
+    # PROSODY_STATE_CACHE_SIZE_BYTES, then
+    # the storage-engine default.
+    config_param :state_cache_size_bytes, converter: ->(v) { Integer(v) }
+
+    # Delay in whole seconds between staging a provisional cell and the
+    # keyed-state recovery sweep. Every registered TTL must strictly exceed this.
+    # Must be a whole number of seconds >= 1 (validated natively).
+    config_param :state_recovery_delay, converter: ->(v) { duration_converter(v) }
+
     # Operation mode of the client.
     #
     # Valid values:

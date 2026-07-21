@@ -1,0 +1,44 @@
+# Private type-checking shims for dependencies that do not publish RBS.
+# This directory is excluded from the built gem.
+module Async
+  class Stop < StandardError
+  end
+
+  class Barrier
+    def self.new: () -> Barrier
+    def async: () { (untyped) -> untyped } -> untyped
+    def wait: () -> untyped
+    def stop: () -> untyped
+  end
+end
+
+module Kernel
+  private
+  def Async: () { (untyped) -> untyped } -> untyped
+end
+
+module OpenTelemetry
+  def self.tracer_provider: () -> untyped
+  def self.propagation: () -> untyped
+
+  module Context
+    def self.with_current: (untyped) { () -> untyped } -> untyped
+    def self.current: () -> untyped
+  end
+
+  module Trace
+    def self.with_span: (untyped) { () -> untyped } -> untyped
+    def self.current_span: (untyped) -> untyped
+
+    class Status
+      def self.error: (String) -> untyped
+    end
+  end
+end
+
+module Sentry
+  def self.initialized?: () -> bool
+  def self.init: () { (untyped) -> void } -> untyped
+  def self.with_scope: () { (untyped) -> void } -> untyped
+  def self.capture_exception: (Exception) -> untyped
+end

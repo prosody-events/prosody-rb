@@ -1,0 +1,20 @@
+type order_event = {
+  "order_id" => String,
+  "total" => Integer
+}
+
+ORDER_BACKLOG: Prosody::_MessageDequeDefinition[order_event]
+ORDER_TOTALS: Prosody::_MapDefinition[Integer]
+
+class TypedOrderHandler < Prosody::EventHandler[order_event]
+  def on_message: (Prosody::Context context, Prosody::Message[order_event] message) -> void
+
+  private
+
+  def consume_order: (String order_id, Integer total) -> String
+  def consume_totals: (Prosody::MapState[Integer] totals) -> nil
+end
+
+class DefaultPayloadConsumer
+  def payload: (Prosody::Message message) -> Prosody::json_value
+end

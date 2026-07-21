@@ -63,6 +63,7 @@ RSpec.describe Prosody::Configuration do
       expect(config.idempotence_ttl).to be_nil
       expect(config.message_spans).to be_nil
       expect(config.timer_spans).to be_nil
+      expect(config.state_cache_size_bytes).to be_nil
     end
   end
 

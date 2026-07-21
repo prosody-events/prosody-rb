@@ -9,6 +9,7 @@ strategies, and integrated OpenTelemetry support for distributed tracing.
 - **Kafka Consumer**: Per-key ordering with cross-key concurrency, offset management, consumer groups
 - **Kafka Producer**: Idempotent delivery with configurable retries
 - **Timer System**: Persistent scheduled execution backed by Cassandra or in-memory store
+- **Keyed State**: Per-key value/map/deque collections that survive across events, transactional by default
 - **Quality of Service**: Fair scheduling limits concurrency and prevents failures from starving fresh traffic. Pipeline mode adds deferred retry and monopolization detection
 - **Distributed Tracing**: OpenTelemetry integration for tracing message flow across services
 - **Backpressure**: Pauses partitions when handlers fall behind
@@ -28,6 +29,12 @@ Or install directly:
 ```bash
 gem install prosody
 ```
+
+The gem ships RBS signatures for the public API. `Prosody::EventHandler[Payload]`
+carries an application payload type into `Prosody::Message[Payload]`, and keyed-
+state definitions carry their item types through `context.state`. A bare handler,
+message, definition, or state handle defaults to `Prosody::json_value`. See the
+[typed examples](examples/) for Ruby and companion RBS files checked by Steep.
 
 ## Quick Start
 
@@ -73,7 +80,7 @@ end
 client.subscribe(MyHandler.new)
 
 # Send a message to a topic
-client.send_message("my-topic", "message-key", { content: "Hello, Kafka!" })
+client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 
 # Ensure proper shutdown when done
 client.unsubscribe
@@ -192,7 +199,7 @@ Configure via constructor options or environment variables. Options fall back to
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks (nil to disable)         | 8000                   |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
-| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Global shared cache capacity across all partitions for message deduplication (0 disables the entire deduplication middleware, both in-memory and persistent) | 8192 |
+| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Global shared cache capacity across all partitions for message deduplication. Consumer deduplication is mandatory and cannot be disabled, so this must be at least 1; setting it to 0 in the client configuration is rejected | 8192 |
 | `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
 | `idempotence_ttl` / `PROSODY_IDEMPOTENCE_TTL`         | TTL for dedup records in Cassandra            | 7d (604800 seconds) |
 | `slab_size` / `PROSODY_SLAB_SIZE`       | Timer storage granularity (rarely needs changing)    | 1h                     |
@@ -260,6 +267,31 @@ Persistent storage for timers and deferred retries (not needed if `mock: true`):
 | `cassandra_datacenter` / `PROSODY_CASSANDRA_DATACENTER` | Prefer this datacenter for queries | - |
 | `cassandra_rack` / `PROSODY_CASSANDRA_RACK` | Prefer this rack for queries      | -       |
 | `cassandra_retention` / `PROSODY_CASSANDRA_RETENTION` | Delete data older than this | 1y     |
+
+### Keyed State
+
+Register keyed-state collections before you subscribe. Persistence is backed by Cassandra and is not needed when `mock: true`. See the [Keyed State](#keyed-state-1) feature section for handler usage; the client-level knobs and per-collection fields are below. Where an option and an environment variable are paired, an explicitly set option wins; otherwise the environment variable applies, then the default.
+
+| Option / Environment Variable | Description | Default |
+|-------------------------------|-------------|---------|
+| `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
+| `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Disk workspace for the local keyed-state cache; each live client needs its own directory (it is locked exclusively) | per-client temp dir |
+| `state_cache_size_bytes` / `PROSODY_STATE_CACHE_SIZE_BYTES` | Capacity of the in-memory keyed-state cache, in bytes; must be greater than 0. One cache is shared by all partition keyspaces | engine default |
+| `state_recovery_delay` / `PROSODY_STATE_RECOVERY_DELAY` | Whole-second delay between staging a provisional cell and the recovery sweep; every collection TTL must strictly exceed it | 30s |
+
+Prefer the definition constructors (`Prosody.value` / `.map` / `.deque` and their `message_*` variants, documented below): they serialize into `state_collections` so you declare each collection once and reuse the same object with `context.state`. Each entry has these fields:
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `name` | Collection name; non-empty and unique within the client | (required) |
+| `kind` | `"value"`, `"map"`, or `"deque"` | (required) |
+| `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received) | (required) |
+| `ttl_seconds` | Per-write TTL in whole seconds (at least 1; must exceed the recovery delay) | (none) |
+| `read_uncommitted` | Opt out of transactional staging | false |
+| `keyset_limit` | Map-only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
+| `capacity` | Deque-only window bound (at least 1); keeps at most N slots, enforced lazily on push. Runtime-only and mutable across deploys — not persisted | unbounded |
+
+Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`).
 
 ### Telemetry Emitter
 
@@ -476,36 +508,37 @@ The deduplication system uses:
 ```ruby
 # Messages with IDs are deduplicated per key
 client.send_message("my-topic", "key1", {
-  id: "msg-123",      # Message will be processed
-  content: "Hello!"
+  "id" => "msg-123",      # Message will be processed
+  "content" => "Hello!"
 })
 
 client.send_message("my-topic", "key1", {
-  id: "msg-123",      # Message will be skipped (duplicate)
-  content: "Hello again!"
+  "id" => "msg-123",      # Message will be skipped (duplicate)
+  "content" => "Hello again!"
 })
 
 client.send_message("my-topic", "key2", {
-  id: "msg-123",      # Message will be processed (different key)
-  content: "Hello!"
+  "id" => "msg-123",      # Message will be processed (different key)
+  "content" => "Hello!"
 })
 ```
 
-Setting `idempotence_cache_size` to `0` disables the **entire** deduplication middleware (both the in-memory cache and the Cassandra-backed persistent store):
+Consumer deduplication is **mandatory** — it is the commit oracle that makes
+keyed state correct — so it cannot be disabled. `idempotence_cache_size` must be
+at least 1; setting it to `0` in the client configuration raises an
+`ArgumentError`:
 
 ```ruby
 client = Prosody::Client.new(
   group_id: "my-consumer-group",
   subscribed_topics: "my-topic",
-  idempotence_cache_size: 0  # Disable all deduplication (both in-memory and persistent)
+  idempotence_cache_size: 0  # Rejected: consumer deduplication cannot be disabled
 )
 ```
 
-Or via environment variable:
-
-```bash
-PROSODY_IDEMPOTENCE_CACHE_SIZE=0
-```
+This applies to every client — `Prosody::Client.new` always builds a consumer, so
+`0` is rejected regardless of whether any topics are subscribed, and whether it is
+supplied in the client configuration or via `PROSODY_IDEMPOTENCE_CACHE_SIZE`.
 
 To invalidate all previously recorded dedup entries (e.g. after a data migration), change the version string:
 
@@ -528,6 +561,107 @@ client = Prosody::Client.new(
 ```
 
 Note that the in-memory cache is best-effort. Duplicates can still occur across different process instances.
+
+## Keyed State
+
+Keyed state gives every Kafka key its own durable working memory. Prosody automatically uses the current message or timer key, so a handler can relate the current event to earlier events for that key. State survives restarts and rebalances. By default, changes become visible only when the event succeeds.
+
+Use keyed state for time-aware stream processing: counters, deduplication, rolling aggregates, pending work, and per-key workflows. Keep your relational database as the source of truth for business data and for work that needs joins or ad hoc queries. Reconstructing stream state with repeated database queries can be slow and expensive; keyed state is built for that job.
+
+Most collections should have a TTL. Set it comfortably beyond the longest timer or workflow that uses the state; Prosody validates the minimum supported TTL. Omit it only when keeping inactive keys forever is intentional.
+
+### A counter for each key
+
+Declare each collection once, register it on the client, and ask the event context for the current key's state:
+
+```ruby
+COUNTER = Prosody.value("counter", ttl: 30 * 24 * 60 * 60)
+
+class CountHandler < Prosody::EventHandler
+  def on_message(context, _message)
+    count = context.state(COUNTER)
+    count.set((count.get || 0) + 1)
+  end
+end
+
+client = Prosody::Client.new(
+  group_id: "counters",
+  subscribed_topics: "events",
+  state_collections: [COUNTER]
+)
+```
+
+Here, counters expire after 30 days without an update.
+
+### Window activity into one notification
+
+This example turns a burst of activity into two useful notifications. It sends the first event immediately, collects later events for five minutes, then sends one summary. Because the user ID is the Kafka key, every user gets an independent window.
+
+```ruby
+WINDOW = Prosody.value("window", ttl: 24 * 60 * 60)
+PENDING = Prosody.message_deque("pending", capacity: 100, ttl: 24 * 60 * 60)
+
+class ActivityHandler < Prosody::EventHandler
+  def on_message(context, message)
+    window = context.state(WINDOW)
+    pending = context.state(PENDING)
+
+    if window.get
+      pending.push(message)
+      return
+    end
+
+    notify(message.key, [message])
+    window.set(true)
+    context.clear_and_schedule(Time.now + 5 * 60)
+  end
+
+  def on_timer(context, timer)
+    pending = context.state(PENDING)
+    batch = []
+    pending.each { |message| batch << message }
+
+    notify(timer.key, batch) unless batch.empty?
+    pending.clear
+    context.state(WINDOW).clear
+  end
+end
+```
+
+See the complete, Steep-checked example for signatures, client setup, and `notify`: [`examples/keyed_state_windowing.rb`](examples/keyed_state_windowing.rb) and [`examples/keyed_state_windowing.rbs`](examples/keyed_state_windowing.rbs).
+
+Why this works:
+
+- Register both definitions in `state_collections` before subscribing. Keyed state uses Cassandra unless `mock: true`.
+- Use `clear_and_schedule`, not `schedule`, so a retried event does not add another timer for the same key.
+- `capacity: 100` and the one-day TTL prevent an inactive or unusually busy key from retaining an unlimited backlog. Since this example only appends, overflow drops the oldest saved message.
+- A `message_deque` requires the original Kafka messages to remain available for the whole window. Use a plain `deque` of payloads if topic retention or compaction cannot guarantee that.
+- Prosody runs one handler at a time for each key, so a user's message and timer handlers cannot overlap.
+- Sending a notification is outside Prosody's state transaction and may happen again after a retry. Give notifications a stable idempotency key, or send them through an outbox, when duplicates matter.
+
+### Collections and handles
+
+A definition gives a collection a stable name, kind, and options. Register it once on the client, then pass the same definition to `context.state` to access the current key. Do not reuse a persisted name for a different collection kind or payload type.
+
+Create handles inside the handler and do not retain them or their iterators afterward. State operations look synchronous but yield the current fiber while Prosody performs the work.
+
+| Collection | JSON payload | Kafka message | Main operations |
+| --- | --- | --- | --- |
+| Value | `Prosody.value` | `Prosody.message_value` | `get`, `set`, `clear` |
+| Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
+| Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
+
+Map and deque scans return enumerators when called without a block. Map keys are strings. `nil` means absence and cannot be stored—use `clear` or `delete` instead.
+
+### When changes become visible
+
+Reads inside a handler see its earlier writes. The default behavior is the safest choice for most handlers: Prosody buffers those changes and publishes them together when the event succeeds. If the handler raises, none of its pending changes become visible.
+
+Each collection also offers explicit controls for workflows that need different behavior:
+
+- `read_uncommitted: true` writes that collection's changes after the handler succeeds but before the event is recorded as complete. A crash in between can leave the changes visible even though the event is retried. Use it only for idempotent changes, where processing the same event again produces the same stored result.
+- `commit` immediately publishes this collection's pending changes. They remain visible even if the handler later raises and the event is retried.
+- `rollback` discards this collection's pending changes since its last `commit`. It cannot undo changes that were already committed.
 
 ## Timer Functionality
 
@@ -898,17 +1032,18 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 ### Prosody::Client
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
-- `send_message(topic, key, payload)`: Send a message to a specified topic.
+- `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `consumer_state`: Get the current state of the consumer (`:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
-- `subscribe(handler)`: Subscribe to messages using the provided handler.
+- `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
 - `unsubscribe`: Unsubscribe from messages and shut down the consumer.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
 - `is_stalled?`: Check if the consumer has stalled partitions.
 
 ### Prosody::EventHandler
 
-A base class for user-defined handlers:
+A base class for user-defined handlers. Its RBS payload parameter flows into
+`Message#payload`; a bare handler defaults to `Prosody::json_value`.
 
 ```ruby
 class MyHandler < Prosody::EventHandler
@@ -928,14 +1063,36 @@ end
 
 ### Prosody::Message
 
-Represents a Kafka message with the following attributes:
+`Prosody::Message[Payload]` represents a Kafka message. `Payload` defaults to
+`Prosody::json_value` (`nil`, booleans, numbers, strings, arrays, and
+string-keyed hashes, recursively). The parameter is static documentation and
+does not perform runtime validation.
+
+For a type-safe handler, describe the JSON record and specialize the handler in
+your application's RBS:
+
+```rbs
+type order_event = { "order_id" => String, "total" => Integer }
+
+class OrderHandler < Prosody::EventHandler[order_event]
+  def on_message: (Prosody::Context, Prosody::Message[order_event]) -> void
+end
+```
+
+Ruby can then use `message.payload["order_id"]` as a `String` and
+`message.payload["total"]` as an `Integer`. See
+[`examples/keyed_state.rb`](examples/keyed_state.rb) and its companion
+[`examples/keyed_state.rbs`](examples/keyed_state.rbs) for payload typing that
+also flows through message-backed state.
+
+Messages have the following attributes:
 
 - `topic` (String): The name of the topic.
 - `partition` (Integer): The partition number.
 - `offset` (Integer): The message offset within the partition.
 - `timestamp` (Time): The timestamp when the message was created or sent.
 - `key` (String): The message key.
-- `payload` (Hash/Array/String): The message payload as a JSON-deserializable value.
+- `payload` (`Payload`): The JSON-deserialized message payload.
 
 ### Prosody::Context
 
@@ -943,6 +1100,7 @@ Represents the context of message processing:
 
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
 - `on_cancel`: Blocks until cancellation is signaled.
+- `state(definition)`: Binds a registered collection for the current event attempt, returning a typed handle (`ValueState`, `MapState`, or `DequeState`). Raises `PermanentStateError` when the name was never registered, or when the definition's `kind`/`payload` disagrees with the collection's durably-registered schema. See the [Keyed State](#keyed-state-2) API reference below.
 
 Timer scheduling methods:
 
@@ -958,3 +1116,36 @@ Represents a timer that has fired, provided to the `on_timer` method:
 
 - `key` (String): The entity key identifying what this timer belongs to
 - `time` (Time): The time when this timer was scheduled to fire
+
+### Keyed State
+
+Definition constructors (each returns a frozen definition object used both in `Configuration#state_collections` and with `context.state`):
+
+- `Prosody.value(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
+- `Prosody.deque(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
+- `Prosody.message_deque(name, ttl: nil, read_uncommitted: nil)`
+
+`Prosody::ValueState`:
+
+- `get`, `set(value)`, `clear`, `commit`, `rollback`
+
+`Prosody::MapState` (keys are `String`):
+
+- `get(key)`, `get_many(keys)`, `set(key, value)`, `delete(key)` (returns `nil`), `clear`
+- `each_pair` / `reverse_each_pair` (block or `Enumerator`), `commit`, `rollback`
+
+`Prosody::DequeState`:
+
+- `push(value)`, `unshift(value)`, `pop`, `shift`, `length` (aliased `size`), `empty?`, `get(index)`, `clear`
+- `each` / `reverse_each` (block or `Enumerator`), `commit`, `rollback`
+
+Errors:
+
+- `Prosody::TransientStateError < Prosody::TransientError`: the default — a temporary store read/write failure, or any caller mistake (a `nil`/unrepresentable write, item-shape mismatch, out-of-range index, invalid scan direction), rejected transient so it retries rather than discarding the message.
+- `Prosody::PermanentStateError < Prosody::PermanentError`: reserved for failures a retry cannot resolve in-process (unregistered/identity-mismatched collection, duplicate registration, bad TTL), or one a handler raises explicitly.
+- `Prosody::NullValueError < Prosody::TransientStateError`: raised when a `nil` is written; use `clear`/`delete` instead.
+
+State errors are never Terminal (core folds Terminal into Transient).
