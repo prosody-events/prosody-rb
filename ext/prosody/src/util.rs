@@ -15,7 +15,7 @@ use prosody::tracing::{
 };
 use std::mem::{ManuallyDrop, forget};
 use tokio::runtime::{EnterGuard, Handle};
-use tracing::warn;
+use tracing::{error, warn};
 
 /// Creates a static Ruby identifier (symbol) for efficient reuse.
 ///
@@ -235,7 +235,7 @@ pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
 ///
 /// Returns a `RuntimeError` if the span or metric exporter fails to flush.
 pub fn flush_telemetry(ruby: &Ruby) -> Result<(), Error> {
-    core_flush_telemetry().map_err(|error| tracing_error(ruby, error))
+    core_flush_telemetry().map_err(|error| tracing_error(ruby, &error))
 }
 
 /// Flushes buffered telemetry and shuts the export pipeline down. Safe to
@@ -253,16 +253,15 @@ pub fn flush_telemetry(ruby: &Ruby) -> Result<(), Error> {
 /// Returns a `RuntimeError` if the span or metric pipeline fails to shut
 /// down.
 pub fn shutdown_telemetry(ruby: &Ruby) -> Result<(), Error> {
-    core_shutdown_telemetry().map_err(|error| tracing_error(ruby, error))
+    core_shutdown_telemetry().map_err(|error| tracing_error(ruby, &error))
 }
 
 /// Registers [`shutdown_telemetry`] to run once via `Kernel#at_exit`, so
 /// short-lived processes don't lose the tail of telemetry buffered since the
 /// last periodic export.
 ///
-/// Failures are logged to stderr rather than raised: exceptions from an
-/// `at_exit` block are easy to miss and shouldn't prevent the process from
-/// exiting.
+/// Failures are logged rather than raised: exceptions from an `at_exit`
+/// block are easy to miss and shouldn't prevent the process from exiting.
 ///
 /// # Errors
 ///
@@ -272,7 +271,7 @@ fn register_shutdown_at_exit(ruby: &Ruby) -> Result<(), Error> {
         .module_kernel()
         .block_call("at_exit", (), |_ruby, _args, _block| {
             if let Err(error) = core_shutdown_telemetry() {
-                eprintln!("failed to shut down telemetry at exit: {error:#}");
+                error!("failed to shut down telemetry at exit: {error:#}");
             }
         })?;
 
@@ -281,7 +280,7 @@ fn register_shutdown_at_exit(ruby: &Ruby) -> Result<(), Error> {
 
 /// Converts a [`TracingError`] into the `Magnus::Error` shape used across the
 /// extension's Ruby-facing functions.
-fn tracing_error(ruby: &Ruby, error: TracingError) -> Error {
+fn tracing_error(ruby: &Ruby, error: &TracingError) -> Error {
     Error::new(ruby.exception_runtime_error(), error.to_string())
 }
 
