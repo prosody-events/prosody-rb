@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.3.0...prosody/v0.4.0) (2026-07-21)
+
+
+### Features
+
+* **state:** add durable keyed state ([#26](https://github.com/prosody-events/prosody-rb/issues/26)) ([fb68411](https://github.com/prosody-events/prosody-rb/commit/fb6841125b1cb7bb3730965254f3205109da8fbe))
+
+
+### Bug Fixes
+
+* **release:** preserve release history boundary ([#28](https://github.com/prosody-events/prosody-rb/issues/28)) ([257cf86](https://github.com/prosody-events/prosody-rb/commit/257cf86e532c942feda5b1ce65af78c8365064d3))
+* **release:** restore published release boundary ([#31](https://github.com/prosody-events/prosody-rb/issues/31)) ([2f4cda1](https://github.com/prosody-events/prosody-rb/commit/2f4cda104f9cf93e28b0d6c7bd8bd66da660b789))
+
 ## [0.3.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.2.1...prosody/v0.3.0) (2026-05-18)
 
 
