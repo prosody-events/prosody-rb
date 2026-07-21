@@ -76,6 +76,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     bridge::init(ruby)?;
     handler::init(ruby)?;
     client::init(ruby)?;
+    util::init(ruby)?;
 
     Ok(())
 }
