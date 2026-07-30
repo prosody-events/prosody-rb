@@ -6,13 +6,16 @@
 
 use crate::bridge::Bridge;
 use crate::logging::Logger;
-use crate::{BRIDGE, RUNTIME, TRACING_INIT};
-use magnus::value::BoxValue;
-use magnus::{Ruby, Value};
-use prosody::tracing::initialize_tracing;
+use crate::{BRIDGE, ROOT_MOD, RUNTIME, TRACING_INIT};
+use magnus::value::{BoxValue, ReprValue};
+use magnus::{Error, Ruby, Value, function};
+use prosody::tracing::{
+    TracingError, flush_telemetry as core_flush_telemetry, initialize_tracing,
+    shutdown_telemetry as core_shutdown_telemetry,
+};
 use std::mem::{ManuallyDrop, forget};
 use tokio::runtime::{EnterGuard, Handle};
-use tracing::warn;
+use tracing::{error, warn};
 
 /// Creates a static Ruby identifier (symbol) for efficient reuse.
 ///
@@ -216,4 +219,82 @@ pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
     });
 
     guard
+}
+
+/// Exports buffered telemetry (spans and metrics) without shutting the
+/// export pipeline down. Safe to call even if tracing was never initialized.
+///
+/// Use for a mid-run flush — e.g. one of several clients in a process
+/// shutting down while others keep running. [`shutdown_telemetry`] is
+/// registered automatically to run once at process exit, so most
+/// applications only need this for manual, mid-run flushes.
+///
+/// Blocks the calling thread until the export completes.
+///
+/// # Errors
+///
+/// Returns a `RuntimeError` if the span or metric exporter fails to flush.
+pub fn flush_telemetry(ruby: &Ruby) -> Result<(), Error> {
+    core_flush_telemetry().map_err(|error| tracing_error(ruby, &error))
+}
+
+/// Flushes buffered telemetry and shuts the export pipeline down. Safe to
+/// call even if tracing was never initialized.
+///
+/// Registered to run once via `Kernel#at_exit` (see
+/// [`register_shutdown_at_exit`]), so applications get it for free; call it
+/// directly only for tests or other cases that need shutdown before the
+/// process actually exits.
+///
+/// Blocks the calling thread until the final export completes.
+///
+/// # Errors
+///
+/// Returns a `RuntimeError` if the span or metric pipeline fails to shut
+/// down.
+pub fn shutdown_telemetry(ruby: &Ruby) -> Result<(), Error> {
+    core_shutdown_telemetry().map_err(|error| tracing_error(ruby, &error))
+}
+
+/// Registers [`shutdown_telemetry`] to run once via `Kernel#at_exit`, so
+/// short-lived processes don't lose the tail of telemetry buffered since the
+/// last periodic export.
+///
+/// Failures are logged rather than raised: exceptions from an `at_exit`
+/// block are easy to miss and shouldn't prevent the process from exiting.
+///
+/// # Errors
+///
+/// Returns a `Magnus::Error` if registering the `at_exit` hook fails.
+fn register_shutdown_at_exit(ruby: &Ruby) -> Result<(), Error> {
+    let _: Value = ruby
+        .module_kernel()
+        .block_call("at_exit", (), |_ruby, _args, _block| {
+            if let Err(error) = core_shutdown_telemetry() {
+                error!("failed to shut down telemetry at exit: {error:#}");
+            }
+        })?;
+
+    Ok(())
+}
+
+/// Converts a [`TracingError`] into the `Magnus::Error` shape used across the
+/// extension's Ruby-facing functions.
+fn tracing_error(ruby: &Ruby, error: &TracingError) -> Error {
+    Error::new(ruby.exception_runtime_error(), error.to_string())
+}
+
+/// Initializes this module's Ruby-visible surface: the `flush_telemetry` and
+/// `shutdown_telemetry` module functions, plus the `at_exit` hook that runs
+/// shutdown automatically.
+///
+/// # Errors
+///
+/// Returns a `Magnus::Error` if function or hook registration fails.
+pub fn init(ruby: &Ruby) -> Result<(), Error> {
+    let module = ruby.get_inner(&ROOT_MOD);
+    module.define_module_function("flush_telemetry", function!(flush_telemetry, 0))?;
+    module.define_module_function("shutdown_telemetry", function!(shutdown_telemetry, 0))?;
+
+    register_shutdown_at_exit(ruby)
 }
