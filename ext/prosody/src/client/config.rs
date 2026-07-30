@@ -29,6 +29,7 @@ use prosody::state::descriptor::{
     DequeDescriptor, MapDescriptor, StateDescriptor, deque_state, map_state, value_state,
 };
 use prosody::state::order_codec::Utf8KeyCodec;
+use prosody::subsystem::SubsystemName;
 use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 use prosody::timers::duration::CompactDuration;
 use serde::{Deserialize, Deserializer};
@@ -220,11 +221,20 @@ pub struct NativeConfiguration {
     /// Keyed-state collections to register before subscribe.
     state_collections: Option<Vec<StateCollectionConfig>>,
 
+    /// Subsystem under which published collections are advertised.
+    state_subsystem: Option<String>,
+
     /// Root directory for the local keyed-state cache. Must not be empty.
     state_cache_dir: Option<String>,
 
     /// Capacity of the in-memory keyed-state cache, in bytes.
     state_cache_size_bytes: Option<u64>,
+
+    /// Byte budget for the published-state read-through cache.
+    state_read_cache_size_bytes: Option<u64>,
+
+    /// Default cache policy for published-state reads.
+    state_read_cache: Option<ReadCacheConfig>,
 
     /// Delay in whole seconds before the keyed-state recovery sweep.
     ///
@@ -252,6 +262,9 @@ struct StateCollectionConfig {
     /// Optional opt-out of transactional staging.
     read_uncommitted: Option<bool>,
 
+    /// Whether other consumer groups may read this JSON collection.
+    published: Option<bool>,
+
     /// Optional map-only keyset bound (`0..=4096`). Crosses as `f64` so
     /// fractional/negative/non-finite values reach the whole-number guard.
     keyset_limit: Option<f64>,
@@ -260,6 +273,13 @@ struct StateCollectionConfig {
     /// persisted. Crosses as `f64` so fractional/negative/non-finite values
     /// reach the whole-number guard.
     capacity: Option<f64>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+enum ReadCacheConfig {
+    Disabled(bool),
+    Ttl(f64),
 }
 
 /// Configuration for the health probe port.
@@ -911,6 +931,7 @@ fn with_def<D: StateDescriptor>(
     descriptor: D,
     ttl_seconds: Option<u32>,
     read_uncommitted: Option<bool>,
+    published: Option<bool>,
 ) -> D {
     let mut descriptor = descriptor;
     if let Some(ttl) = ttl_seconds {
@@ -918,6 +939,9 @@ fn with_def<D: StateDescriptor>(
     }
     if read_uncommitted == Some(true) {
         descriptor = descriptor.read_uncommitted();
+    }
+    if let Some(published) = published {
+        descriptor = descriptor.published(published);
     }
     descriptor
 }
@@ -975,42 +999,15 @@ fn register_state_collection(
         None => None,
     };
 
-    let keyset_limit = match collection.keyset_limit {
-        Some(value) => {
-            if !matches!(kind, CollectionKind::Map) {
-                return Err(format!(
-                    "state_collections[{index}].keyset_limit: only valid for map collections"
-                ));
-            }
-            Some(whole_number_field(
-                value,
-                &format!("state_collections[{index}].keyset_limit"),
-                0,
-                4096,
-            )?)
-        }
-        None => None,
-    };
-
-    let capacity = match collection.capacity {
-        Some(value) => {
-            if !matches!(kind, CollectionKind::Deque) {
-                return Err(format!(
-                    "state_collections[{index}].capacity: only valid for deque collections"
-                ));
-            }
-            let n = whole_number_field(
-                value,
-                &format!("state_collections[{index}].capacity"),
-                1,
-                u32::MAX,
-            )?;
-            NonZeroUsize::new(n as usize)
-        }
-        None => None,
-    };
+    let keyset_limit = keyset_limit(collection.keyset_limit, &kind, index)?;
+    let capacity = capacity(collection.capacity, &kind, index)?;
 
     let read_uncommitted = collection.read_uncommitted;
+    if collection.published == Some(true) && matches!(payload, CollectionPayload::Message) {
+        return Err(format!(
+            "state_collections[{index}].published: published readers support JSON collections only"
+        ));
+    }
     let name = collection.name.as_str();
     match (kind, payload) {
         (CollectionKind::Value, CollectionPayload::Json) => {
@@ -1018,6 +1015,7 @@ fn register_state_collection(
                 value_state::<JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             ));
         }
         (CollectionKind::Map, CollectionPayload::Json) => {
@@ -1025,6 +1023,7 @@ fn register_state_collection(
                 map_state::<Utf8KeyCodec, JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
@@ -1033,6 +1032,7 @@ fn register_state_collection(
                 deque_state::<JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
@@ -1041,6 +1041,7 @@ fn register_state_collection(
                 message_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             ));
         }
         (CollectionKind::Map, CollectionPayload::Message) => {
@@ -1048,6 +1049,7 @@ fn register_state_collection(
                 message_map_state::<Utf8KeyCodec, KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
@@ -1056,12 +1058,57 @@ fn register_state_collection(
                 message_deque_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
     }
 
     Ok(())
+}
+
+fn keyset_limit(
+    value: Option<f64>,
+    kind: &CollectionKind,
+    index: usize,
+) -> Result<Option<u32>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if !matches!(kind, CollectionKind::Map) {
+        return Err(format!(
+            "state_collections[{index}].keyset_limit: only valid for map collections"
+        ));
+    }
+    whole_number_field(
+        value,
+        &format!("state_collections[{index}].keyset_limit"),
+        0,
+        4096,
+    )
+    .map(Some)
+}
+
+fn capacity(
+    value: Option<f64>,
+    kind: &CollectionKind,
+    index: usize,
+) -> Result<Option<NonZeroUsize>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if !matches!(kind, CollectionKind::Deque) {
+        return Err(format!(
+            "state_collections[{index}].capacity: only valid for deque collections"
+        ));
+    }
+    let value = whole_number_field(
+        value,
+        &format!("state_collections[{index}].capacity"),
+        1,
+        u32::MAX,
+    )?;
+    Ok(NonZeroUsize::new(value as usize))
 }
 
 /// Builds the `KeyedStateConfiguration`, registering each declared collection
@@ -1091,6 +1138,37 @@ fn build_keyed_state_config(
         let bytes = NonZeroU64::new(bytes)
             .ok_or_else(|| "state_cache_size_bytes: must be greater than 0".to_owned())?;
         builder.cache_size_bytes(Some(bytes));
+    }
+
+    if let Some(bytes) = config.state_read_cache_size_bytes {
+        let bytes = NonZeroU64::new(bytes)
+            .ok_or_else(|| "state_read_cache_size_bytes: must be greater than 0".to_owned())?;
+        builder.read_cache_size_bytes(Some(bytes));
+    }
+
+    if let Some(cache) = &config.state_read_cache {
+        match cache {
+            ReadCacheConfig::Disabled(false) => {
+                builder.read_cache_ttl(None);
+            }
+            ReadCacheConfig::Disabled(true) => {
+                return Err(
+                    "state_read_cache: true is ambiguous; use a duration or false".to_owned(),
+                );
+            }
+            ReadCacheConfig::Ttl(seconds) if seconds.is_finite() && *seconds > 0.0_f64 => {
+                builder.read_cache_ttl(Some(Duration::from_secs_f64(*seconds)));
+            }
+            ReadCacheConfig::Ttl(_) => {
+                return Err("state_read_cache: duration must be greater than 0".to_owned());
+            }
+        }
+    }
+
+    if let Some(subsystem) = &config.state_subsystem {
+        builder.subsystem(Some(
+            SubsystemName::try_new(subsystem).map_err(|error| error.to_string())?,
+        ));
     }
 
     let mut keyed = builder.build().map_err(|error| error.to_string())?;

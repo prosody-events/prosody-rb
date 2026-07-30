@@ -275,8 +275,11 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | Option / Environment Variable | Description | Default |
 |-------------------------------|-------------|---------|
 | `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
+| `state_subsystem` / - | Subsystem name used to advertise published collections | (none) |
 | `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Disk workspace for the local keyed-state cache; each live client needs its own directory (it is locked exclusively) | per-client temp dir |
 | `state_cache_size_bytes` / `PROSODY_STATE_CACHE_SIZE_BYTES` | Capacity of the in-memory keyed-state cache, in bytes; must be greater than 0. One cache is shared by all partition keyspaces | engine default |
+| `state_read_cache_size_bytes` / - | Capacity of the published-state read cache, in bytes; must be greater than 0 | engine default |
+| `state_read_cache` / - | Default published-read cache TTL in seconds, or `false` to bypass it | core default |
 | `state_recovery_delay` / `PROSODY_STATE_RECOVERY_DELAY` | Whole-second delay between staging a provisional cell and the recovery sweep; every collection TTL must strictly exceed it | 30s |
 
 Prefer the definition constructors (`Prosody.value` / `.map` / `.deque` and their `message_*` variants, documented below): they serialize into `state_collections` so you declare each collection once and reuse the same object with `context.state`. Each entry has these fields:
@@ -288,10 +291,11 @@ Prefer the definition constructors (`Prosody.value` / `.map` / `.deque` and thei
 | `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received) | (required) |
 | `ttl_seconds` | Per-write TTL in whole seconds (at least 1; must exceed the recovery delay) | (none) |
 | `read_uncommitted` | Opt out of transactional staging | false |
+| `published` | Allow read-only access from other consumer groups; JSON collections only | false |
 | `keyset_limit` | Map-only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
 | `capacity` | Deque-only window bound (at least 1); keeps at most N slots, enforced lazily on push. Runtime-only and mutable across deploys — not persisted | unbounded |
 
-Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`).
+Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`, `published:`, `read_cache:`). `read_cache` is a positive duration in seconds, `false` to bypass the cache, or `nil` to inherit the client default.
 
 ### Telemetry Emitter
 
@@ -569,6 +573,30 @@ Keyed state gives every Kafka key its own durable working memory. Prosody automa
 Use keyed state for time-aware stream processing: counters, deduplication, rolling aggregates, pending work, and per-key workflows. Keep your relational database as the source of truth for business data and for work that needs joins or ad hoc queries. Reconstructing stream state with repeated database queries can be slow and expensive; keyed state is built for that job.
 
 Most collections should have a TTL. Set it comfortably beyond the longest timer or workflow that uses the state; Prosody validates the minimum supported TTL. Omit it only when keeping inactive keys forever is intentional.
+
+### Published state
+
+JSON value, map, and deque collections can be read from another consumer group without subscribing or acquiring its partitions. The same descriptor configures the owner and opens the reader:
+
+```ruby
+CART = Prosody.value("cart", published: true, read_cache: 2)
+
+owner = Prosody::Client.new(
+  group_id: "cart-writer",
+  state_subsystem: "carts",
+  state_collections: [CART]
+)
+
+# Inside the owner's handler:
+cart = context.state(CART)
+cart.set({"sku" => "book"})
+
+# From another client:
+carts = client.state("carts", CART)
+cart = carts.get("user-1")
+```
+
+Published maps provide `get`, `get_many`, `each(key)`, and `reverse_each_pair(key)`. Published deques provide `get`, `length`, `each(key)`, and `reverse_each(key)`. Set `read_cache: false` on the descriptor to read durable storage on every operation.
 
 ### A counter for each key
 
@@ -1121,9 +1149,9 @@ Represents a timer that has fired, provided to the `on_timer` method:
 
 Definition constructors (each returns a frozen definition object used both in `Configuration#state_collections` and with `context.state`):
 
-- `Prosody.value(name, ttl: nil, read_uncommitted: nil)`
-- `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
-- `Prosody.deque(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
+- `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
+- `Prosody.deque(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
 - `Prosody.message_deque(name, ttl: nil, read_uncommitted: nil)`

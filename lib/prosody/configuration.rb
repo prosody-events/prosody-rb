@@ -292,6 +292,9 @@ module Prosody
         list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
       }
 
+    # Subsystem under which published keyed-state collections are advertised.
+    config_param :state_subsystem, converter: lambda(&:to_s)
+
     # Disk workspace for the local keyed-state cache. Each live client
     # needs its own directory. Falls back to the
     # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
@@ -301,6 +304,13 @@ module Prosody
     # PROSODY_STATE_CACHE_SIZE_BYTES, then
     # the storage-engine default.
     config_param :state_cache_size_bytes, converter: ->(v) { Integer(v) }
+
+    # Byte budget for the published-state read-through cache.
+    config_param :state_read_cache_size_bytes, converter: ->(v) { Integer(v) }
+
+    # Default published-read cache policy in seconds, or false to bypass it.
+    config_param :state_read_cache,
+      converter: ->(v) { (v == true || v == false) ? v : Float(v) }
 
     # Delay in whole seconds between staging a provisional cell and the
     # keyed-state recovery sweep. Every registered TTL must strictly exceed this.

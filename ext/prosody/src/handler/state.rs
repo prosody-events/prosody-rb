@@ -40,7 +40,9 @@ use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ThreadSafeValue;
 use crate::{ROOT_MOD, id};
 use magnus::value::{Lazy, ReprValue};
-use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, TryConvert, Value, method};
+use magnus::{
+    Error, ExceptionClass, IntoValue, Module, Ruby, StaticSymbol, TryConvert, Value, method,
+};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::{
@@ -177,13 +179,13 @@ fn message_write_item(
 /// Parses a scan-direction token into the core [`Direction`].
 ///
 /// An invalid token is a caller mistake and rejects transient.
-fn parse_direction(ruby: &Ruby, direction: &str) -> Result<Direction, Error> {
-    match direction {
+pub(crate) fn parse_direction(ruby: &Ruby, direction: StaticSymbol) -> Result<Direction, Error> {
+    match direction.name()? {
         "forward" => Ok(Direction::Forward),
         "backward" => Ok(Direction::Backward),
         other => Err(transient_state_error(
             ruby,
-            format!("direction: expected \"forward\" or \"backward\", got {other:?}"),
+            format!("direction: expected :forward or :backward, got :{other}"),
         )),
     }
 }
@@ -432,9 +434,8 @@ impl NativeMapState {
     /// Opens a cursor over the live entries in key order, yielding `(key,
     /// value)` pairs. Synchronous; the carrier is active while core constructs
     /// the stream span.
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn scan(ruby: &Ruby, this: &Self, direction: String) -> Result<StateScan, Error> {
-        let dir = parse_direction(ruby, &direction)?;
+    fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<StateScan, Error> {
+        let dir = parse_direction(ruby, direction)?;
         let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
         let inner = match &this.state {
             MapStateVariant::Json(handle) => ScanInner::MapJson {
@@ -461,9 +462,8 @@ impl NativeMapState {
     /// — a message-backed map enumerates keys with zero Kafka fetches, though
     /// not no-I/O. Synchronous; the carrier is active while core constructs the
     /// stream span.
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn keys(ruby: &Ruby, this: &Self, direction: String) -> Result<StateScan, Error> {
-        let dir = parse_direction(ruby, &direction)?;
+    fn keys(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<StateScan, Error> {
+        let dir = parse_direction(ruby, direction)?;
         let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
         let inner = match &this.state {
             MapStateVariant::Json(handle) => ScanInner::MapKeys {
@@ -653,9 +653,8 @@ impl NativeDequeState {
 
     /// Opens a cursor over the live elements in index order. Synchronous; the
     /// carrier is active while core constructs the stream span.
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn scan(ruby: &Ruby, this: &Self, direction: String) -> Result<StateScan, Error> {
-        let dir = parse_direction(ruby, &direction)?;
+    fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<StateScan, Error> {
+        let dir = parse_direction(ruby, direction)?;
         let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
         let inner = match &this.state {
             DequeStateVariant::Json(handle) => ScanInner::DequeJson {
@@ -953,6 +952,42 @@ impl StateScan {
         }
         Ok(ruby.qnil().as_value())
     }
+}
+
+pub(crate) fn published_map_scan(
+    ruby: &Ruby,
+    cursor: Box<StateCursor<(String, JsonValue)>>,
+    bridge: Bridge,
+    propagator: Arc<TextMapCompositePropagator>,
+) -> Result<StateScan, Error> {
+    StateScan::new(
+        ruby,
+        ScanInner::MapJson {
+            cursor: Arc::from(cursor),
+            buffer: VecDeque::new(),
+            done: false,
+        },
+        bridge,
+        propagator,
+    )
+}
+
+pub(crate) fn published_deque_scan(
+    ruby: &Ruby,
+    cursor: Box<StateCursor<JsonValue>>,
+    bridge: Bridge,
+    propagator: Arc<TextMapCompositePropagator>,
+) -> Result<StateScan, Error> {
+    StateScan::new(
+        ruby,
+        ScanInner::DequeJson {
+            cursor: Arc::from(cursor),
+            buffer: VecDeque::new(),
+            done: false,
+        },
+        bridge,
+        propagator,
+    )
 }
 
 /// Registers the native keyed-state classes and their methods.

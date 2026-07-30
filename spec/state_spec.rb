@@ -182,6 +182,16 @@ RSpec.describe "Prosody keyed state" do
       error = client_error(state_cache_size_bytes: 0)
       expect(error.message).to match(/state_cache_size_bytes.*greater than 0/)
     end
+
+    it "rejects a zero published-read cache size" do
+      error = client_error(state_read_cache_size_bytes: 0)
+      expect(error.message).to match(/state_read_cache_size_bytes.*greater than 0/)
+    end
+
+    it "rejects an ambiguous published-read cache policy" do
+      error = client_error(state_read_cache: true)
+      expect(error.message).to match(/state_read_cache.*ambiguous/)
+    end
   end
 
   describe "error hierarchy" do
@@ -227,6 +237,12 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody.deque("events").kind).to eq("deque")
     end
 
+    it "uses one descriptor for owned and published access" do
+      definition = Prosody.value("cart", published: true, read_cache: false)
+      expect(definition.to_state_config).to include(published: true)
+      expect(definition.read_cache).to be(false)
+    end
+
     it "carries a deque window capacity on deque and message_deque" do
       expect(Prosody.deque("d", capacity: 100).capacity).to eq(100)
       expect(Prosody.message_deque("d", capacity: 50).capacity).to eq(50)
@@ -255,6 +271,24 @@ RSpec.describe "Prosody keyed state" do
         {name: "cart", kind: "value", payload: "json", ttl_seconds: 30},
         {name: "d", kind: "deque", payload: "json"}
       ])
+    end
+  end
+
+  describe "Prosody::State::Reading#state" do
+    it "routes the descriptor and its cache policy to a typed published wrapper" do
+      calls = []
+      native = Object.new
+      reader = Object.new.extend(Prosody::State::Reading)
+      reader.define_singleton_method(:published_map) do |*args|
+        calls << args
+        native
+      end
+
+      definition = Prosody.map("sessions", published: true, read_cache: 2)
+      handle = reader.state(:accounts, definition)
+
+      expect(handle).to be_a(Prosody::PublishedMap)
+      expect(calls).to eq([["accounts", "sessions", 2, false]])
     end
   end
 
@@ -319,7 +353,8 @@ RSpec.describe "Prosody keyed state" do
       fake = build_fake_context([])
       definition = Prosody::StateDefinition.new(
         name: "x", kind: "set", payload: "json",
-        ttl_seconds: nil, read_uncommitted: nil, keyset_limit: nil, capacity: nil
+        ttl_seconds: nil, read_uncommitted: nil, published: nil, read_cache: nil,
+        keyset_limit: nil, capacity: nil
       )
       expect { fake.state(definition) }.to raise_error(Prosody::TransientStateError, /unknown collection/)
     end
@@ -391,6 +426,21 @@ RSpec.describe "Prosody keyed state" do
       native = fake_scanning_native([["a", false], ["b", 2]])
       Prosody::MapState.new(native).each_pair { |key, value| collected << [key, value] }
       expect(collected).to eq([["a", false], ["b", 2]])
+    end
+
+    it "uses symbols for owned and published scan directions" do
+      directions = []
+      native = fake_scanning_native([])
+      original_scan = native.method(:scan)
+      native.define_singleton_method(:scan) do |*args|
+        directions << args.last
+        original_scan.call(args.last)
+      end
+
+      Prosody::MapState.new(native).reverse_each_pair.to_a
+      Prosody::PublishedMap.new(native).reverse_each_pair("owner").to_a
+
+      expect(directions).to eq([:backward, :backward])
     end
   end
 end

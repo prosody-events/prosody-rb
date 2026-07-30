@@ -24,6 +24,8 @@ module Prosody
     attr_reader payload: String
     attr_reader ttl_seconds: Integer?
     attr_reader read_uncommitted: bool?
+    attr_reader published: bool?
+    attr_reader read_cache: (Numeric | false)?
     attr_reader keyset_limit: Integer?
     attr_reader capacity: Integer?
 
@@ -37,6 +39,7 @@ module Prosody
     def name: () -> String
     def kind: () -> "value"
     def payload: () -> "json"
+    def read_cache: () -> (Numeric | false)?
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
@@ -44,6 +47,7 @@ module Prosody
     def name: () -> String
     def kind: () -> "map"
     def payload: () -> "json"
+    def read_cache: () -> (Numeric | false)?
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
@@ -51,6 +55,7 @@ module Prosody
     def name: () -> String
     def kind: () -> "deque"
     def payload: () -> "json"
+    def read_cache: () -> (Numeric | false)?
     def to_state_config: () -> Hash[Symbol, untyped]
   end
 
@@ -79,9 +84,9 @@ module Prosody
   # The `message_*` siblings return the same structural definition interfaces as
   # their JSON counterparts (the runtime object is one StateDefinition); the
   # `[P]` type parameter is annotation-only, naming the message payload type.
-  def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _ValueDefinition[T]
-  def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MapDefinition[V]
-  def self.deque: [T] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _DequeDefinition[T]
+  def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _ValueDefinition[T]
+  def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _MapDefinition[V]
+  def self.deque: [T] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _DequeDefinition[T]
   def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
   def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
   def self.message_deque: [P] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?) -> _MessageDequeDefinition[P]
@@ -208,8 +213,8 @@ module Prosody
     def set: (String key, untyped value) -> void
     def remove: (String key) -> void
     def clear: () -> void
-    def scan: (String direction) -> StateScan
-    def keys: (String direction) -> StateScan
+    def scan: (Symbol direction) -> StateScan
+    def keys: (Symbol direction) -> StateScan
     def commit: () -> nil
     def rollback: () -> nil
   end
@@ -226,7 +231,7 @@ module Prosody
     def pop_front: () -> untyped
     def pop_back: () -> untyped
     def clear: () -> void
-    def scan: (String direction) -> StateScan
+    def scan: (Symbol direction) -> StateScan
     def commit: () -> nil
     def rollback: () -> nil
   end
@@ -237,9 +242,49 @@ module Prosody
     def close: () -> void
   end
 
+  class NativePublishedValue
+    def get: (String key) -> untyped
+  end
+
+  class NativePublishedMap
+    def get: (String key, String map_key) -> untyped
+    def get_many: (String key, Array[String] map_keys) -> Array[untyped]
+    def scan: (String key, Symbol direction) -> StateScan
+  end
+
+  class NativePublishedDeque
+    def get: (String key, Integer index) -> untyped
+    def length: (String key) -> Integer
+    def scan: (String key, Symbol direction) -> StateScan
+  end
+
+  class PublishedValue[T = json_value]
+    def get: (_ToS key) -> T?
+  end
+
+  class PublishedMap[V = json_value]
+    def get: (_ToS key, _ToS map_key) -> V?
+    def get_many: (_ToS key, Array[_ToS] map_keys) -> Array[V?]
+    def each_pair: (_ToS key) { (String, V) -> void } -> void
+                 | (_ToS key) -> Enumerator[[String, V], void]
+    def reverse_each_pair: (_ToS key) { (String, V) -> void } -> void
+                         | (_ToS key) -> Enumerator[[String, V], void]
+    alias each each_pair
+  end
+
+  class PublishedDeque[T = json_value]
+    def get: (_ToS key, Integer index) -> T?
+    def length: (_ToS key) -> Integer
+    def each: (_ToS key) { (T) -> void } -> void
+            | (_ToS key) -> Enumerator[T, void]
+    def reverse_each: (_ToS key) { (T) -> void } -> void
+                    | (_ToS key) -> Enumerator[T, void]
+  end
+
   # --- internal routing module --------------------------------------------
   module State
     VEND: Hash[Array[String], [ Symbol, Symbol ]]
+    PUBLISHED_VEND: Hash[Array[String], [ Symbol, Symbol ]]
 
     # Adds keyed-state vending to the native context.
     module Vending
@@ -255,6 +300,7 @@ module Prosody
     module Scanning
       private
       def scan_each: (Symbol direction, ?Symbol opener) { (untyped) -> void } -> void
+      def scan_items: (StateScan scan) { (untyped) -> void } -> void
     end
   end
 
