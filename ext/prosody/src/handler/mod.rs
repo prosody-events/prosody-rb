@@ -41,7 +41,9 @@ mod message;
 mod state;
 mod trigger;
 
-pub(crate) use state::{StateScan, parse_direction, published_deque_scan, published_map_scan};
+pub(crate) use state::{
+    StateScan, parse_direction, published_deque_scan, published_map_key_scan, published_map_scan,
+};
 
 /// A handler that bridges between Kafka messages and Ruby message processing
 /// code.

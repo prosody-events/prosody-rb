@@ -1863,7 +1863,7 @@ dependencies = [
 [[package]]
 name = "prosody"
 version = "0.5.0"
-source = "git+https://github.com/prosody-events/prosody?rev=2e9523226d85848e847148f85cfd892d13b572a6#2e9523226d85848e847148f85cfd892d13b572a6"
+source = "git+https://github.com/prosody-events/prosody?rev=7311a952c01b8faca23068bbc95063f9f7e23a51#7311a952c01b8faca23068bbc95063f9f7e23a51"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1939,7 +1939,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",

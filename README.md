@@ -596,7 +596,7 @@ carts = client.state("carts", CART)
 cart = carts.get("user-1")
 ```
 
-Published maps provide `get`, `get_many`, `each(key)`, and `reverse_each_pair(key)`. Published deques provide `get`, `length`, `each(key)`, and `reverse_each(key)`. Set `read_cache: false` on the descriptor to read durable storage on every operation.
+Published maps provide the same reads as owned maps: `get`, `get_many`, `key?`, `each_pair`, `each_key`, and `each_value`, with reverse traversal variants. Published deques likewise provide `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. Their extra first argument is the owner key. Directions remain Ruby symbols internally, and all traversal uses the same chunked cursor as owned state. Set `read_cache: false` on the descriptor to read durable storage on every operation.
 
 ### A counter for each key
 
@@ -1163,7 +1163,7 @@ Definition constructors (each returns a frozen definition object used both in `C
 `Prosody::MapState` (keys are `String`):
 
 - `get(key)`, `get_many(keys)`, `set(key, value)`, `delete(key)` (returns `nil`), `clear`
-- `each_pair` / `reverse_each_pair` (block or `Enumerator`), `commit`, `rollback`
+- `key?`, `each_pair`, `each_key`, and `each_value` (each with reverse traversal), `commit`, `rollback`
 
 `Prosody::DequeState`:
 

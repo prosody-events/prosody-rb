@@ -128,6 +128,10 @@ module Prosody
                 | () -> Enumerator[String, void]
     def reverse_each_key: () { (String) -> void } -> void
                         | () -> Enumerator[String, void]
+    def each_value: () { (V) -> void } -> void
+                  | () -> Enumerator[V, void]
+    def reverse_each_value: () { (V) -> void } -> void
+                          | () -> Enumerator[V, void]
 
     # idiomatic Hash-style conveniences (bounded reads only)
     def []: (String key) -> V?                       # alias of #get
@@ -249,12 +253,17 @@ module Prosody
   class NativePublishedMap
     def get: (String key, String map_key) -> untyped
     def get_many: (String key, Array[String] map_keys) -> Array[untyped]
+    def contains_key: (String key, String map_key) -> bool
     def scan: (String key, Symbol direction) -> StateScan
+    def keys: (String key, Symbol direction) -> StateScan
   end
 
   class NativePublishedDeque
     def get: (String key, Integer index) -> untyped
     def length: (String key) -> Integer
+    def is_empty: (String key) -> bool
+    def peek_front: (String key) -> untyped
+    def peek_back: (String key) -> untyped
     def scan: (String key, Symbol direction) -> StateScan
   end
 
@@ -265,16 +274,32 @@ module Prosody
   class PublishedMap[V = json_value]
     def get: (_ToS key, _ToS map_key) -> V?
     def get_many: (_ToS key, Array[_ToS] map_keys) -> Array[V?]
+    def key?: (_ToS key, _ToS map_key) -> bool
+    alias has_key? key?
+    alias include? key?
+    alias member? key?
     def each_pair: (_ToS key) { (String, V) -> void } -> void
                  | (_ToS key) -> Enumerator[[String, V], void]
     def reverse_each_pair: (_ToS key) { (String, V) -> void } -> void
                          | (_ToS key) -> Enumerator[[String, V], void]
+    def each_key: (_ToS key) { (String) -> void } -> void
+                | (_ToS key) -> Enumerator[String, void]
+    def reverse_each_key: (_ToS key) { (String) -> void } -> void
+                        | (_ToS key) -> Enumerator[String, void]
+    def each_value: (_ToS key) { (V) -> void } -> void
+                  | (_ToS key) -> Enumerator[V, void]
+    def reverse_each_value: (_ToS key) { (V) -> void } -> void
+                          | (_ToS key) -> Enumerator[V, void]
     alias each each_pair
   end
 
   class PublishedDeque[T = json_value]
     def get: (_ToS key, Integer index) -> T?
     def length: (_ToS key) -> Integer
+    alias size length
+    def empty?: (_ToS key) -> bool
+    def first: (_ToS key) -> T?
+    def last: (_ToS key) -> T?
     def each: (_ToS key) { (T) -> void } -> void
             | (_ToS key) -> Enumerator[T, void]
     def reverse_each: (_ToS key) { (T) -> void } -> void

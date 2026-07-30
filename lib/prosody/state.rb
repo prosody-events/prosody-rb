@@ -243,9 +243,17 @@ module Prosody
     def initialize(native) = @native = native
     def get(key, map_key) = @native.get(key.to_s, map_key.to_s)
     def get_many(key, map_keys) = @native.get_many(key.to_s, map_keys.map(&:to_s))
+    def key?(key, map_key) = @native.contains_key(key.to_s, map_key.to_s)
+    alias_method :has_key?, :key?
+    alias_method :include?, :key?
+    alias_method :member?, :key?
 
     def each_pair(key, &block) = traverse(key, :forward, &block)
     def reverse_each_pair(key, &block) = traverse(key, :backward, &block)
+    def each_key(key, &block) = traverse_keys(key, :forward, &block)
+    def reverse_each_key(key, &block) = traverse_keys(key, :backward, &block)
+    def each_value(key, &block) = traverse_values(key, :forward, &block)
+    def reverse_each_value(key, &block) = traverse_values(key, :backward, &block)
     alias_method :each, :each_pair
 
     private
@@ -255,14 +263,42 @@ module Prosody
 
       scan_items(@native.scan(key.to_s, direction)) { |entry| yield(*entry) }
     end
+
+    def traverse_keys(key, direction)
+      return enum_for(__method__, key, direction) unless block_given?
+
+      scan_items(@native.keys(key.to_s, direction)) { |map_key| yield map_key }
+    end
+
+    def traverse_values(key, direction)
+      return enum_for(__method__, key, direction) unless block_given?
+
+      scan_items(@native.scan(key.to_s, direction)) { |entry| yield entry[1] }
+    end
   end
 
   class PublishedDeque
     include State::Scanning
 
     def initialize(native) = @native = native
-    def get(key, index) = @native.get(key.to_s, index)
+
+    def get(key, index)
+      unless index.is_a?(Integer)
+        raise TransientStateError, "get: index must be an Integer, got #{index.inspect}"
+      end
+
+      return @native.get(key.to_s, index) unless index.negative?
+      return last(key) if index == -1
+
+      resolved = length(key) + index
+      resolved.negative? ? nil : @native.get(key.to_s, resolved)
+    end
+
     def length(key) = @native.length(key.to_s)
+    alias_method :size, :length
+    def empty?(key) = @native.is_empty(key.to_s)
+    def first(key) = @native.peek_front(key.to_s)
+    def last(key) = @native.peek_back(key.to_s)
 
     def each(key, &block) = traverse(key, :forward, &block)
     def reverse_each(key, &block) = traverse(key, :backward, &block)
@@ -424,6 +460,8 @@ module Prosody
     # @yieldparam key [String]
     # @return [Enumerator, void]
     def reverse_each_key(&block) = traverse_keys(:backward, &block)
+    def each_value(&block) = traverse_values(:forward, &block)
+    def reverse_each_value(&block) = traverse_values(:backward, &block)
 
     # --- idiomatic Hash-style aliases and conveniences ------------------
     # Each is composed from the canonical ops above and adds no capability
@@ -559,6 +597,12 @@ module Prosody
       return enum_for(:traverse_keys, direction) unless block_given?
 
       scan_each(direction, :keys) { |key| yield key }
+    end
+
+    def traverse_values(direction)
+      return enum_for(:traverse_values, direction) unless block_given?
+
+      scan_each(direction) { |entry| yield entry[1] }
     end
   end
 

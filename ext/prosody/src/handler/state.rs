@@ -972,6 +972,24 @@ pub(crate) fn published_map_scan(
     )
 }
 
+pub(crate) fn published_map_key_scan(
+    ruby: &Ruby,
+    cursor: Box<StateCursor<String>>,
+    bridge: Bridge,
+    propagator: Arc<TextMapCompositePropagator>,
+) -> Result<StateScan, Error> {
+    StateScan::new(
+        ruby,
+        ScanInner::MapKeys {
+            cursor: Arc::from(cursor),
+            buffer: VecDeque::new(),
+            done: false,
+        },
+        bridge,
+        propagator,
+    )
+}
+
 pub(crate) fn published_deque_scan(
     ruby: &Ruby,
     cursor: Box<StateCursor<JsonValue>>,

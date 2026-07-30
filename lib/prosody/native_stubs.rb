@@ -796,7 +796,15 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    def contains_key(key, map_key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     def scan(key, direction)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def keys(key, direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end
@@ -808,6 +816,18 @@ module Prosody
     end
 
     def length(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def is_empty(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def peek_front(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def peek_back(key)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
