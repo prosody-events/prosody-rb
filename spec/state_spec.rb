@@ -438,7 +438,7 @@ RSpec.describe "Prosody keyed state" do
       end
 
       Prosody::MapState.new(native).reverse_each_pair.to_a
-      Prosody::PublishedMap.new(native).reverse_each_pair("owner").to_a
+      Prosody::PublishedMap.new(native).reverse_each_pair("user-1").to_a
 
       expect(directions).to eq([:backward, :backward])
     end
@@ -447,7 +447,7 @@ RSpec.describe "Prosody keyed state" do
       native = fake_scanning_native([["a", 1], ["b", 2]])
       scan = native.method(:scan)
       native.define_singleton_method(:scan) { |_key, direction| scan.call(direction) }
-      native.define_singleton_method(:contains_key) { |key, map_key| [key, map_key] == ["owner", "a"] }
+      native.define_singleton_method(:contains_key) { |key, map_key| [key, map_key] == ["user-1", "a"] }
       key_scan = []
       key_native = fake_scanning_native(["b", "a"])
       native.define_singleton_method(:keys) do |key, direction|
@@ -456,10 +456,10 @@ RSpec.describe "Prosody keyed state" do
       end
 
       state = Prosody::PublishedMap.new(native)
-      expect(state.key?("owner", "a")).to be(true)
-      expect(state.reverse_each_key("owner").to_a).to eq(["b", "a"])
-      expect(state.each_value("owner").to_a).to eq([1, 2])
-      expect(key_scan).to eq([["owner", :backward]])
+      expect(state.key?("user-1", "a")).to be(true)
+      expect(state.reverse_each_key("user-1").to_a).to eq(["b", "a"])
+      expect(state.each_value("user-1").to_a).to eq([1, 2])
+      expect(key_scan).to eq([["user-1", :backward]])
     end
 
     it "gives published deques the owned read operations" do
@@ -471,11 +471,11 @@ RSpec.describe "Prosody keyed state" do
       native.define_singleton_method(:get) { |_key, index| ["first", "last"][index] }
 
       state = Prosody::PublishedDeque.new(native)
-      expect(state.size("owner")).to eq(2)
-      expect(state).not_to be_empty("owner")
-      expect(state.first("owner")).to eq("first")
-      expect(state.last("owner")).to eq("last")
-      expect(state.get("owner", -1)).to eq("last")
+      expect(state.size("user-1")).to eq(2)
+      expect(state).not_to be_empty("user-1")
+      expect(state.first("user-1")).to eq("first")
+      expect(state.last("user-1")).to eq("last")
+      expect(state.get("user-1", -1)).to eq("last")
     end
   end
 end
