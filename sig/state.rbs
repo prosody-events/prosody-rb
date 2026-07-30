@@ -1,4 +1,7 @@
 module Prosody
+  type state_item = json_value | Message[json_value]
+  type map_state_item = [String, state_item]
+
   # --- error taxonomy -----------------------------------------------------
   # Raised for keyed-state failures a retry cannot resolve (unregistered
   # collection, identity mismatch, duplicate registration, bad TTL). Never
@@ -202,8 +205,8 @@ module Prosody
 
   # Native single-value handle (Prosody::NativeValueState), wrapped by ValueState.
   class NativeValueState
-    def get: () -> untyped
-    def set: (untyped value) -> void
+    def get: () -> state_item?
+    def set: (state_item value) -> void
     def clear: () -> void
     def commit: () -> nil
     def rollback: () -> nil
@@ -211,14 +214,14 @@ module Prosody
 
   # Native ordered-map handle (Prosody::NativeMapState), wrapped by MapState.
   class NativeMapState
-    def get: (String key) -> untyped
+    def get: (String key) -> state_item?
     def contains_key: (String key) -> bool
-    def get_many: (Array[String] keys) -> Array[untyped]
-    def set: (String key, untyped value) -> void
+    def get_many: (Array[String] keys) -> Array[state_item?]
+    def set: (String key, state_item value) -> void
     def remove: (String key) -> void
     def clear: () -> void
-    def scan: (Symbol direction) -> StateScan
-    def keys: (Symbol direction) -> StateScan
+    def scan: (Symbol direction) -> StateScan[map_state_item]
+    def keys: (Symbol direction) -> StateScan[String]
     def commit: () -> nil
     def rollback: () -> nil
   end
@@ -227,44 +230,44 @@ module Prosody
   class NativeDequeState
     def len: () -> Integer
     def is_empty: () -> bool
-    def get: (Integer index) -> untyped
-    def peek_front: () -> untyped
-    def peek_back: () -> untyped
-    def push_back: (untyped value) -> void
-    def push_front: (untyped value) -> void
-    def pop_front: () -> untyped
-    def pop_back: () -> untyped
+    def get: (Integer index) -> state_item?
+    def peek_front: () -> state_item?
+    def peek_back: () -> state_item?
+    def push_back: (state_item value) -> void
+    def push_front: (state_item value) -> void
+    def pop_front: () -> state_item?
+    def pop_back: () -> state_item?
     def clear: () -> void
-    def scan: (Symbol direction) -> StateScan
+    def scan: (Symbol direction) -> StateScan[state_item]
     def commit: () -> nil
     def rollback: () -> nil
   end
 
   # Native scan cursor (Prosody::StateScan), driven by the wrapper traversal.
-  class StateScan
-    def next: () -> untyped
+  class StateScan[T]
+    def next: () -> T?
     def close: () -> void
   end
 
   class NativePublishedValue
-    def get: (String key) -> untyped
+    def get: (String key) -> json_value?
   end
 
   class NativePublishedMap
-    def get: (String key, String map_key) -> untyped
-    def get_many: (String key, Array[String] map_keys) -> Array[untyped]
+    def get: (String key, String map_key) -> json_value?
+    def get_many: (String key, Array[String] map_keys) -> Array[json_value?]
     def contains_key: (String key, String map_key) -> bool
-    def scan: (String key, Symbol direction) -> StateScan
-    def keys: (String key, Symbol direction) -> StateScan
+    def scan: (String key, Symbol direction) -> StateScan[[String, json_value]]
+    def keys: (String key, Symbol direction) -> StateScan[String]
   end
 
   class NativePublishedDeque
-    def get: (String key, Integer index) -> untyped
+    def get: (String key, Integer index) -> json_value?
     def length: (String key) -> Integer
     def is_empty: (String key) -> bool
-    def peek_front: (String key) -> untyped
-    def peek_back: (String key) -> untyped
-    def scan: (String key, Symbol direction) -> StateScan
+    def peek_front: (String key) -> json_value?
+    def peek_back: (String key) -> json_value?
+    def scan: (String key, Symbol direction) -> StateScan[json_value]
   end
 
   class PublishedValue[T = json_value]
@@ -324,8 +327,8 @@ module Prosody
     # Shared native-scan driving mixed into the traversal handles.
     module Scanning
       private
-      def scan_each: (Symbol direction, ?Symbol opener) { (untyped) -> void } -> void
-      def scan_items: (StateScan scan) { (untyped) -> void } -> void
+      def scan_each: (Symbol direction, ?Symbol opener) { (state_item | map_state_item | String) -> void } -> void
+      def scan_items: [T] (StateScan[T] scan) { (T) -> void } -> void
     end
   end
 
