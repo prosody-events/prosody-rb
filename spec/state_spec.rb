@@ -275,34 +275,26 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "Prosody::State::Reading#state" do
-    it "routes the descriptor and its cache policy to a typed published wrapper" do
+    it "uses every JSON descriptor's typed published-state access strategy" do
       calls = []
       native = Object.new
       reader = Object.new.extend(Prosody::State::Reading)
-      reader.define_singleton_method(:published_map) do |*args|
-        calls << args
-        native
+      %i[published_value published_map published_deque].each do |vend_method|
+        reader.define_singleton_method(vend_method) do |*args|
+          calls << [vend_method, *args]
+          native
+        end
       end
 
-      definition = Prosody.map("sessions", published: true, read_cache: 2)
-      handle = reader.state(:accounts, definition)
+      cases = [
+        [Prosody.value("cart", published: true, read_cache: 2), :published_value, Prosody::PublishedValue],
+        [Prosody.map("sessions", published: true, read_cache: 2), :published_map, Prosody::PublishedMap],
+        [Prosody.deque("jobs", published: true, read_cache: 2), :published_deque, Prosody::PublishedDeque]
+      ]
 
-      expect(handle).to be_a(Prosody::PublishedMap)
-      expect(calls).to eq([["accounts", "sessions", 2, false]])
-    end
-  end
-
-  describe "Prosody::State::VEND routing table" do
-    {
-      %w[value json] => [:value_state, :ValueState],
-      %w[map json] => [:map_state, :MapState],
-      %w[deque json] => [:deque_state, :DequeState],
-      %w[value message] => [:message_value_state, :ValueState],
-      %w[map message] => [:message_map_state, :MapState],
-      %w[deque message] => [:message_deque_state, :DequeState]
-    }.each do |key, expected|
-      it "routes #{key.inspect} to #{expected.inspect}" do
-        expect(Prosody::State::VEND[key]).to eq(expected)
+      cases.each do |definition, vend_method, wrapper|
+        expect(reader.state(:accounts, definition)).to be_a(wrapper)
+        expect(calls.last).to eq([vend_method, "accounts", definition.name, 2, false])
       end
     end
   end
@@ -326,11 +318,22 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody::Context.include?(Prosody::State::Vending)).to be(true)
     end
 
-    it "routes a value definition to value_state and wraps it in ValueState" do
-      calls = []
-      handle = build_fake_context(calls).state(Prosody.value("cart"))
-      expect(handle).to be_a(Prosody::ValueState)
-      expect(calls).to eq([[:value_state, "cart"]])
+    it "uses every descriptor's typed owned-state access strategy" do
+      cases = [
+        [Prosody.value("value"), :value_state, Prosody::ValueState],
+        [Prosody.map("map"), :map_state, Prosody::MapState],
+        [Prosody.deque("deque"), :deque_state, Prosody::DequeState],
+        [Prosody.message_value("message-value"), :message_value_state, Prosody::ValueState],
+        [Prosody.message_map("message-map"), :message_map_state, Prosody::MapState],
+        [Prosody.message_deque("message-deque"), :message_deque_state, Prosody::DequeState]
+      ]
+
+      cases.each do |definition, vend_method, wrapper|
+        calls = []
+        handle = build_fake_context(calls).state(definition)
+        expect(handle).to be_a(wrapper)
+        expect(calls).to eq([[vend_method, definition.name]])
+      end
     end
 
     it "caches vended handles per kind/payload/name" do
@@ -340,23 +343,6 @@ RSpec.describe "Prosody keyed state" do
       second = fake.state(Prosody.value("cart"))
       expect(second).to equal(first)
       expect(calls).to eq([[:value_state, "cart"]])
-    end
-
-    it "routes a message map definition to message_map_state and wraps it in MapState" do
-      calls = []
-      handle = build_fake_context(calls).state(Prosody.message_map("sessions"))
-      expect(handle).to be_a(Prosody::MapState)
-      expect(calls).to eq([[:message_map_state, "sessions"]])
-    end
-
-    it "raises for an unknown kind/payload pair" do
-      fake = build_fake_context([])
-      definition = Prosody::StateDefinition.new(
-        name: "x", kind: "set", payload: "json",
-        ttl_seconds: nil, read_uncommitted: nil, published: nil, read_cache: nil,
-        keyset_limit: nil, capacity: nil
-      )
-      expect { fake.state(definition) }.to raise_error(Prosody::TransientStateError, /unknown collection/)
     end
   end
 

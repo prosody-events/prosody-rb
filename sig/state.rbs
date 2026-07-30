@@ -1,6 +1,7 @@
 module Prosody
   type state_item = json_value | Message[json_value]
   type map_state_item = [String, state_item]
+  type state_config_value = String | Integer | bool
 
   # --- error taxonomy -----------------------------------------------------
   # Raised for keyed-state failures a retry cannot resolve (unregistered
@@ -20,6 +21,13 @@ module Prosody
   class NullValueError < TransientStateError
   end
 
+  class StateAccess < Data
+    attr_reader vend_method: Symbol
+    attr_reader wrapper: Symbol
+    attr_reader published_vend_method: Symbol?
+    attr_reader published_wrapper: Symbol?
+  end
+
   # Concrete immutable definition object returned by the constructor helpers.
   class StateDefinition < Data
     attr_reader name: String
@@ -31,8 +39,9 @@ module Prosody
     attr_reader read_cache: (Numeric | false)?
     attr_reader keyset_limit: Integer?
     attr_reader capacity: Integer?
+    attr_reader access: StateAccess
 
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   # --- definition interfaces (phantom-typed over the payload) --------------
@@ -43,7 +52,7 @@ module Prosody
     def kind: () -> "value"
     def payload: () -> "json"
     def read_cache: () -> (Numeric | false)?
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   interface _MapDefinition[V = json_value]
@@ -51,7 +60,7 @@ module Prosody
     def kind: () -> "map"
     def payload: () -> "json"
     def read_cache: () -> (Numeric | false)?
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   interface _DequeDefinition[T = json_value]
@@ -59,28 +68,28 @@ module Prosody
     def kind: () -> "deque"
     def payload: () -> "json"
     def read_cache: () -> (Numeric | false)?
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   interface _MessageValueDefinition[P = json_value]
     def name: () -> String
     def kind: () -> "value"
     def payload: () -> "message"
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   interface _MessageMapDefinition[P = json_value]
     def name: () -> String
     def kind: () -> "map"
     def payload: () -> "message"
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   interface _MessageDequeDefinition[P = json_value]
     def name: () -> String
     def kind: () -> "deque"
     def payload: () -> "message"
-    def to_state_config: () -> Hash[Symbol, untyped]
+    def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
   # --- definition constructors --------------------------------------------

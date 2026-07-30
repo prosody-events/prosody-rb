@@ -40,8 +40,25 @@ module Prosody
   # both serializes into `Configuration#state_collections` (via
   # {#to_state_config}) so the collection is registered before subscribe, and
   # drives {Prosody::Context#state} to vend the matching typed handle.
+  StateAccess = Data.define(:vend_method, :wrapper, :published_vend_method, :published_wrapper)
+  private_constant :StateAccess
+  VALUE_ACCESS = StateAccess.new(vend_method: :value_state, wrapper: :ValueState,
+    published_vend_method: :published_value, published_wrapper: :PublishedValue)
+  MAP_ACCESS = StateAccess.new(vend_method: :map_state, wrapper: :MapState,
+    published_vend_method: :published_map, published_wrapper: :PublishedMap)
+  DEQUE_ACCESS = StateAccess.new(vend_method: :deque_state, wrapper: :DequeState,
+    published_vend_method: :published_deque, published_wrapper: :PublishedDeque)
+  MESSAGE_VALUE_ACCESS = StateAccess.new(vend_method: :message_value_state, wrapper: :ValueState,
+    published_vend_method: nil, published_wrapper: nil)
+  MESSAGE_MAP_ACCESS = StateAccess.new(vend_method: :message_map_state, wrapper: :MapState,
+    published_vend_method: nil, published_wrapper: nil)
+  MESSAGE_DEQUE_ACCESS = StateAccess.new(vend_method: :message_deque_state, wrapper: :DequeState,
+    published_vend_method: nil, published_wrapper: nil)
+  private_constant :VALUE_ACCESS, :MAP_ACCESS, :DEQUE_ACCESS,
+    :MESSAGE_VALUE_ACCESS, :MESSAGE_MAP_ACCESS, :MESSAGE_DEQUE_ACCESS
+
   StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted,
-    :published, :read_cache, :keyset_limit, :capacity) do
+    :published, :read_cache, :keyset_limit, :capacity, :access) do
     # Serializes this definition into the native-registration hash, omitting
     # unset optionals so they fall back to the core defaults.
     #
@@ -66,7 +83,8 @@ module Prosody
   def self.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "json",
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: nil, capacity: nil)
+      read_cache: read_cache, keyset_limit: nil, capacity: nil,
+      access: VALUE_ACCESS)
   end
 
   # Defines a `String`-keyed ordered map JSON collection.
@@ -79,7 +97,8 @@ module Prosody
   def self.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "json",
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil)
+      read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
+      access: MAP_ACCESS)
   end
 
   # Defines a deque JSON collection.
@@ -94,7 +113,8 @@ module Prosody
   def self.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "json",
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: nil, capacity: capacity)
+      read_cache: read_cache, keyset_limit: nil, capacity: capacity,
+      access: DEQUE_ACCESS)
   end
 
   # Defines a single-value Kafka-message collection (items are full messages).
@@ -106,7 +126,8 @@ module Prosody
   def self.message_value(name, ttl: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "message",
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
-      read_cache: nil, keyset_limit: nil, capacity: nil)
+      read_cache: nil, keyset_limit: nil, capacity: nil,
+      access: MESSAGE_VALUE_ACCESS)
   end
 
   # Defines a `String`-keyed ordered map Kafka-message collection.
@@ -119,7 +140,8 @@ module Prosody
   def self.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "message",
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
-      read_cache: nil, keyset_limit: keyset_limit, capacity: nil)
+      read_cache: nil, keyset_limit: keyset_limit, capacity: nil,
+      access: MESSAGE_MAP_ACCESS)
   end
 
   # Defines a deque Kafka-message collection.
@@ -134,38 +156,23 @@ module Prosody
   def self.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "message",
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
-      read_cache: nil, keyset_limit: nil, capacity: capacity)
+      read_cache: nil, keyset_limit: nil, capacity: capacity,
+      access: MESSAGE_DEQUE_ACCESS)
   end
 
-  # Internal routing tables shared by the state wrappers.
+  # Shared state wrapper behavior.
   module State
-    # Maps a definition's `[kind, payload]` to the native vend method and the
-    # public wrapper class that wraps the vended native handle.
-    VEND = {
-      %w[value json] => [:value_state, :ValueState],
-      %w[map json] => [:map_state, :MapState],
-      %w[deque json] => [:deque_state, :DequeState],
-      %w[value message] => [:message_value_state, :ValueState],
-      %w[map message] => [:message_map_state, :MapState],
-      %w[deque message] => [:message_deque_state, :DequeState]
-    }.freeze
-
-    PUBLISHED_VEND = {
-      %w[value json] => [:published_value, :PublishedValue],
-      %w[map json] => [:published_map, :PublishedMap],
-      %w[deque json] => [:published_deque, :PublishedDeque]
-    }.freeze
-
     module Reading
       # Opens a read-only view of a published JSON collection.
       def state(subsystem, definition)
-        vend_method, wrapper = State::PUBLISHED_VEND.fetch([definition.kind, definition.payload]) do
+        access = definition.access
+        if access.published_vend_method.nil? || access.published_wrapper.nil?
           raise ArgumentError, "published state readers support JSON collections only"
         end
         cache_seconds = definition.read_cache unless definition.read_cache == false
-        native = public_send(vend_method, subsystem.to_s, definition.name, cache_seconds,
+        native = public_send(access.published_vend_method, subsystem.to_s, definition.name, cache_seconds,
           definition.read_cache == false)
-        Prosody.const_get(wrapper).new(native)
+        Prosody.const_get(access.published_wrapper).new(native)
       end
     end
 
@@ -188,12 +195,8 @@ module Prosody
         cache_key = "#{definition.kind}:#{definition.payload}:#{definition.name}"
         return cache[cache_key] if cache.key?(cache_key)
 
-        vend_method, wrapper = VEND.fetch([definition.kind, definition.payload]) do
-          raise TransientStateError,
-            "state: unknown collection kind/payload #{[definition.kind, definition.payload].inspect}"
-        end
-        native = public_send(vend_method, definition.name)
-        cache[cache_key] = Prosody.const_get(wrapper).new(native)
+        native = public_send(definition.access.vend_method, definition.name)
+        cache[cache_key] = Prosody.const_get(definition.access.wrapper).new(native)
       end
     end
 
