@@ -318,11 +318,8 @@ module Prosody
                     | (_ToS key) -> Enumerator[T, void]
   end
 
-  # --- internal routing module --------------------------------------------
+  # --- shared state modules ------------------------------------------------
   module State
-    VEND: Hash[Array[String], [ Symbol, Symbol ]]
-    PUBLISHED_VEND: Hash[Array[String], [ Symbol, Symbol ]]
-
     # Adds keyed-state vending to the native context.
     module Vending
       def state: [T] (_ValueDefinition[T]) -> ValueState[T]
