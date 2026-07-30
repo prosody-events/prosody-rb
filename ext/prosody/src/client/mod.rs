@@ -20,13 +20,12 @@ use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
-use prosody::high_level::HighLevelClient;
+use prosody::high_level::erased::{ErasedConsumerState, SharedHighLevelClient, new_erased};
 use prosody::high_level::mode::Mode;
-use prosody::high_level::state::ConsumerState;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
-use std::sync::Arc;
 use tracing::{Span, debug, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -44,7 +43,7 @@ mod config;
 pub struct Client {
     /// The underlying Prosody client
     #[educe(Debug(ignore))]
-    inner: Arc<HighLevelClient<RubyHandler>>,
+    inner: SharedHighLevelClient<RubyHandler, prosody::JsonCodec>,
     /// Bridge for communicating between Rust and Ruby
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
@@ -96,13 +95,23 @@ impl Client {
             .try_into()
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
-        let client = HighLevelClient::new(
-            mode,
-            &mut config_ref.into(),
-            &consumer_builders,
-            &config_ref.into(),
-        )
-        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        let mock = consumer_builders
+            .consumer
+            .clone()
+            .build()
+            .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?
+            .mock;
+        let cassandra = if mock {
+            None
+        } else {
+            Some(
+                Into::<CassandraConfigurationBuilder>::into(config_ref)
+                    .build()
+                    .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?,
+            )
+        };
+        let client = new_erased(mode, &mut config_ref.into(), &consumer_builders, cassandra)
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let bridge = BRIDGE
             .get()
@@ -113,7 +122,7 @@ impl Client {
             .clone();
 
         Ok(Self {
-            inner: Arc::new(client),
+            inner: client,
             bridge: bridge.clone(),
             propagator: new_propagator(),
             pid: std::process::id(),
@@ -158,14 +167,13 @@ impl Client {
         let state: Result<&'static str, String> = this.bridge.wait_for(
             ruby,
             async move {
-                let view = inner.consumer_state().await;
-                match &*view {
-                    ConsumerState::Unconfigured => Ok("unconfigured"),
-                    ConsumerState::ConfigurationFailed(err) => {
-                        Err(format!("consumer configuration failed: {err:#}"))
+                match inner.consumer_state().await {
+                    ErasedConsumerState::Unconfigured => Ok("unconfigured"),
+                    ErasedConsumerState::ConfigurationFailed(error) => {
+                        Err(format!("consumer configuration failed: {error}"))
                     }
-                    ConsumerState::Configured(_) => Ok("configured"),
-                    ConsumerState::Running { .. } => Ok("running"),
+                    ErasedConsumerState::Configured(_) => Ok("configured"),
+                    ErasedConsumerState::Running { .. } => Ok("running"),
                 }
             },
             Span::current(),
@@ -215,7 +223,7 @@ impl Client {
         this.bridge
             .wait_for(
                 ruby,
-                async move { client.send(topic.as_str().into(), &key, value).await },
+                async move { client.send(topic.as_str().into(), key, value).await },
                 span,
             )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
