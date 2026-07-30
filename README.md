@@ -1151,7 +1151,7 @@ Definition constructors (each returns a frozen definition object used both in `C
 
 - `Prosody.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
-- `Prosody.deque(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
+- `Prosody.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
 - `Prosody.message_deque(name, ttl: nil, read_uncommitted: nil)`
