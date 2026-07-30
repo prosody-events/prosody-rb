@@ -15,7 +15,7 @@ magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
 # TODO: replace this Git revision with the published Prosody release once the backend change is released.
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "bb4777a8ffd4862f89208da53d3fbc81eb9d0101", features = [
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "9a9b2c5b452dba83a5a90e512c389e572d89a9ae", features = [
     "libz-static",
 ] }
 rb-sys = "0.9"
