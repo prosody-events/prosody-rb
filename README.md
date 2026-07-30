@@ -596,7 +596,7 @@ cart_reader = client.state("carts", CART)
 cart = cart_reader.get("user-1")
 ```
 
-Published maps provide the same reads as owned maps: `get`, `get_many`, `key?`, `each_pair`, `each_key`, and `each_value`, with reverse traversal variants. Published deques likewise provide `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. An owned handle gets its state key from the current event; a published reader is outside a handler, so each operation receives that state key explicitly. Directions remain Ruby symbols internally, and all traversal uses the same chunked cursor as owned state. Set `read_cache: false` on the descriptor to read durable storage on every operation.
+Published maps provide the same reads as owned maps: `get`, `get_many`, `key?`, `each_pair`, `each_key`, and `each_value`, with reverse traversal variants. Published deques likewise provide `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. An owned handle gets its state key from the current event; a published reader is outside a handler, so each operation receives that state key explicitly. Directions remain Ruby symbols internally, and all traversal uses the same chunked cursor as owned state. Set `read_cache: false` on the descriptor to read durable storage on every operation. To retire a publication, deploy the descriptor with `published: false` while retaining both its registration and `state_subsystem` for that deploy.
 
 ### A counter for each key
 
