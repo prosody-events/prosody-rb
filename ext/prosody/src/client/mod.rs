@@ -100,22 +100,8 @@ impl Client {
             .try_into()
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
-        let mock = consumer_builders
-            .consumer
-            .clone()
-            .build()
-            .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?
-            .mock;
-        let cassandra = if mock {
-            None
-        } else {
-            Some(
-                Into::<CassandraConfigurationBuilder>::into(config_ref)
-                    .build()
-                    .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?,
-            )
-        };
-        let client = new_erased(mode, &mut config_ref.into(), &consumer_builders, cassandra)
+        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
+        let client = new_erased(mode, &mut config_ref.into(), &consumer_builders, &cassandra)
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let bridge = BRIDGE
