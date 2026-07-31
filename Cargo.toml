@@ -15,7 +15,7 @@ magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
 # TODO: replace with the published prosody crate release once the backend change ships.
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "03f83b93ce598f4ded35396aa2f6d1ac30bfefdc", features = [
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "98248019cc454924149d9317bae801bc63a6acab", features = [
     "libz-static",
 ] }
 rb-sys = "0.9"
