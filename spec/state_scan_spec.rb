@@ -96,7 +96,7 @@ RSpec.describe "Prosody keyed state scans" do
           # handle via the surviving @native.scan seam) from N concurrent
           # sub-tasks so the one-token permit is exercised; reaching through the
           # ivar keeps this test-only with no new public surface.
-          scan = map.instance_variable_get(:@native).scan("forward")
+          scan = map.instance_variable_get(:@native).scan(:forward)
           collected = []
           barrier = Async::Barrier.new
           4.times do
