@@ -584,7 +584,7 @@ ITEMS = Prosody.map("items", published: true)
 
 owner = Prosody::Client.new(
   group_id: "cart-writer",
-  subsystem: "carts",
+  subsystem: "checkout",
   state_collections: [CART, ITEMS]
 )
 
@@ -596,10 +596,10 @@ cart.set({"sku" => "book"})
 Another client opens a reader by naming the subsystem and passing that same definition. The reader is independent of subscriptions and only returns committed state:
 
 ```ruby
-cart_reader = client.state("carts", CART)
+cart_reader = client.state("checkout", CART)
 cart = cart_reader.get("user-1")
 
-item_reader = client.state("carts", ITEMS)
+item_reader = client.state("checkout", ITEMS)
 item_reader.each_pair("user-1") do |map_key, item|
   # Entries are ordered by key.
 end
