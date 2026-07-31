@@ -13,6 +13,7 @@
 use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
+use crate::published::{NativePublishedDeque, NativePublishedMap, NativePublishedValue};
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
 use crate::{BRIDGE, ROOT_MOD, id};
@@ -20,13 +21,16 @@ use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
-use prosody::high_level::HighLevelClient;
+use prosody::high_level::erased::{
+    ErasedConsumerState, ErasedReadCache, SharedHighLevelClient, new_erased,
+};
 use prosody::high_level::mode::Mode;
-use prosody::high_level::state::ConsumerState;
 use prosody::propagator::new_propagator;
 use serde_magnus::deserialize;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{Span, debug, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -44,11 +48,11 @@ mod config;
 pub struct Client {
     /// The underlying Prosody client
     #[educe(Debug(ignore))]
-    inner: Arc<HighLevelClient<RubyHandler>>,
+    inner: SharedHighLevelClient<RubyHandler, prosody::JsonCodec>,
     /// Bridge for communicating between Rust and Ruby
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
-    propagator: TextMapCompositePropagator,
+    propagator: Arc<TextMapCompositePropagator>,
     /// PID at construction time, used to detect post-fork usage
     pid: u32,
 }
@@ -96,13 +100,9 @@ impl Client {
             .try_into()
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
-        let client = HighLevelClient::new(
-            mode,
-            &mut config_ref.into(),
-            &consumer_builders,
-            &config_ref.into(),
-        )
-        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
+        let client = new_erased(mode, &mut config_ref.into(), &consumer_builders, &cassandra)
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let bridge = BRIDGE
             .get()
@@ -113,9 +113,9 @@ impl Client {
             .clone();
 
         Ok(Self {
-            inner: Arc::new(client),
+            inner: client,
             bridge: bridge.clone(),
-            propagator: new_propagator(),
+            propagator: Arc::new(new_propagator()),
             pid: std::process::id(),
         })
     }
@@ -158,14 +158,13 @@ impl Client {
         let state: Result<&'static str, String> = this.bridge.wait_for(
             ruby,
             async move {
-                let view = inner.consumer_state().await;
-                match &*view {
-                    ConsumerState::Unconfigured => Ok("unconfigured"),
-                    ConsumerState::ConfigurationFailed(err) => {
-                        Err(format!("consumer configuration failed: {err:#}"))
+                match inner.consumer_state().await {
+                    ErasedConsumerState::Unconfigured => Ok("unconfigured"),
+                    ErasedConsumerState::ConfigurationFailed(error) => {
+                        Err(format!("consumer configuration failed: {error}"))
                     }
-                    ConsumerState::Configured(_) => Ok("configured"),
-                    ConsumerState::Running { .. } => Ok("running"),
+                    ErasedConsumerState::Configured(_) => Ok("configured"),
+                    ErasedConsumerState::Running { .. } => Ok("running"),
                 }
             },
             Span::current(),
@@ -215,7 +214,7 @@ impl Client {
         this.bridge
             .wait_for(
                 ruby,
-                async move { client.send(topic.as_str().into(), &key, value).await },
+                async move { client.send(topic.as_str().into(), key, value).await },
                 span,
             )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
@@ -342,6 +341,101 @@ impl Client {
     fn source_system(this: &Self) -> &str {
         this.inner.source_system()
     }
+
+    fn published_value(
+        ruby: &Ruby,
+        this: &Self,
+        subsystem: String,
+        name: String,
+        cache_seconds: Option<f64>,
+        cache_disabled: bool,
+    ) -> Result<NativePublishedValue, Error> {
+        Self::check_fork(ruby, this)?;
+        let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
+        let inner = this.inner.clone();
+        let reader = this
+            .bridge
+            .wait_for(
+                ruby,
+                async move { inner.value_state(subsystem, name, cache).await },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        Ok(NativePublishedValue {
+            inner: reader,
+            bridge: this.bridge.clone(),
+        })
+    }
+
+    fn published_map(
+        ruby: &Ruby,
+        this: &Self,
+        subsystem: String,
+        name: String,
+        cache_seconds: Option<f64>,
+        cache_disabled: bool,
+    ) -> Result<NativePublishedMap, Error> {
+        Self::check_fork(ruby, this)?;
+        let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
+        let inner = this.inner.clone();
+        let reader = this
+            .bridge
+            .wait_for(
+                ruby,
+                async move { inner.map_state(subsystem, name, cache).await },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        Ok(NativePublishedMap {
+            inner: reader,
+            bridge: this.bridge.clone(),
+            propagator: Arc::clone(&this.propagator),
+        })
+    }
+
+    fn published_deque(
+        ruby: &Ruby,
+        this: &Self,
+        subsystem: String,
+        name: String,
+        cache_seconds: Option<f64>,
+        cache_disabled: bool,
+    ) -> Result<NativePublishedDeque, Error> {
+        Self::check_fork(ruby, this)?;
+        let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
+        let inner = this.inner.clone();
+        let reader = this
+            .bridge
+            .wait_for(
+                ruby,
+                async move { inner.deque_state(subsystem, name, cache).await },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        Ok(NativePublishedDeque {
+            inner: reader,
+            bridge: this.bridge.clone(),
+            propagator: Arc::clone(&this.propagator),
+        })
+    }
+}
+
+fn read_cache(ruby: &Ruby, seconds: Option<f64>, disabled: bool) -> Result<ErasedReadCache, Error> {
+    match (seconds, disabled) {
+        (None, false) => Ok(ErasedReadCache::Inherit),
+        (None, true) => Ok(ErasedReadCache::Disabled),
+        (Some(seconds), false) if seconds.is_finite() && seconds > 0.0 => {
+            Ok(ErasedReadCache::Ttl(Duration::from_secs_f64(seconds)))
+        }
+        (Some(_), false) => Err(Error::new(
+            ruby.exception_arg_error(),
+            "read_cache must be greater than zero",
+        )),
+        (Some(_), true) => Err(Error::new(
+            ruby.exception_arg_error(),
+            "read_cache cannot specify a TTL and be disabled",
+        )),
+    }
 }
 
 /// Initializes the client module in Ruby.
@@ -376,6 +470,18 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_method(
         id!(ruby, "source_system"),
         method!(Client::source_system, 0),
+    )?;
+    class.define_method(
+        id!(ruby, "published_value"),
+        method!(Client::published_value, 4),
+    )?;
+    class.define_method(
+        id!(ruby, "published_map"),
+        method!(Client::published_map, 4),
+    )?;
+    class.define_method(
+        id!(ruby, "published_deque"),
+        method!(Client::published_deque, 4),
     )?;
 
     Ok(())

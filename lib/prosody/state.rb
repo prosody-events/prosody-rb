@@ -40,7 +40,25 @@ module Prosody
   # both serializes into `Configuration#state_collections` (via
   # {#to_state_config}) so the collection is registered before subscribe, and
   # drives {Prosody::Context#state} to vend the matching typed handle.
-  StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted, :keyset_limit, :capacity) do
+  StateAccess = Data.define(:vend_method, :wrapper, :published_vend_method, :published_wrapper)
+  private_constant :StateAccess
+  VALUE_ACCESS = StateAccess.new(vend_method: :value_state, wrapper: :ValueState,
+    published_vend_method: :published_value, published_wrapper: :PublishedValue)
+  MAP_ACCESS = StateAccess.new(vend_method: :map_state, wrapper: :MapState,
+    published_vend_method: :published_map, published_wrapper: :PublishedMap)
+  DEQUE_ACCESS = StateAccess.new(vend_method: :deque_state, wrapper: :DequeState,
+    published_vend_method: :published_deque, published_wrapper: :PublishedDeque)
+  MESSAGE_VALUE_ACCESS = StateAccess.new(vend_method: :message_value_state, wrapper: :ValueState,
+    published_vend_method: nil, published_wrapper: nil)
+  MESSAGE_MAP_ACCESS = StateAccess.new(vend_method: :message_map_state, wrapper: :MapState,
+    published_vend_method: nil, published_wrapper: nil)
+  MESSAGE_DEQUE_ACCESS = StateAccess.new(vend_method: :message_deque_state, wrapper: :DequeState,
+    published_vend_method: nil, published_wrapper: nil)
+  private_constant :VALUE_ACCESS, :MAP_ACCESS, :DEQUE_ACCESS,
+    :MESSAGE_VALUE_ACCESS, :MESSAGE_MAP_ACCESS, :MESSAGE_DEQUE_ACCESS
+
+  StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted,
+    :published, :read_cache, :keyset_limit, :capacity, :access) do
     # Serializes this definition into the native-registration hash, omitting
     # unset optionals so they fall back to the core defaults.
     #
@@ -49,6 +67,7 @@ module Prosody
       config = {name: name, kind: kind, payload: payload}
       config[:ttl_seconds] = ttl_seconds unless ttl_seconds.nil?
       config[:read_uncommitted] = read_uncommitted unless read_uncommitted.nil?
+      config[:published] = published unless published.nil?
       config[:keyset_limit] = keyset_limit unless keyset_limit.nil?
       config[:capacity] = capacity unless capacity.nil?
       config
@@ -61,9 +80,11 @@ module Prosody
   # @param ttl [Integer, nil] optional per-write TTL in whole seconds
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
-  def self.value(name, ttl: nil, read_uncommitted: nil)
+  def self.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
+      read_cache: read_cache, keyset_limit: nil, capacity: nil,
+      access: VALUE_ACCESS)
   end
 
   # Defines a `String`-keyed ordered map JSON collection.
@@ -73,9 +94,11 @@ module Prosody
   # @param keyset_limit [Integer, nil] optional map-only keyset bound (`0..=4096`)
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
-  def self.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)
+  def self.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: keyset_limit, capacity: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
+      read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
+      access: MAP_ACCESS)
   end
 
   # Defines a deque JSON collection.
@@ -87,9 +110,11 @@ module Prosody
   #   and mutable across deploys, never persisted (see {DequeState#push}).
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
-  def self.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)
+  def self.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: capacity)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
+      read_cache: read_cache, keyset_limit: nil, capacity: capacity,
+      access: DEQUE_ACCESS)
   end
 
   # Defines a single-value Kafka-message collection (items are full messages).
@@ -100,7 +125,9 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.message_value(name, ttl: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
+      read_cache: nil, keyset_limit: nil, capacity: nil,
+      access: MESSAGE_VALUE_ACCESS)
   end
 
   # Defines a `String`-keyed ordered map Kafka-message collection.
@@ -112,7 +139,9 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: keyset_limit, capacity: nil)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
+      read_cache: nil, keyset_limit: keyset_limit, capacity: nil,
+      access: MESSAGE_MAP_ACCESS)
   end
 
   # Defines a deque Kafka-message collection.
@@ -126,21 +155,26 @@ module Prosody
   # @return [StateDefinition] a frozen definition
   def self.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, keyset_limit: nil, capacity: capacity)
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
+      read_cache: nil, keyset_limit: nil, capacity: capacity,
+      access: MESSAGE_DEQUE_ACCESS)
   end
 
-  # Internal routing tables shared by the state wrappers.
+  # Shared state wrapper behavior.
   module State
-    # Maps a definition's `[kind, payload]` to the native vend method and the
-    # public wrapper class that wraps the vended native handle.
-    VEND = {
-      %w[value json] => [:value_state, :ValueState],
-      %w[map json] => [:map_state, :MapState],
-      %w[deque json] => [:deque_state, :DequeState],
-      %w[value message] => [:message_value_state, :ValueState],
-      %w[map message] => [:message_map_state, :MapState],
-      %w[deque message] => [:message_deque_state, :DequeState]
-    }.freeze
+    module Reading
+      # Opens a read-only view of a published JSON collection.
+      def state(subsystem, definition)
+        access = definition.access
+        if access.published_vend_method.nil? || access.published_wrapper.nil?
+          raise ArgumentError, "published state readers support JSON collections only"
+        end
+        cache_seconds = definition.read_cache unless definition.read_cache == false
+        native = public_send(access.published_vend_method, subsystem.to_s, definition.name, cache_seconds,
+          definition.read_cache == false)
+        Prosody.const_get(access.published_wrapper).new(native)
+      end
+    end
 
     # Adds keyed-state vending to the native context. Included into
     # {Prosody::Context}; kept as a module so the routing can be exercised
@@ -161,12 +195,8 @@ module Prosody
         cache_key = "#{definition.kind}:#{definition.payload}:#{definition.name}"
         return cache[cache_key] if cache.key?(cache_key)
 
-        vend_method, wrapper = VEND.fetch([definition.kind, definition.payload]) do
-          raise TransientStateError,
-            "state: unknown collection kind/payload #{[definition.kind, definition.payload].inspect}"
-        end
-        native = public_send(vend_method, definition.name)
-        cache[cache_key] = Prosody.const_get(wrapper).new(native)
+        native = public_send(definition.access.vend_method, definition.name)
+        cache[cache_key] = Prosody.const_get(definition.access.wrapper).new(native)
       end
     end
 
@@ -184,19 +214,104 @@ module Prosody
       # selects the native cursor seam — the default `:scan` yields values (or
       # `[key, value]` pairs), `:keys` yields bare map keys.
       def scan_each(direction, opener = :scan)
-        scan = @native.public_send(opener, direction.to_s)
-        begin
-          # `nil` is the exhaustion sentinel (unambiguous under the null ban);
-          # terminate on it explicitly rather than on falsiness, so a legal
-          # stored `false` (or a `[key, false]` pair, always a truthy Array)
-          # does not stop iteration and drop the tail after it.
-          until (item = scan.next).nil?
-            yield item
-          end
-        ensure
-          scan.close
-        end
+        scan_items(@native.public_send(opener, direction)) { |item| yield item }
       end
+
+      def scan_items(scan)
+        # `nil` is the exhaustion sentinel (unambiguous under the null ban);
+        # terminate on it explicitly rather than on falsiness, so a legal
+        # stored `false` (or a `[key, false]` pair, always a truthy Array)
+        # does not stop iteration and drop the tail after it.
+        until (item = scan.next).nil?
+          yield item
+        end
+      ensure
+        scan.close
+      end
+    end
+  end
+
+  class Client
+    include State::Reading
+  end
+
+  class PublishedValue
+    def initialize(native) = @native = native
+    def get(key) = @native.get(key.to_s)
+  end
+
+  class PublishedMap
+    include State::Scanning
+
+    def initialize(native) = @native = native
+    def get(key, map_key) = @native.get(key.to_s, map_key.to_s)
+    def get_many(key, map_keys) = @native.get_many(key.to_s, map_keys.map(&:to_s))
+    def key?(key, map_key) = @native.contains_key(key.to_s, map_key.to_s)
+    alias_method :has_key?, :key?
+    alias_method :include?, :key?
+    alias_method :member?, :key?
+
+    def each_pair(key, &block) = traverse(key, :forward, &block)
+    def reverse_each_pair(key, &block) = traverse(key, :backward, &block)
+    def each_key(key, &block) = traverse_keys(key, :forward, &block)
+    def reverse_each_key(key, &block) = traverse_keys(key, :backward, &block)
+    def each_value(key, &block) = traverse_values(key, :forward, &block)
+    def reverse_each_value(key, &block) = traverse_values(key, :backward, &block)
+    alias_method :each, :each_pair
+
+    private
+
+    def traverse(key, direction)
+      return enum_for(__method__, key, direction) unless block_given?
+
+      scan_items(@native.scan(key.to_s, direction)) { |entry| yield(*entry) }
+    end
+
+    def traverse_keys(key, direction)
+      return enum_for(__method__, key, direction) unless block_given?
+
+      scan_items(@native.keys(key.to_s, direction)) { |map_key| yield map_key }
+    end
+
+    def traverse_values(key, direction)
+      return enum_for(__method__, key, direction) unless block_given?
+
+      scan_items(@native.scan(key.to_s, direction)) { |entry| yield entry[1] }
+    end
+  end
+
+  class PublishedDeque
+    include State::Scanning
+
+    def initialize(native) = @native = native
+
+    def get(key, index)
+      unless index.is_a?(Integer)
+        raise TransientStateError, "get: index must be an Integer, got #{index.inspect}"
+      end
+
+      return @native.get(key.to_s, index) unless index.negative?
+      return last(key) if index == -1
+
+      resolved = length(key) + index
+      resolved.negative? ? nil : @native.get(key.to_s, resolved)
+    end
+
+    def length(key) = @native.length(key.to_s)
+    alias_method :size, :length
+    def empty?(key) = @native.is_empty(key.to_s)
+    def first(key) = @native.peek_front(key.to_s)
+    def last(key) = @native.peek_back(key.to_s)
+
+    def each(key, &block) = traverse(key, :forward, &block)
+    def reverse_each(key, &block) = traverse(key, :backward, &block)
+
+    private
+
+    def traverse(key, direction)
+      return enum_for(__method__, key, direction) unless block_given?
+
+      scan_items(@native.scan(key.to_s, direction)) { |item| yield item }
     end
   end
 
@@ -348,6 +463,8 @@ module Prosody
     # @yieldparam key [String]
     # @return [Enumerator, void]
     def reverse_each_key(&block) = traverse_keys(:backward, &block)
+    def each_value(&block) = traverse_values(:forward, &block)
+    def reverse_each_value(&block) = traverse_values(:backward, &block)
 
     # --- idiomatic Hash-style aliases and conveniences ------------------
     # Each is composed from the canonical ops above and adds no capability
@@ -483,6 +600,12 @@ module Prosody
       return enum_for(:traverse_keys, direction) unless block_given?
 
       scan_each(direction, :keys) { |key| yield key }
+    end
+
+    def traverse_values(direction)
+      return enum_for(:traverse_values, direction) unless block_given?
+
+      scan_each(direction) { |entry| yield entry[1] }
     end
   end
 

@@ -241,6 +241,10 @@ module Prosody
     def state_collections: () -> Array[untyped]?
     def state_collections=: (untyped) -> Array[untyped]
 
+    # Subsystem under which published keyed-state collections are advertised.
+    def state_subsystem: () -> String?
+    def state_subsystem=: (_ToS) -> String
+
     # Root directory for the local keyed-state cache. Falls back to
     # PROSODY_STATE_CACHE_DIR. Must not be an empty string.
     def state_cache_dir: () -> String?
@@ -251,6 +255,14 @@ module Prosody
     # PROSODY_STATE_CACHE_SIZE_BYTES, then the engine default.
     def state_cache_size_bytes: () -> Integer?
     def state_cache_size_bytes=: (Integer | _ToInt) -> Integer
+
+    # Capacity of the published-state read cache, in bytes.
+    def state_read_cache_size_bytes: () -> Integer?
+    def state_read_cache_size_bytes=: (Integer | _ToInt) -> Integer
+
+    # Default published-read cache TTL in seconds, or false to bypass it.
+    def state_read_cache: () -> (Float | false)?
+    def state_read_cache=: (Numeric | false) -> (Float | false)
 
     # Delay in whole seconds between staging a provisional cell and the recovery
     # sweep. Falls back to PROSODY_STATE_RECOVERY_DELAY (read by core).

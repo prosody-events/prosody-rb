@@ -26,6 +26,7 @@ mod client;
 mod gvl;
 mod handler;
 mod logging;
+mod published;
 mod scheduler;
 mod tracing_util;
 mod util;
@@ -75,6 +76,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     admin::init(ruby)?;
     bridge::init(ruby)?;
     handler::init(ruby)?;
+    published::init(ruby)?;
     client::init(ruby)?;
     util::init(ruby)?;
 
