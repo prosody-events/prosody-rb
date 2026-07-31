@@ -222,7 +222,7 @@ pub struct NativeConfiguration {
     state_collections: Option<Vec<StateCollectionConfig>>,
 
     /// Subsystem under which published collections are advertised.
-    state_subsystem: Option<String>,
+    subsystem: Option<String>,
 
     /// Root directory for the local keyed-state cache. Must not be empty.
     state_cache_dir: Option<String>,
@@ -1165,7 +1165,7 @@ fn build_keyed_state_config(
         }
     }
 
-    if let Some(subsystem) = &config.state_subsystem {
+    if let Some(subsystem) = &config.subsystem {
         builder.subsystem(Some(
             SubsystemName::try_new(subsystem).map_err(|error| error.to_string())?,
         ));

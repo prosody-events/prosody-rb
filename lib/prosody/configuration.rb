@@ -293,7 +293,7 @@ module Prosody
       }
 
     # Subsystem under which published keyed-state collections are advertised.
-    config_param :state_subsystem, converter: lambda(&:to_s)
+    config_param :subsystem, converter: lambda(&:to_s)
 
     # Disk workspace for the local keyed-state cache. Each live client
     # needs its own directory. Falls back to the

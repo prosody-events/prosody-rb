@@ -242,8 +242,8 @@ module Prosody
     def state_collections=: (untyped) -> Array[untyped]
 
     # Subsystem under which published keyed-state collections are advertised.
-    def state_subsystem: () -> String?
-    def state_subsystem=: (_ToS) -> String
+    def subsystem: () -> String?
+    def subsystem=: (_ToS) -> String
 
     # Root directory for the local keyed-state cache. Falls back to
     # PROSODY_STATE_CACHE_DIR. Must not be an empty string.

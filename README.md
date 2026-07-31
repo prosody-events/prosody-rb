@@ -275,7 +275,7 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | Option / Environment Variable | Description | Default |
 |-------------------------------|-------------|---------|
 | `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
-| `state_subsystem` / - | Subsystem name used to advertise published collections | (none) |
+| `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise published collections | (none) |
 | `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Disk workspace for the local keyed-state cache; each live client needs its own directory (it is locked exclusively) | per-client temp dir |
 | `state_cache_size_bytes` / `PROSODY_STATE_CACHE_SIZE_BYTES` | Capacity of the in-memory keyed-state cache, in bytes; must be greater than 0. One cache is shared by all partition keyspaces | engine default |
 | `state_read_cache_size_bytes` / `PROSODY_STATE_READ_CACHE_SIZE_BYTES` | Capacity of the published-state read cache, in bytes; must be greater than 0 | state cache size, then 1 MiB |
@@ -576,7 +576,7 @@ Most collections should have a TTL. Set it comfortably beyond the longest timer 
 
 ### Published state
 
-Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, gives its state a `state_subsystem`, and registers the definition as usual:
+Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, names its `subsystem`, and registers the definition as usual:
 
 ```ruby
 CART = Prosody.value("cart", published: true, read_cache: 2)
@@ -584,7 +584,7 @@ ITEMS = Prosody.map("items", published: true)
 
 owner = Prosody::Client.new(
   group_id: "cart-writer",
-  state_subsystem: "carts",
+  subsystem: "carts",
   state_collections: [CART, ITEMS]
 )
 
@@ -607,7 +607,7 @@ end
 
 Published readers provide the owned collection's read operations without its mutations. An owned handle gets the user key from the current event; a published reader is outside a handler, so every operation takes that key explicitly. Map and deque traversal returns an `Enumerator` when no block is given and reads in chunks rather than loading the entire collection. Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
 
-The default cache window is five seconds unless the client configuration changes it. Set `read_cache:` on a definition to choose a different freshness window, or `read_cache: false` to read durable storage on every operation. To stop publishing a collection, deploy its definition with `published: false` while keeping it registered and retaining `state_subsystem` for that deployment.
+The default cache window is five seconds unless the client configuration changes it. Set `read_cache:` on a definition to choose a different freshness window, or `read_cache: false` to read durable storage on every operation. To stop publishing a collection, deploy its definition with `published: false` while keeping it registered and retaining `subsystem` for that deployment.
 
 ### A counter for each key
 
