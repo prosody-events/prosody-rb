@@ -576,27 +576,38 @@ Most collections should have a TTL. Set it comfortably beyond the longest timer 
 
 ### Published state
 
-JSON value, map, and deque collections can be read from another consumer group without subscribing or acquiring its partitions. The same descriptor configures the owner and opens the reader:
+Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, gives its state a `state_subsystem`, and registers the definition as usual:
 
 ```ruby
 CART = Prosody.value("cart", published: true, read_cache: 2)
+ITEMS = Prosody.map("items", published: true)
 
 owner = Prosody::Client.new(
   group_id: "cart-writer",
   state_subsystem: "carts",
-  state_collections: [CART]
+  state_collections: [CART, ITEMS]
 )
 
-# Inside the owner's handler:
+# Inside the owner's handler, the event supplies the user key.
 cart = context.state(CART)
 cart.set({"sku" => "book"})
-
-# From another client:
-cart_reader = client.state("carts", CART)
-cart = cart_reader.get("user-1")
 ```
 
-Published maps provide the same reads as owned maps: `get`, `get_many`, `key?`, `each_pair`, `each_key`, and `each_value`, with reverse traversal variants. Published deques likewise provide `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. An owned handle gets its state key from the current event; a published reader is outside a handler, so each operation receives that state key explicitly. Directions remain Ruby symbols internally, and all traversal uses the same chunked cursor as owned state. Set `read_cache: false` on the descriptor to read durable storage on every operation. To retire a publication, deploy the descriptor with `published: false` while retaining both its registration and `state_subsystem` for that deploy.
+Another client opens a reader by naming the subsystem and passing that same definition. The reader is independent of subscriptions and only returns committed state:
+
+```ruby
+cart_reader = client.state("carts", CART)
+cart = cart_reader.get("user-1")
+
+item_reader = client.state("carts", ITEMS)
+item_reader.each_pair("user-1") do |map_key, item|
+  # Entries are ordered by key.
+end
+```
+
+Published readers provide the owned collection's read operations without its mutations. An owned handle gets the user key from the current event; a published reader is outside a handler, so every operation takes that key explicitly. Map and deque traversal returns an `Enumerator` when no block is given and reads in chunks rather than loading the entire collection. Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
+
+The default cache window is five seconds unless the client configuration changes it. Set `read_cache:` on a definition to choose a different freshness window, or `read_cache: false` to read durable storage on every operation. To stop publishing a collection, deploy its definition with `published: false` while keeping it registered and retaining `state_subsystem` for that deployment.
 
 ### A counter for each key
 
@@ -1063,6 +1074,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `consumer_state`: Get the current state of the consumer (`:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
+- `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
 - `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
 - `unsubscribe`: Unsubscribe from messages and shut down the consumer.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
@@ -1154,7 +1166,9 @@ Definition constructors (each returns a frozen definition object used both in `C
 - `Prosody.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
-- `Prosody.message_deque(name, ttl: nil, read_uncommitted: nil)`
+- `Prosody.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)`
+
+Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`. `Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `each_pair`, `each_key`, `each_value`, and their reverse variants. `Prosody::PublishedDeque` provides `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. Traversal methods return an `Enumerator` when no block is given.
 
 `Prosody::ValueState`:
 
