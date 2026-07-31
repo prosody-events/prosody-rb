@@ -3,6 +3,10 @@
 require "prosody"
 
 RSpec.describe "Prosody.logger" do
+  it "exposes telemetry lifecycle functions" do
+    expect(Prosody).to respond_to(:flush_telemetry, :shutdown_telemetry)
+  end
+
   around do |example|
     original = Prosody.logger
     Prosody.logger = nil

@@ -12,6 +12,12 @@ module Prosody
   # Sets the module-level logger. Pass nil to reset to the default.
   def self.logger=: (Logger?) -> Logger?
 
+  # Exports buffered telemetry without shutting down the process-global pipeline.
+  def self.flush_telemetry: () -> void
+
+  # Exports buffered telemetry and shuts down the process-global pipeline.
+  def self.shutdown_telemetry: () -> void
+
   # Wrapper for dynamically-typed results from async operations.
   # This is an internal class used for bridging Rust and Ruby.
   class DynamicResult
