@@ -179,13 +179,13 @@ RSpec.describe "Prosody keyed state" do
     end
 
     it "rejects a zero in-memory block-cache size" do
-      error = client_error(state_cache_size_bytes: 0)
-      expect(error.message).to match(/state_cache_size_bytes.*greater than 0/)
+      error = client_error(state_owned_cache_size: "0")
+      expect(error.message).to match(/state_owned_cache_size/)
     end
 
     it "rejects a zero published-read cache size" do
-      error = client_error(state_read_cache_size_bytes: 0)
-      expect(error.message).to match(/state_read_cache_size_bytes.*greater than 0/)
+      error = client_error(state_read_cache_size: "0")
+      expect(error.message).to match(/state_read_cache_size/)
     end
 
     it "rejects an ambiguous published-read cache policy" do

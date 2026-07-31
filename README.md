@@ -277,8 +277,8 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
 | `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise published collections | (none) |
 | `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Disk workspace for the local keyed-state cache; each live client needs its own directory (it is locked exclusively) | per-client temp dir |
-| `state_cache_size_bytes` / `PROSODY_STATE_CACHE_SIZE_BYTES` | Capacity of the in-memory keyed-state cache, in bytes; must be greater than 0. One cache is shared by all partition keyspaces | engine default |
-| `state_read_cache_size_bytes` / `PROSODY_STATE_READ_CACHE_SIZE_BYTES` | Capacity of the published-state read cache, in bytes; must be greater than 0 | state cache size, then 1 MiB |
+| `state_owned_cache_size` / `PROSODY_STATE_OWNED_CACHE_SIZE` | Capacity of the owning keyed-state cache; accepts sizes such as `64 MiB` or `500 MB` | engine default |
+| `state_read_cache_size` / `PROSODY_STATE_READ_CACHE_SIZE` | Capacity of the published-state read cache; accepts sizes such as `1 MiB` | owned cache size, then 1 MiB |
 | `state_read_cache` / `PROSODY_STATE_READ_CACHE_TTL` | Default published-read cache TTL in seconds, or `false` to bypass it | 5s |
 | `state_recovery_delay` / `PROSODY_STATE_RECOVERY_DELAY` | Whole-second delay between staging a provisional cell and the recovery sweep; every collection TTL must strictly exceed it | 30s |
 

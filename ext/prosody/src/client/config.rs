@@ -7,7 +7,6 @@
 //! builders.
 
 use magnus::{Error, Ruby, Value};
-use prosody::JsonCodec;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::KeyedStateConfiguration;
@@ -32,11 +31,12 @@ use prosody::state::order_codec::Utf8KeyCodec;
 use prosody::subsystem::SubsystemName;
 use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 use prosody::timers::duration::CompactDuration;
+use prosody::{ByteSize, JsonCodec};
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
 use std::collections::HashSet;
-use std::num::{NonZeroU64, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -227,11 +227,11 @@ pub struct NativeConfiguration {
     /// Root directory for the local keyed-state cache. Must not be empty.
     state_cache_dir: Option<String>,
 
-    /// Capacity of the in-memory keyed-state cache, in bytes.
-    state_cache_size_bytes: Option<u64>,
+    /// Capacity of the owning keyed-state cache.
+    state_owned_cache_size: Option<String>,
 
-    /// Byte budget for the published-state read-through cache.
-    state_read_cache_size_bytes: Option<u64>,
+    /// Capacity of the published-state read-through cache.
+    state_read_cache_size: Option<String>,
 
     /// Default cache policy for published-state reads.
     state_read_cache: Option<ReadCacheConfig>,
@@ -1134,16 +1134,18 @@ fn build_keyed_state_config(
         builder.recovery_delay(CompactDuration::new(seconds));
     }
 
-    if let Some(bytes) = config.state_cache_size_bytes {
-        let bytes = NonZeroU64::new(bytes)
-            .ok_or_else(|| "state_cache_size_bytes: must be greater than 0".to_owned())?;
-        builder.cache_size_bytes(Some(bytes));
+    if let Some(size) = &config.state_owned_cache_size {
+        let size = size
+            .parse::<ByteSize>()
+            .map_err(|error| format!("state_owned_cache_size: {error}"))?;
+        builder.owned_cache_size(Some(size));
     }
 
-    if let Some(bytes) = config.state_read_cache_size_bytes {
-        let bytes = NonZeroU64::new(bytes)
-            .ok_or_else(|| "state_read_cache_size_bytes: must be greater than 0".to_owned())?;
-        builder.read_cache_size_bytes(Some(bytes));
+    if let Some(size) = &config.state_read_cache_size {
+        let size = size
+            .parse::<ByteSize>()
+            .map_err(|error| format!("state_read_cache_size: {error}"))?;
+        builder.read_cache_size(Some(size));
     }
 
     if let Some(cache) = &config.state_read_cache {

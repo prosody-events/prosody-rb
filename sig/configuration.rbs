@@ -252,13 +252,13 @@ module Prosody
 
     # Capacity of the in-memory keyed-state cache, in bytes. Must be positive.
     # Falls back to
-    # PROSODY_STATE_CACHE_SIZE_BYTES, then the engine default.
-    def state_cache_size_bytes: () -> Integer?
-    def state_cache_size_bytes=: (Integer | _ToInt) -> Integer
+    # PROSODY_STATE_OWNED_CACHE_SIZE, then the engine default.
+    def state_owned_cache_size: () -> String?
+    def state_owned_cache_size=: (String | _ToS) -> String
 
     # Capacity of the published-state read cache, in bytes.
-    def state_read_cache_size_bytes: () -> Integer?
-    def state_read_cache_size_bytes=: (Integer | _ToInt) -> Integer
+    def state_read_cache_size: () -> String?
+    def state_read_cache_size=: (String | _ToS) -> String
 
     # Default published-read cache TTL in seconds, or false to bypass it.
     def state_read_cache: () -> (Float | false)?

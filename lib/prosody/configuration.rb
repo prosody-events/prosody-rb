@@ -300,13 +300,11 @@ module Prosody
     # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
     config_param :state_cache_dir, converter: lambda(&:to_s)
 
-    # Capacity of the in-memory keyed-state cache, in bytes. Falls back to
-    # PROSODY_STATE_CACHE_SIZE_BYTES, then
-    # the storage-engine default.
-    config_param :state_cache_size_bytes, converter: ->(v) { Integer(v) }
+    # Capacity of the owning keyed-state cache, such as "64 MiB".
+    config_param :state_owned_cache_size, converter: lambda(&:to_s)
 
-    # Byte budget for the published-state read-through cache.
-    config_param :state_read_cache_size_bytes, converter: ->(v) { Integer(v) }
+    # Capacity of the published-state read-through cache, such as "1 MiB".
+    config_param :state_read_cache_size, converter: lambda(&:to_s)
 
     # Default published-read cache policy in seconds, or false to bypass it.
     config_param :state_read_cache,
