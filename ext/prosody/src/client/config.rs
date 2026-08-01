@@ -186,18 +186,18 @@ pub struct NativeConfiguration {
     /// Sliding window duration (in seconds) for failure rate tracking.
     defer_failure_window: Option<f32>,
 
-    /// Cache size for defer middleware.
-    defer_cache_size: Option<u32>,
+    /// Maximum messages retained by the shared Kafka loader.
+    loader_cache_size: Option<u32>,
 
     /// Maximum number of deferred store entries kept in the write-through cache
     /// per Cassandra defer store.
     defer_store_cache_size: Option<u32>,
 
-    /// Timeout for Kafka seek operations (in seconds).
-    defer_seek_timeout: Option<f32>,
+    /// Timeout for Kafka loader seek operations (in seconds).
+    loader_seek_timeout: Option<f32>,
 
     /// Messages to read sequentially before seeking.
-    defer_discard_threshold: Option<i64>,
+    loader_discard_threshold: Option<i64>,
 
     // Timeout configuration
     /// Fixed timeout duration for handler execution (in seconds).
@@ -1235,24 +1235,22 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             consumer.timer_spans(relation);
         }
 
-        // The Kafka message loader that the defer middleware uses to reload
-        // failed messages is now consumer-wide configuration. Route the
-        // defer-loader tuning knobs onto the consumer builder's loader.
-        if config.defer_cache_size.is_some()
-            || config.defer_seek_timeout.is_some()
-            || config.defer_discard_threshold.is_some()
+        // Route the shared Kafka message loader settings onto the consumer.
+        if config.loader_cache_size.is_some()
+            || config.loader_seek_timeout.is_some()
+            || config.loader_discard_threshold.is_some()
         {
             let mut loader = KafkaLoaderConfiguration::builder();
 
-            if let Some(cache_size) = &config.defer_cache_size {
+            if let Some(cache_size) = &config.loader_cache_size {
                 loader.cache_size(*cache_size as usize);
             }
 
-            if let Some(seek_timeout) = &config.defer_seek_timeout {
+            if let Some(seek_timeout) = &config.loader_seek_timeout {
                 loader.seek_timeout(Duration::from_secs_f32(*seek_timeout));
             }
 
-            if let Some(discard_threshold) = &config.defer_discard_threshold {
+            if let Some(discard_threshold) = &config.loader_discard_threshold {
                 loader.discard_threshold(*discard_threshold);
             }
 

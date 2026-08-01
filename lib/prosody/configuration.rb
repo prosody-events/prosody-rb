@@ -131,7 +131,7 @@ module Prosody
     config_param :max_retry_delay, converter: ->(v) { duration_converter(v) }
 
     # Global shared cache capacity across all partitions for message deduplication.
-    # Default 8192. Set to 0 to disable deduplication entirely.
+    # Must be at least 1. Default: 8192.
     config_param :idempotence_cache_size, converter: ->(v) { Integer(v) }
 
     # Version string for cache-busting deduplication hashes. Changing this
@@ -241,17 +241,22 @@ module Prosody
     # Sliding window duration (in seconds) for failure rate tracking.
     config_param :defer_failure_window, converter: ->(v) { duration_converter(v) }
 
-    # Cache size for defer middleware.
-    config_param :defer_cache_size, converter: ->(v) { Integer(v) }
-
     # Maximum deferred store cache entries per Cassandra defer store. Env: PROSODY_DEFER_STORE_CACHE_SIZE
     config_param :defer_store_cache_size, converter: ->(v) { Integer(v) }
 
-    # Timeout for Kafka seek operations (in seconds).
-    config_param :defer_seek_timeout, converter: ->(v) { duration_converter(v) }
+    # Kafka message loader configuration
+    #
+    # Maximum messages retained by the shared Kafka loader.
+    # Env: PROSODY_LOADER_CACHE_SIZE. Default: 1024.
+    config_param :loader_cache_size, converter: ->(v) { Integer(v) }
 
-    # Messages to read sequentially before seeking.
-    config_param :defer_discard_threshold, converter: ->(v) { Integer(v) }
+    # Timeout for Kafka loader seek operations (in seconds).
+    # Env: PROSODY_LOADER_SEEK_TIMEOUT. Default: 30 seconds.
+    config_param :loader_seek_timeout, converter: ->(v) { duration_converter(v) }
+
+    # Sequential-read distance before the loader seeks.
+    # Env: PROSODY_LOADER_DISCARD_THRESHOLD. Default: 100.
+    config_param :loader_discard_threshold, converter: ->(v) { Integer(v) }
 
     # Timeout configuration
     #
@@ -292,7 +297,8 @@ module Prosody
         list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
       }
 
-    # Subsystem under which published keyed-state collections are advertised.
+    # Subsystem under which published JSON collections are advertised.
+    # Uses PROSODY_SUBSYSTEM when omitted. Published collections require it.
     config_param :subsystem, converter: lambda(&:to_s)
 
     # Disk workspace for the local keyed-state cache. Each live client
@@ -300,13 +306,18 @@ module Prosody
     # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
     config_param :state_cache_dir, converter: lambda(&:to_s)
 
-    # Capacity of the owning keyed-state cache, such as "64 MiB".
+    # Capacity of the owning keyed-state cache, such as "64 MiB". Uses
+    # PROSODY_STATE_OWNED_CACHE_SIZE when omitted. Otherwise, the engine
+    # selects its default.
     config_param :state_owned_cache_size, converter: lambda(&:to_s)
 
     # Capacity of the published-state read-through cache, such as "1 MiB".
+    # Uses PROSODY_STATE_READ_CACHE_SIZE when omitted. It then uses the owned
+    # cache size when set, or 1 MiB when both sizes are unset.
     config_param :state_read_cache_size, converter: lambda(&:to_s)
 
     # Default published-read cache policy in seconds, or false to bypass it.
+    # Uses PROSODY_STATE_READ_CACHE_TTL when omitted, then 5 seconds.
     config_param :state_read_cache,
       converter: ->(v) { (v == true || v == false) ? v : Float(v) }
 
