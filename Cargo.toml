@@ -14,8 +14,8 @@ futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
-# TODO: replace with the published prosody crate release (prosody = "x.y.z") once the flush/shutdown change ships; pinned to merged commit e9b492f until then.
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "e9b492fc6c75bafce4d28bbea205aebf5baaa2d3", features = [
+# TODO: replace with the published prosody crate release once the backend change ships.
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "1add1b742a4118142ea536b96d3dc8237ae16897", features = [
     "libz-static",
 ] }
 rb-sys = "0.9"

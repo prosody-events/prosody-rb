@@ -199,21 +199,21 @@ module Prosody
     def defer_failure_window: () -> Float?
     def defer_failure_window=: (Numeric) -> Float
 
-    # Defer cache size
-    def defer_cache_size: () -> Integer?
-    def defer_cache_size=: (Integer | _ToInt) -> Integer
-
     # Maximum deferred store cache entries. Env: PROSODY_DEFER_STORE_CACHE_SIZE
     def defer_store_cache_size: () -> Integer?
     def defer_store_cache_size=: (Integer | _ToInt) -> Integer
 
-    # Defer seek timeout (seconds)
-    def defer_seek_timeout: () -> Float?
-    def defer_seek_timeout=: (Numeric) -> Float
+    # Maximum messages retained by the shared Kafka loader. Env: PROSODY_LOADER_CACHE_SIZE. Default: 1024
+    def loader_cache_size: () -> Integer?
+    def loader_cache_size=: (Integer | _ToInt) -> Integer
 
-    # Defer discard threshold (messages)
-    def defer_discard_threshold: () -> Integer?
-    def defer_discard_threshold=: (Integer | _ToInt) -> Integer
+    # Kafka loader seek timeout (seconds). Env: PROSODY_LOADER_SEEK_TIMEOUT. Default: 30
+    def loader_seek_timeout: () -> Float?
+    def loader_seek_timeout=: (Numeric) -> Float
+
+    # Sequential-read distance before the loader seeks. Env: PROSODY_LOADER_DISCARD_THRESHOLD. Default: 100
+    def loader_discard_threshold: () -> Integer?
+    def loader_discard_threshold=: (Integer | _ToInt) -> Integer
 
     # Handler execution timeout (seconds)
     def timeout: () -> Float?
@@ -241,16 +241,32 @@ module Prosody
     def state_collections: () -> Array[untyped]?
     def state_collections=: (untyped) -> Array[untyped]
 
+    # Subsystem under which published JSON collections are advertised.
+    # Uses PROSODY_SUBSYSTEM when omitted. Published collections require it.
+    def subsystem: () -> String?
+    def subsystem=: (_ToS) -> String
+
     # Root directory for the local keyed-state cache. Falls back to
     # PROSODY_STATE_CACHE_DIR. Must not be an empty string.
     def state_cache_dir: () -> String?
     def state_cache_dir=: (_ToS) -> String
 
-    # Capacity of the in-memory keyed-state cache, in bytes. Must be positive.
-    # Falls back to
-    # PROSODY_STATE_CACHE_SIZE_BYTES, then the engine default.
-    def state_cache_size_bytes: () -> Integer?
-    def state_cache_size_bytes=: (Integer | _ToInt) -> Integer
+    # Capacity of the owning keyed-state cache. Accepts a human-readable size.
+    # Uses PROSODY_STATE_OWNED_CACHE_SIZE when omitted. Otherwise, the engine
+    # selects its default.
+    def state_owned_cache_size: () -> String?
+    def state_owned_cache_size=: (String | _ToS) -> String
+
+    # Capacity of the published-state read cache. Uses
+    # PROSODY_STATE_READ_CACHE_SIZE when omitted. It then uses the owned cache
+    # size when set, or 1 MiB when both sizes are unset.
+    def state_read_cache_size: () -> String?
+    def state_read_cache_size=: (String | _ToS) -> String
+
+    # Default published-read cache TTL in seconds, or false to bypass it. Uses
+    # PROSODY_STATE_READ_CACHE_TTL when omitted, then 5 seconds.
+    def state_read_cache: () -> (Float | false)?
+    def state_read_cache=: (Numeric | false) -> (Float | false)
 
     # Delay in whole seconds between staging a provisional cell and the recovery
     # sweep. Falls back to PROSODY_STATE_RECOVERY_DELAY (read by core).

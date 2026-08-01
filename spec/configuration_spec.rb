@@ -53,17 +53,19 @@ RSpec.describe Prosody::Configuration do
       expect(config.defer_max_delay).to be_nil
       expect(config.defer_failure_threshold).to be_nil
       expect(config.defer_failure_window).to be_nil
-      expect(config.defer_cache_size).to be_nil
+      expect(config.loader_cache_size).to be_nil
       expect(config.defer_store_cache_size).to be_nil
-      expect(config.defer_seek_timeout).to be_nil
-      expect(config.defer_discard_threshold).to be_nil
+      expect(config.loader_seek_timeout).to be_nil
+      expect(config.loader_discard_threshold).to be_nil
       expect(config.telemetry_topic).to be_nil
       expect(config.telemetry_enabled).to be_nil
       expect(config.idempotence_version).to be_nil
       expect(config.idempotence_ttl).to be_nil
       expect(config.message_spans).to be_nil
       expect(config.timer_spans).to be_nil
-      expect(config.state_cache_size_bytes).to be_nil
+      expect(config.state_owned_cache_size).to be_nil
+      expect(config.state_read_cache_size).to be_nil
+      expect(config.state_read_cache).to be_nil
     end
   end
 
@@ -121,7 +123,7 @@ RSpec.describe Prosody::Configuration do
         defer_base: 1.0,
         defer_max_delay: 86400.0,
         defer_failure_window: 300.0,
-        defer_seek_timeout: 30.0,
+        loader_seek_timeout: 30.0,
         idempotence_ttl: 604_800.0
       }.each do |field, value|
         it "sets and gets #{field}" do
@@ -143,9 +145,9 @@ RSpec.describe Prosody::Configuration do
         max_retries: 3,
         scheduler_cache_size: 8192,
         monopolization_cache_size: 8192,
-        defer_cache_size: 1024,
+        loader_cache_size: 1024,
         defer_store_cache_size: 8192,
-        defer_discard_threshold: 100
+        loader_discard_threshold: 100
       }.each do |field, value|
         it "sets and gets #{field}" do
           config.public_send(:"#{field}=", value)

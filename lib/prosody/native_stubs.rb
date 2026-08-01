@@ -471,6 +471,21 @@ module Prosody
     def source_system
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
+
+    # @private
+    def published_value(subsystem, name, read_cache, read_cache_disabled)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # @private
+    def published_map(subsystem, name, read_cache, read_cache_disabled)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # @private
+    def published_deque(subsystem, name, read_cache, read_cache_disabled)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
   end
 
   # Native single-value keyed-state handle, vended by the context and wrapped by
@@ -589,9 +604,9 @@ module Prosody
 
     # Opens a native ordered scan over the live entries.
     #
-    # @param direction [String] "forward" or "backward"
+    # @param direction [Symbol] +:forward+ or +:backward+
     # @return [StateScan] the native cursor
-    # @raise [TransientStateError] if direction is not "forward"/"backward"
+    # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
     def scan(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -600,9 +615,9 @@ module Prosody
     # Skips value decode and the resolver (a message-backed map enumerates keys
     # with zero Kafka fetches), though not no-I/O.
     #
-    # @param direction [String] "forward" or "backward"
+    # @param direction [Symbol] +:forward+ or +:backward+
     # @return [StateScan] the native key cursor
-    # @raise [TransientStateError] if direction is not "forward"/"backward"
+    # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
     def keys(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -716,9 +731,9 @@ module Prosody
 
     # Opens a native scan over the live elements.
     #
-    # @param direction [String] "forward" or "backward"
+    # @param direction [Symbol] +:forward+ or +:backward+
     # @return [StateScan] the native cursor
-    # @raise [TransientStateError] if direction is not "forward"/"backward"
+    # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
     def scan(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -760,6 +775,63 @@ module Prosody
     #
     # @return [void]
     def close
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # @private
+  class NativePublishedValue
+    def get(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # @private
+  class NativePublishedMap
+    def get(key, map_key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def get_many(key, map_keys)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def contains_key(key, map_key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def scan(key, direction)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def keys(key, direction)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # @private
+  class NativePublishedDeque
+    def get(key, index)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def length(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def is_empty(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def peek_front(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def peek_back(key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def scan(key, direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end

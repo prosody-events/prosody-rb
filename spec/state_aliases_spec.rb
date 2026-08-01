@@ -76,13 +76,13 @@ RSpec.describe "keyed-state idiomatic aliases" do
 
       define_method(:scan) do |direction|
         pairs = @hash.sort_by { |key, _| key }
-        pairs = pairs.reverse if direction == "backward"
+        pairs = pairs.reverse if direction == :backward
         cursor_class.new(pairs.map { |key, value| [key, value] })
       end
 
       define_method(:keys) do |direction|
         keys = @hash.keys.sort
-        keys = keys.reverse if direction == "backward"
+        keys = keys.reverse if direction == :backward
         cursor_class.new(keys)
       end
     end
@@ -120,7 +120,7 @@ RSpec.describe "keyed-state idiomatic aliases" do
       def rollback = nil
 
       define_method(:scan) do |direction|
-        items = (direction == "backward") ? @array.reverse : @array.dup
+        items = (direction == :backward) ? @array.reverse : @array.dup
         cursor_class.new(items)
       end
     end

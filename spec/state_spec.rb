@@ -2,10 +2,9 @@
 
 require "spec_helper"
 
-# Infra-free unit/mock coverage for the keyed-state surface: the shared
-# registration validation table (raised through Client.new in mock mode, before
-# any network or disk-cache I/O), the error-class hierarchy, the definition constructors and
-# their serialization/routing, and the Ruby-side index and direction guards.
+# Infra-free unit/mock coverage for host-value mapping, the error-class
+# hierarchy, definition serialization and routing, and Ruby index and direction
+# behavior.
 RSpec.describe "Prosody keyed state" do
   # Builds a mock client and returns the raised exception, or nil on success.
   # Registration validation runs while building the consumer configuration,
@@ -22,30 +21,10 @@ RSpec.describe "Prosody keyed state" do
     e
   end
 
-  describe "registration validation table" do
-    it "rejects an empty collection name" do
-      error = client_error(state_collections: [{name: "", kind: "value", payload: "json"}])
-      expect(error).to be_a(ArgumentError)
-      expect(error.message).to match(/state_collections\[0\]\.name.*empty/)
-    end
-
-    it "rejects a duplicate collection name" do
-      error = client_error(state_collections: [
-        {name: "dup", kind: "value", payload: "json"},
-        {name: "dup", kind: "deque", payload: "json"}
-      ])
-      expect(error).to be_a(ArgumentError)
-      expect(error.message).to match(/state_collections\[1\]\.name.*duplicate/)
-    end
-
+  describe "host-value mapping" do
     it "accepts a single bare registration hash" do
       error = client_error(state_collections: {name: "cart", kind: "value", payload: "json"})
       expect(error).to be_nil
-    end
-
-    it "rejects a zero TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 0}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
     end
 
     it "rejects a fractional TTL" do
@@ -73,24 +52,19 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
     end
 
-    it "rejects a keyset_limit above 4096 on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 5000}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
-    end
-
     it "rejects a fractional keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 128.5}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
+      expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
     it "rejects a negative keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: -1}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
+      expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
     it "rejects an infinite keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: Float::INFINITY}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
+      expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
     it "rejects keyset_limit on a non-map collection" do
@@ -148,11 +122,6 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_collections\[0\]\.payload.*expected/)
     end
 
-    it "rejects a zero recovery delay" do
-      error = client_error(state_recovery_delay: 0)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
     it "rejects a fractional recovery delay" do
       error = client_error(state_recovery_delay: 0.5)
       expect(error.message).to match(/state_recovery_delay.*whole number/)
@@ -173,14 +142,19 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_recovery_delay.*whole number/)
     end
 
-    it "rejects an empty cache dir" do
-      error = client_error(state_cache_dir: "")
-      expect(error.message).to match(/state_cache_dir.*empty/)
+    it "rejects a zero in-memory block-cache size" do
+      error = client_error(state_owned_cache_size: "0")
+      expect(error.message).to match(/state_owned_cache_size/)
     end
 
-    it "rejects a zero in-memory block-cache size" do
-      error = client_error(state_cache_size_bytes: 0)
-      expect(error.message).to match(/state_cache_size_bytes.*greater than 0/)
+    it "rejects a zero published-read cache size" do
+      error = client_error(state_read_cache_size: "0")
+      expect(error.message).to match(/state_read_cache_size/)
+    end
+
+    it "rejects an ambiguous published-read cache policy" do
+      error = client_error(state_read_cache: true)
+      expect(error.message).to match(/state_read_cache.*ambiguous/)
     end
   end
 
@@ -227,6 +201,12 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody.deque("events").kind).to eq("deque")
     end
 
+    it "uses one descriptor for owned and published access" do
+      definition = Prosody.value("cart", published: true, read_cache: false)
+      expect(definition.to_state_config).to include(published: true)
+      expect(definition.read_cache).to be(false)
+    end
+
     it "carries a deque window capacity on deque and message_deque" do
       expect(Prosody.deque("d", capacity: 100).capacity).to eq(100)
       expect(Prosody.message_deque("d", capacity: 50).capacity).to eq(50)
@@ -258,17 +238,27 @@ RSpec.describe "Prosody keyed state" do
     end
   end
 
-  describe "Prosody::State::VEND routing table" do
-    {
-      %w[value json] => [:value_state, :ValueState],
-      %w[map json] => [:map_state, :MapState],
-      %w[deque json] => [:deque_state, :DequeState],
-      %w[value message] => [:message_value_state, :ValueState],
-      %w[map message] => [:message_map_state, :MapState],
-      %w[deque message] => [:message_deque_state, :DequeState]
-    }.each do |key, expected|
-      it "routes #{key.inspect} to #{expected.inspect}" do
-        expect(Prosody::State::VEND[key]).to eq(expected)
+  describe "Prosody::State::Reading#state" do
+    it "uses every JSON descriptor's typed published-state access strategy" do
+      calls = []
+      native = Object.new
+      reader = Object.new.extend(Prosody::State::Reading)
+      %i[published_value published_map published_deque].each do |vend_method|
+        reader.define_singleton_method(vend_method) do |*args|
+          calls << [vend_method, *args]
+          native
+        end
+      end
+
+      cases = [
+        [Prosody.value("cart", published: true, read_cache: 2), :published_value, Prosody::PublishedValue],
+        [Prosody.map("sessions", published: true, read_cache: 2), :published_map, Prosody::PublishedMap],
+        [Prosody.deque("jobs", published: true, read_cache: 2), :published_deque, Prosody::PublishedDeque]
+      ]
+
+      cases.each do |definition, vend_method, wrapper|
+        expect(reader.state(:accounts, definition)).to be_a(wrapper)
+        expect(calls.last).to eq([vend_method, "accounts", definition.name, 2, false])
       end
     end
   end
@@ -292,11 +282,22 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody::Context.include?(Prosody::State::Vending)).to be(true)
     end
 
-    it "routes a value definition to value_state and wraps it in ValueState" do
-      calls = []
-      handle = build_fake_context(calls).state(Prosody.value("cart"))
-      expect(handle).to be_a(Prosody::ValueState)
-      expect(calls).to eq([[:value_state, "cart"]])
+    it "uses every descriptor's typed owned-state access strategy" do
+      cases = [
+        [Prosody.value("value"), :value_state, Prosody::ValueState],
+        [Prosody.map("map"), :map_state, Prosody::MapState],
+        [Prosody.deque("deque"), :deque_state, Prosody::DequeState],
+        [Prosody.message_value("message-value"), :message_value_state, Prosody::ValueState],
+        [Prosody.message_map("message-map"), :message_map_state, Prosody::MapState],
+        [Prosody.message_deque("message-deque"), :message_deque_state, Prosody::DequeState]
+      ]
+
+      cases.each do |definition, vend_method, wrapper|
+        calls = []
+        handle = build_fake_context(calls).state(definition)
+        expect(handle).to be_a(wrapper)
+        expect(calls).to eq([[vend_method, definition.name]])
+      end
     end
 
     it "caches vended handles per kind/payload/name" do
@@ -306,22 +307,6 @@ RSpec.describe "Prosody keyed state" do
       second = fake.state(Prosody.value("cart"))
       expect(second).to equal(first)
       expect(calls).to eq([[:value_state, "cart"]])
-    end
-
-    it "routes a message map definition to message_map_state and wraps it in MapState" do
-      calls = []
-      handle = build_fake_context(calls).state(Prosody.message_map("sessions"))
-      expect(handle).to be_a(Prosody::MapState)
-      expect(calls).to eq([[:message_map_state, "sessions"]])
-    end
-
-    it "raises for an unknown kind/payload pair" do
-      fake = build_fake_context([])
-      definition = Prosody::StateDefinition.new(
-        name: "x", kind: "set", payload: "json",
-        ttl_seconds: nil, read_uncommitted: nil, keyset_limit: nil, capacity: nil
-      )
-      expect { fake.state(definition) }.to raise_error(Prosody::TransientStateError, /unknown collection/)
     end
   end
 
@@ -391,6 +376,56 @@ RSpec.describe "Prosody keyed state" do
       native = fake_scanning_native([["a", false], ["b", 2]])
       Prosody::MapState.new(native).each_pair { |key, value| collected << [key, value] }
       expect(collected).to eq([["a", false], ["b", 2]])
+    end
+
+    it "uses symbols for owned and published scan directions" do
+      directions = []
+      native = fake_scanning_native([])
+      original_scan = native.method(:scan)
+      native.define_singleton_method(:scan) do |*args|
+        directions << args.last
+        original_scan.call(args.last)
+      end
+
+      Prosody::MapState.new(native).reverse_each_pair.to_a
+      Prosody::PublishedMap.new(native).reverse_each_pair("user-1").to_a
+
+      expect(directions).to eq([:backward, :backward])
+    end
+
+    it "gives published maps the owned read operations" do
+      native = fake_scanning_native([["a", 1], ["b", 2]])
+      scan = native.method(:scan)
+      native.define_singleton_method(:scan) { |_key, direction| scan.call(direction) }
+      native.define_singleton_method(:contains_key) { |key, map_key| [key, map_key] == ["user-1", "a"] }
+      key_scan = []
+      key_native = fake_scanning_native(["b", "a"])
+      native.define_singleton_method(:keys) do |key, direction|
+        key_scan << [key, direction]
+        key_native.scan(direction)
+      end
+
+      state = Prosody::PublishedMap.new(native)
+      expect(state.key?("user-1", "a")).to be(true)
+      expect(state.reverse_each_key("user-1").to_a).to eq(["b", "a"])
+      expect(state.each_value("user-1").to_a).to eq([1, 2])
+      expect(key_scan).to eq([["user-1", :backward]])
+    end
+
+    it "gives published deques the owned read operations" do
+      native = Object.new
+      native.define_singleton_method(:length) { |_key| 2 }
+      native.define_singleton_method(:is_empty) { |_key| false }
+      native.define_singleton_method(:peek_front) { |_key| "first" }
+      native.define_singleton_method(:peek_back) { |_key| "last" }
+      native.define_singleton_method(:get) { |_key, index| ["first", "last"][index] }
+
+      state = Prosody::PublishedDeque.new(native)
+      expect(state.size("user-1")).to eq(2)
+      expect(state).not_to be_empty("user-1")
+      expect(state.first("user-1")).to eq("first")
+      expect(state.last("user-1")).to eq("last")
+      expect(state.get("user-1", -1)).to eq("last")
     end
   end
 end

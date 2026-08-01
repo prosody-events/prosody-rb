@@ -7,7 +7,6 @@
 //! builders.
 
 use magnus::{Error, Ruby, Value};
-use prosody::JsonCodec;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::KeyedStateConfiguration;
@@ -29,13 +28,14 @@ use prosody::state::descriptor::{
     DequeDescriptor, MapDescriptor, StateDescriptor, deque_state, map_state, value_state,
 };
 use prosody::state::order_codec::Utf8KeyCodec;
+use prosody::subsystem::SubsystemName;
 use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 use prosody::timers::duration::CompactDuration;
+use prosody::{ByteSize, JsonCodec};
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
-use std::collections::HashSet;
-use std::num::{NonZeroU64, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -117,7 +117,7 @@ pub struct NativeConfiguration {
     /// List of Cassandra contact nodes (hostnames or IPs)
     cassandra_nodes: Option<Vec<String>>,
 
-    /// Keyspace to use for storing timer data in Cassandra
+    /// Keyspace used for persistent Prosody data in Cassandra.
     cassandra_keyspace: Option<String>,
 
     /// Preferred datacenter for Cassandra query routing
@@ -132,8 +132,8 @@ pub struct NativeConfiguration {
     /// Password for authenticating with Cassandra
     cassandra_password: Option<String>,
 
-    /// Retention period for failed/unprocessed timer data in Cassandra (in
-    /// seconds)
+    /// Retention period for persistent timer and deferral data in Cassandra,
+    /// in seconds.
     cassandra_retention: Option<f32>,
 
     /// Timer slab partitioning duration in seconds.
@@ -179,24 +179,24 @@ pub struct NativeConfiguration {
     /// Maximum delay between deferred retries (in seconds).
     defer_max_delay: Option<f32>,
 
-    /// Failure rate threshold for enabling deferral (0.0 to 1.0).
+    /// Failure rate threshold for disabling deferral (0.0 to 1.0).
     defer_failure_threshold: Option<f64>,
 
     /// Sliding window duration (in seconds) for failure rate tracking.
     defer_failure_window: Option<f32>,
 
-    /// Cache size for defer middleware.
-    defer_cache_size: Option<u32>,
+    /// Maximum messages retained by the shared Kafka loader.
+    loader_cache_size: Option<u32>,
 
     /// Maximum number of deferred store entries kept in the write-through cache
     /// per Cassandra defer store.
     defer_store_cache_size: Option<u32>,
 
-    /// Timeout for Kafka seek operations (in seconds).
-    defer_seek_timeout: Option<f32>,
+    /// Timeout for Kafka loader seek operations (in seconds).
+    loader_seek_timeout: Option<f32>,
 
     /// Messages to read sequentially before seeking.
-    defer_discard_threshold: Option<i64>,
+    loader_discard_threshold: Option<i64>,
 
     // Timeout configuration
     /// Fixed timeout duration for handler execution (in seconds).
@@ -220,11 +220,20 @@ pub struct NativeConfiguration {
     /// Keyed-state collections to register before subscribe.
     state_collections: Option<Vec<StateCollectionConfig>>,
 
+    /// Subsystem under which published collections are advertised.
+    subsystem: Option<String>,
+
     /// Root directory for the local keyed-state cache. Must not be empty.
     state_cache_dir: Option<String>,
 
-    /// Capacity of the in-memory keyed-state cache, in bytes.
-    state_cache_size_bytes: Option<u64>,
+    /// Capacity of the owning keyed-state cache.
+    state_owned_cache_size: Option<String>,
+
+    /// Capacity of the published-state read-through cache.
+    state_read_cache_size: Option<String>,
+
+    /// Default cache policy for published-state reads.
+    state_read_cache: Option<ReadCacheConfig>,
 
     /// Delay in whole seconds before the keyed-state recovery sweep.
     ///
@@ -236,7 +245,7 @@ pub struct NativeConfiguration {
 /// Declares one keyed-state collection to register before subscribe.
 #[derive(Clone, Debug, Deserialize)]
 struct StateCollectionConfig {
-    /// The collection name (non-empty, unique within the client).
+    /// The collection name. Prosody requires it to be non-empty and unique.
     name: String,
 
     /// The collection kind: `"value"`, `"map"`, or `"deque"`.
@@ -252,14 +261,24 @@ struct StateCollectionConfig {
     /// Optional opt-out of transactional staging.
     read_uncommitted: Option<bool>,
 
-    /// Optional map-only keyset bound (`0..=4096`). Crosses as `f64` so
-    /// fractional/negative/non-finite values reach the whole-number guard.
+    /// Whether other consumer groups may read this JSON collection.
+    published: Option<bool>,
+
+    /// Optional map-only keyset bound (`0..=4096`). The binding rejects values
+    /// that cannot map to an unsigned integer. Prosody enforces the ceiling.
     keyset_limit: Option<f64>,
 
     /// Optional deque-only window capacity (`>= 1`). Runtime-only and not
     /// persisted. Crosses as `f64` so fractional/negative/non-finite values
     /// reach the whole-number guard.
     capacity: Option<f64>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+enum ReadCacheConfig {
+    Disabled(bool),
+    Ttl(f64),
 }
 
 /// Configuration for the health probe port.
@@ -911,6 +930,7 @@ fn with_def<D: StateDescriptor>(
     descriptor: D,
     ttl_seconds: Option<u32>,
     read_uncommitted: Option<bool>,
+    published: Option<bool>,
 ) -> D {
     let mut descriptor = descriptor;
     if let Some(ttl) = ttl_seconds {
@@ -918,6 +938,9 @@ fn with_def<D: StateDescriptor>(
     }
     if read_uncommitted == Some(true) {
         descriptor = descriptor.read_uncommitted();
+    }
+    if let Some(published) = published {
+        descriptor = descriptor.published(published);
     }
     descriptor
 }
@@ -944,24 +967,18 @@ fn with_capacity<T>(
     }
 }
 
-/// Validates one collection and registers its descriptor over the closed 3×2
-/// (kind × payload) matrix.
+/// Maps one collection into its descriptor over the closed 3×2 (kind ×
+/// payload) matrix.
 ///
 /// # Errors
 ///
-/// Returns a permanent-category error naming the offending field if a field is
-/// invalid.
+/// Returns a permanent-category error when a host value cannot be mapped into
+/// a Prosody type.
 fn register_state_collection(
     keyed: &mut KeyedStateConfiguration,
     index: usize,
     collection: &StateCollectionConfig,
 ) -> Result<(), String> {
-    if collection.name.is_empty() {
-        return Err(format!(
-            "state_collections[{index}].name: must not be empty"
-        ));
-    }
-
     let kind = parse_kind(index, &collection.kind)?;
     let payload = parse_payload(index, &collection.payload)?;
 
@@ -969,46 +986,14 @@ fn register_state_collection(
         Some(value) => Some(whole_number_field(
             value,
             &format!("state_collections[{index}].ttl_seconds"),
-            1,
+            0,
             u32::MAX,
         )?),
         None => None,
     };
 
-    let keyset_limit = match collection.keyset_limit {
-        Some(value) => {
-            if !matches!(kind, CollectionKind::Map) {
-                return Err(format!(
-                    "state_collections[{index}].keyset_limit: only valid for map collections"
-                ));
-            }
-            Some(whole_number_field(
-                value,
-                &format!("state_collections[{index}].keyset_limit"),
-                0,
-                4096,
-            )?)
-        }
-        None => None,
-    };
-
-    let capacity = match collection.capacity {
-        Some(value) => {
-            if !matches!(kind, CollectionKind::Deque) {
-                return Err(format!(
-                    "state_collections[{index}].capacity: only valid for deque collections"
-                ));
-            }
-            let n = whole_number_field(
-                value,
-                &format!("state_collections[{index}].capacity"),
-                1,
-                u32::MAX,
-            )?;
-            NonZeroUsize::new(n as usize)
-        }
-        None => None,
-    };
+    let keyset_limit = keyset_limit(collection.keyset_limit, &kind, index)?;
+    let capacity = capacity(collection.capacity, &kind, index)?;
 
     let read_uncommitted = collection.read_uncommitted;
     let name = collection.name.as_str();
@@ -1018,6 +1003,7 @@ fn register_state_collection(
                 value_state::<JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             ));
         }
         (CollectionKind::Map, CollectionPayload::Json) => {
@@ -1025,6 +1011,7 @@ fn register_state_collection(
                 map_state::<Utf8KeyCodec, JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
@@ -1033,6 +1020,7 @@ fn register_state_collection(
                 deque_state::<JsonCodec>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
@@ -1041,6 +1029,7 @@ fn register_state_collection(
                 message_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             ));
         }
         (CollectionKind::Map, CollectionPayload::Message) => {
@@ -1048,6 +1037,7 @@ fn register_state_collection(
                 message_map_state::<Utf8KeyCodec, KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
@@ -1056,6 +1046,7 @@ fn register_state_collection(
                 message_deque_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
                 read_uncommitted,
+                collection.published,
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
@@ -1064,46 +1055,113 @@ fn register_state_collection(
     Ok(())
 }
 
-/// Builds the `KeyedStateConfiguration`, registering each declared collection
-/// synchronously (before subscribe) and rejecting duplicate names.
+fn keyset_limit(
+    value: Option<f64>,
+    kind: &CollectionKind,
+    index: usize,
+) -> Result<Option<u32>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if !matches!(kind, CollectionKind::Map) {
+        return Err(format!(
+            "state_collections[{index}].keyset_limit: only valid for map collections"
+        ));
+    }
+    whole_number_field(
+        value,
+        &format!("state_collections[{index}].keyset_limit"),
+        0,
+        u32::MAX,
+    )
+    .map(Some)
+}
+
+fn capacity(
+    value: Option<f64>,
+    kind: &CollectionKind,
+    index: usize,
+) -> Result<Option<NonZeroUsize>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if !matches!(kind, CollectionKind::Deque) {
+        return Err(format!(
+            "state_collections[{index}].capacity: only valid for deque collections"
+        ));
+    }
+    let value = whole_number_field(
+        value,
+        &format!("state_collections[{index}].capacity"),
+        1,
+        u32::MAX,
+    )?;
+    Ok(NonZeroUsize::new(value as usize))
+}
+
+/// Builds the `KeyedStateConfiguration` by mapping each declared collection.
+/// The normal Prosody construction path validates the result.
 ///
 /// # Errors
 ///
-/// Returns an error if a keyed-state field is invalid or a name is duplicated.
+/// Returns an error if a host value cannot be mapped.
 fn build_keyed_state_config(
     config: &NativeConfiguration,
 ) -> Result<KeyedStateConfiguration, String> {
     let mut builder = KeyedStateConfiguration::builder();
 
     if let Some(dir) = &config.state_cache_dir {
-        if dir.is_empty() {
-            return Err("state_cache_dir: must not be an empty string".to_owned());
-        }
         builder.cache_dir(PathBuf::from(dir));
     }
 
     if let Some(seconds) = config.state_recovery_delay {
-        let seconds = whole_number_field(seconds, "state_recovery_delay", 1, u32::MAX)?;
+        let seconds = whole_number_field(seconds, "state_recovery_delay", 0, u32::MAX)?;
         builder.recovery_delay(CompactDuration::new(seconds));
     }
 
-    if let Some(bytes) = config.state_cache_size_bytes {
-        let bytes = NonZeroU64::new(bytes)
-            .ok_or_else(|| "state_cache_size_bytes: must be greater than 0".to_owned())?;
-        builder.cache_size_bytes(Some(bytes));
+    if let Some(size) = &config.state_owned_cache_size {
+        let size = size
+            .parse::<ByteSize>()
+            .map_err(|error| format!("state_owned_cache_size: {error}"))?;
+        builder.owned_cache_size(Some(size));
+    }
+
+    if let Some(size) = &config.state_read_cache_size {
+        let size = size
+            .parse::<ByteSize>()
+            .map_err(|error| format!("state_read_cache_size: {error}"))?;
+        builder.read_cache_size(Some(size));
+    }
+
+    if let Some(cache) = &config.state_read_cache {
+        match cache {
+            ReadCacheConfig::Disabled(false) => {
+                builder.read_cache_ttl(None);
+            }
+            ReadCacheConfig::Disabled(true) => {
+                return Err(
+                    "state_read_cache: true is ambiguous; use a duration or false".to_owned(),
+                );
+            }
+            ReadCacheConfig::Ttl(seconds) => {
+                let ttl = Duration::try_from_secs_f64(*seconds).map_err(|_| {
+                    "state_read_cache: duration must be finite and non-negative".to_owned()
+                })?;
+                builder.read_cache_ttl(Some(ttl));
+            }
+        }
+    }
+
+    if let Some(subsystem) = &config.subsystem {
+        builder.subsystem(Some(
+            SubsystemName::try_new(subsystem).map_err(|error| error.to_string())?,
+        ));
     }
 
     let mut keyed = builder.build().map_err(|error| error.to_string())?;
 
     if let Some(collections) = &config.state_collections {
-        let mut seen = HashSet::with_capacity(collections.len());
         for (index, collection) in collections.iter().enumerate() {
-            if !seen.insert(collection.name.as_str()) {
-                return Err(format!(
-                    "state_collections[{index}].name: duplicate collection name {:?}",
-                    collection.name
-                ));
-            }
             register_state_collection(&mut keyed, index, collection)?;
         }
     }
@@ -1155,24 +1213,22 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             consumer.timer_spans(relation);
         }
 
-        // The Kafka message loader that the defer middleware uses to reload
-        // failed messages is now consumer-wide configuration. Route the
-        // defer-loader tuning knobs onto the consumer builder's loader.
-        if config.defer_cache_size.is_some()
-            || config.defer_seek_timeout.is_some()
-            || config.defer_discard_threshold.is_some()
+        // Route the shared Kafka message loader settings onto the consumer.
+        if config.loader_cache_size.is_some()
+            || config.loader_seek_timeout.is_some()
+            || config.loader_discard_threshold.is_some()
         {
             let mut loader = KafkaLoaderConfiguration::builder();
 
-            if let Some(cache_size) = &config.defer_cache_size {
+            if let Some(cache_size) = &config.loader_cache_size {
                 loader.cache_size(*cache_size as usize);
             }
 
-            if let Some(seek_timeout) = &config.defer_seek_timeout {
+            if let Some(seek_timeout) = &config.loader_seek_timeout {
                 loader.seek_timeout(Duration::from_secs_f32(*seek_timeout));
             }
 
-            if let Some(discard_threshold) = &config.defer_discard_threshold {
+            if let Some(discard_threshold) = &config.loader_discard_threshold {
                 loader.discard_threshold(*discard_threshold);
             }
 
