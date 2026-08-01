@@ -579,7 +579,7 @@ Most collections should have a TTL. Set it comfortably beyond the longest timer 
 Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, names its `subsystem`, and registers the definition as usual:
 
 ```ruby
-CURRENT_ORDER = Prosody.value("current-order", published: true, read_cache: 2)
+CURRENT_ORDER = Prosody.value("current-order", published: true)
 
 owner = Prosody::Client.new(
   group_id: "order-writer",
