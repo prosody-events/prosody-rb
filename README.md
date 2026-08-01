@@ -579,30 +579,24 @@ Most collections should have a TTL. Set it comfortably beyond the longest timer 
 Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, names its `subsystem`, and registers the definition as usual:
 
 ```ruby
-CART = Prosody.value("cart", published: true, read_cache: 2)
-ITEMS = Prosody.map("items", published: true)
+CURRENT_ORDER = Prosody.value("current-order", published: true, read_cache: 2)
 
 owner = Prosody::Client.new(
-  group_id: "cart-writer",
+  group_id: "order-writer",
   subsystem: "checkout",
-  state_collections: [CART, ITEMS]
+  state_collections: [CURRENT_ORDER]
 )
 
 # Inside the owner's handler, the event supplies the user key.
-cart = context.state(CART)
-cart.set({"sku" => "book"})
+current_order = context.state(CURRENT_ORDER)
+current_order.set({"sku" => "book"})
 ```
 
 Another client opens a reader by naming the subsystem and passing that same definition. The reader is independent of subscriptions and only returns committed state:
 
 ```ruby
-cart_reader = client.state("checkout", CART)
-cart = cart_reader.get("user-1")
-
-item_reader = client.state("checkout", ITEMS)
-item_reader.each_pair("user-1") do |map_key, item|
-  # Entries are ordered by key.
-end
+order_reader = client.state("checkout", CURRENT_ORDER)
+current_order = order_reader.get("customer-123")
 ```
 
 Published readers provide the owned collection's read operations without its mutations. An owned handle gets the user key from the current event; a published reader is outside a handler, so every operation takes that key explicitly. Map and deque traversal returns an `Enumerator` when no block is given and reads in chunks rather than loading the entire collection. Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
