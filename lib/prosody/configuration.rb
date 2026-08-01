@@ -172,7 +172,7 @@ module Prosody
         end
       }
 
-    # Keyspace to use for storing timer data in Cassandra.
+    # Keyspace used for persistent Prosody data in Cassandra.
     config_param :cassandra_keyspace, converter: lambda(&:to_s)
 
     # Preferred datacenter for Cassandra query routing.
@@ -187,7 +187,7 @@ module Prosody
     # Password for authenticating with Cassandra.
     config_param :cassandra_password, converter: lambda(&:to_s)
 
-    # Retention period for failed/unprocessed timer data in Cassandra.
+    # Retention period for persistent timer and deferral data in Cassandra.
     # Accepts duration objects or numeric values (in seconds).
     config_param :cassandra_retention, converter: ->(v) { duration_converter(v) }
 
@@ -235,7 +235,7 @@ module Prosody
     # Maximum delay between deferred retries (in seconds).
     config_param :defer_max_delay, converter: ->(v) { duration_converter(v) }
 
-    # Failure rate threshold for enabling deferral (0.0 to 1.0).
+    # Failure rate threshold for disabling deferral (0.0 to 1.0).
     config_param :defer_failure_threshold, converter: ->(v) { Float(v) }
 
     # Sliding window duration (in seconds) for failure rate tracking.

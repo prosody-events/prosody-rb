@@ -2,6 +2,8 @@
 
 Configure via constructor options or environment variables. Options fall back to environment variables when unset.
 
+The Ruby client reports values it cannot convert to Prosody types. Prosody validates configuration semantics when the client is built.
+
 ## Core
 
 | Option / Environment Variable           | Description                                       | Default      |
@@ -44,11 +46,11 @@ Configure via constructor options or environment variables. Options fall back to
 
 ## Retry
 
-When a handler fails, retry with exponential backoff:
+Retry backoff applies in pipeline and low-latency modes. `max_retries` controls how many retries low-latency mode performs before routing the failure to `failure_topic`. Pipeline mode uses deferral and does not use this limit.
 
 | Option / Environment Variable           | Description                       | Default |
 |-----------------------------------------|-----------------------------------|---------|
-| `max_retries` / `PROSODY_MAX_RETRIES`   | Give up after this many attempts  | 3       |
+| `max_retries` / `PROSODY_MAX_RETRIES`   | Low-latency retries before routing to the failure topic | 3       |
 | `retry_base` / `PROSODY_RETRY_BASE`     | Wait this long before first retry | 20ms    |
 | `max_retry_delay` / `PROSODY_RETRY_MAX_DELAY` | Never wait longer than this  | 5m      |
 

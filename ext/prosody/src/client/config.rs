@@ -117,7 +117,7 @@ pub struct NativeConfiguration {
     /// List of Cassandra contact nodes (hostnames or IPs)
     cassandra_nodes: Option<Vec<String>>,
 
-    /// Keyspace to use for storing timer data in Cassandra
+    /// Keyspace used for persistent Prosody data in Cassandra.
     cassandra_keyspace: Option<String>,
 
     /// Preferred datacenter for Cassandra query routing
@@ -132,8 +132,8 @@ pub struct NativeConfiguration {
     /// Password for authenticating with Cassandra
     cassandra_password: Option<String>,
 
-    /// Retention period for failed/unprocessed timer data in Cassandra (in
-    /// seconds)
+    /// Retention period for persistent timer and deferral data in Cassandra,
+    /// in seconds.
     cassandra_retention: Option<f32>,
 
     /// Timer slab partitioning duration in seconds.
@@ -179,7 +179,7 @@ pub struct NativeConfiguration {
     /// Maximum delay between deferred retries (in seconds).
     defer_max_delay: Option<f32>,
 
-    /// Failure rate threshold for enabling deferral (0.0 to 1.0).
+    /// Failure rate threshold for disabling deferral (0.0 to 1.0).
     defer_failure_threshold: Option<f64>,
 
     /// Sliding window duration (in seconds) for failure rate tracking.
