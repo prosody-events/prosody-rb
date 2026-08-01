@@ -35,7 +35,6 @@ use prosody::{ByteSize, JsonCodec};
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
-use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -246,7 +245,7 @@ pub struct NativeConfiguration {
 /// Declares one keyed-state collection to register before subscribe.
 #[derive(Clone, Debug, Deserialize)]
 struct StateCollectionConfig {
-    /// The collection name (non-empty, unique within the client).
+    /// The collection name. Prosody requires it to be non-empty and unique.
     name: String,
 
     /// The collection kind: `"value"`, `"map"`, or `"deque"`.
@@ -265,8 +264,8 @@ struct StateCollectionConfig {
     /// Whether other consumer groups may read this JSON collection.
     published: Option<bool>,
 
-    /// Optional map-only keyset bound (`0..=4096`). Crosses as `f64` so
-    /// fractional/negative/non-finite values reach the whole-number guard.
+    /// Optional map-only keyset bound (`0..=4096`). The binding rejects values
+    /// that cannot map to an unsigned integer. Prosody enforces the ceiling.
     keyset_limit: Option<f64>,
 
     /// Optional deque-only window capacity (`>= 1`). Runtime-only and not
@@ -968,24 +967,18 @@ fn with_capacity<T>(
     }
 }
 
-/// Validates one collection and registers its descriptor over the closed 3×2
-/// (kind × payload) matrix.
+/// Maps one collection into its descriptor over the closed 3×2 (kind ×
+/// payload) matrix.
 ///
 /// # Errors
 ///
-/// Returns a permanent-category error naming the offending field if a field is
-/// invalid.
+/// Returns a permanent-category error when a host value cannot be mapped into
+/// a Prosody type.
 fn register_state_collection(
     keyed: &mut KeyedStateConfiguration,
     index: usize,
     collection: &StateCollectionConfig,
 ) -> Result<(), String> {
-    if collection.name.is_empty() {
-        return Err(format!(
-            "state_collections[{index}].name: must not be empty"
-        ));
-    }
-
     let kind = parse_kind(index, &collection.kind)?;
     let payload = parse_payload(index, &collection.payload)?;
 
@@ -993,7 +986,7 @@ fn register_state_collection(
         Some(value) => Some(whole_number_field(
             value,
             &format!("state_collections[{index}].ttl_seconds"),
-            1,
+            0,
             u32::MAX,
         )?),
         None => None,
@@ -1003,11 +996,6 @@ fn register_state_collection(
     let capacity = capacity(collection.capacity, &kind, index)?;
 
     let read_uncommitted = collection.read_uncommitted;
-    if collection.published == Some(true) && matches!(payload, CollectionPayload::Message) {
-        return Err(format!(
-            "state_collections[{index}].published: published readers support JSON collections only"
-        ));
-    }
     let name = collection.name.as_str();
     match (kind, payload) {
         (CollectionKind::Value, CollectionPayload::Json) => {
@@ -1084,7 +1072,7 @@ fn keyset_limit(
         value,
         &format!("state_collections[{index}].keyset_limit"),
         0,
-        4096,
+        u32::MAX,
     )
     .map(Some)
 }
@@ -1111,26 +1099,23 @@ fn capacity(
     Ok(NonZeroUsize::new(value as usize))
 }
 
-/// Builds the `KeyedStateConfiguration`, registering each declared collection
-/// synchronously (before subscribe) and rejecting duplicate names.
+/// Builds the `KeyedStateConfiguration` by mapping each declared collection.
+/// The normal Prosody construction path validates the result.
 ///
 /// # Errors
 ///
-/// Returns an error if a keyed-state field is invalid or a name is duplicated.
+/// Returns an error if a host value cannot be mapped.
 fn build_keyed_state_config(
     config: &NativeConfiguration,
 ) -> Result<KeyedStateConfiguration, String> {
     let mut builder = KeyedStateConfiguration::builder();
 
     if let Some(dir) = &config.state_cache_dir {
-        if dir.is_empty() {
-            return Err("state_cache_dir: must not be an empty string".to_owned());
-        }
         builder.cache_dir(PathBuf::from(dir));
     }
 
     if let Some(seconds) = config.state_recovery_delay {
-        let seconds = whole_number_field(seconds, "state_recovery_delay", 1, u32::MAX)?;
+        let seconds = whole_number_field(seconds, "state_recovery_delay", 0, u32::MAX)?;
         builder.recovery_delay(CompactDuration::new(seconds));
     }
 
@@ -1158,11 +1143,11 @@ fn build_keyed_state_config(
                     "state_read_cache: true is ambiguous; use a duration or false".to_owned(),
                 );
             }
-            ReadCacheConfig::Ttl(seconds) if seconds.is_finite() && *seconds > 0.0_f64 => {
-                builder.read_cache_ttl(Some(Duration::from_secs_f64(*seconds)));
-            }
-            ReadCacheConfig::Ttl(_) => {
-                return Err("state_read_cache: duration must be greater than 0".to_owned());
+            ReadCacheConfig::Ttl(seconds) => {
+                let ttl = Duration::try_from_secs_f64(*seconds).map_err(|_| {
+                    "state_read_cache: duration must be finite and non-negative".to_owned()
+                })?;
+                builder.read_cache_ttl(Some(ttl));
             }
         }
     }
@@ -1176,14 +1161,7 @@ fn build_keyed_state_config(
     let mut keyed = builder.build().map_err(|error| error.to_string())?;
 
     if let Some(collections) = &config.state_collections {
-        let mut seen = HashSet::with_capacity(collections.len());
         for (index, collection) in collections.iter().enumerate() {
-            if !seen.insert(collection.name.as_str()) {
-                return Err(format!(
-                    "state_collections[{index}].name: duplicate collection name {:?}",
-                    collection.name
-                ));
-            }
             register_state_collection(&mut keyed, index, collection)?;
         }
     }

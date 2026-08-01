@@ -2,10 +2,9 @@
 
 require "spec_helper"
 
-# Infra-free unit/mock coverage for the keyed-state surface: the shared
-# registration validation table (raised through Client.new in mock mode, before
-# any network or disk-cache I/O), the error-class hierarchy, the definition constructors and
-# their serialization/routing, and the Ruby-side index and direction guards.
+# Infra-free unit/mock coverage for host-value mapping, the error-class
+# hierarchy, definition serialization and routing, and Ruby index and direction
+# behavior.
 RSpec.describe "Prosody keyed state" do
   # Builds a mock client and returns the raised exception, or nil on success.
   # Registration validation runs while building the consumer configuration,
@@ -22,30 +21,10 @@ RSpec.describe "Prosody keyed state" do
     e
   end
 
-  describe "registration validation table" do
-    it "rejects an empty collection name" do
-      error = client_error(state_collections: [{name: "", kind: "value", payload: "json"}])
-      expect(error).to be_a(ArgumentError)
-      expect(error.message).to match(/state_collections\[0\]\.name.*empty/)
-    end
-
-    it "rejects a duplicate collection name" do
-      error = client_error(state_collections: [
-        {name: "dup", kind: "value", payload: "json"},
-        {name: "dup", kind: "deque", payload: "json"}
-      ])
-      expect(error).to be_a(ArgumentError)
-      expect(error.message).to match(/state_collections\[1\]\.name.*duplicate/)
-    end
-
+  describe "host-value mapping" do
     it "accepts a single bare registration hash" do
       error = client_error(state_collections: {name: "cart", kind: "value", payload: "json"})
       expect(error).to be_nil
-    end
-
-    it "rejects a zero TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 0}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
     end
 
     it "rejects a fractional TTL" do
@@ -73,24 +52,19 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
     end
 
-    it "rejects a keyset_limit above 4096 on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 5000}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
-    end
-
     it "rejects a fractional keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 128.5}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
+      expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
     it "rejects a negative keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: -1}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
+      expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
     it "rejects an infinite keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: Float::INFINITY}])
-      expect(error.message).to match(/keyset_limit.*0..=4096/)
+      expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
     it "rejects keyset_limit on a non-map collection" do
@@ -148,11 +122,6 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_collections\[0\]\.payload.*expected/)
     end
 
-    it "rejects a zero recovery delay" do
-      error = client_error(state_recovery_delay: 0)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
     it "rejects a fractional recovery delay" do
       error = client_error(state_recovery_delay: 0.5)
       expect(error.message).to match(/state_recovery_delay.*whole number/)
@@ -171,11 +140,6 @@ RSpec.describe "Prosody keyed state" do
     it "rejects an infinite recovery delay" do
       error = client_error(state_recovery_delay: Float::INFINITY)
       expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects an empty cache dir" do
-      error = client_error(state_cache_dir: "")
-      expect(error.message).to match(/state_cache_dir.*empty/)
     end
 
     it "rejects a zero in-memory block-cache size" do

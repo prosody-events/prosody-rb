@@ -424,13 +424,14 @@ fn read_cache(ruby: &Ruby, seconds: Option<f64>, disabled: bool) -> Result<Erase
     match (seconds, disabled) {
         (None, false) => Ok(ErasedReadCache::Inherit),
         (None, true) => Ok(ErasedReadCache::Disabled),
-        (Some(seconds), false) if seconds.is_finite() && seconds > 0.0 => {
-            Ok(ErasedReadCache::Ttl(Duration::from_secs_f64(seconds)))
-        }
-        (Some(_), false) => Err(Error::new(
-            ruby.exception_arg_error(),
-            "read_cache must be greater than zero",
-        )),
+        (Some(seconds), false) => Duration::try_from_secs_f64(seconds)
+            .map(ErasedReadCache::Ttl)
+            .map_err(|_| {
+                Error::new(
+                    ruby.exception_arg_error(),
+                    "read_cache must be finite and non-negative",
+                )
+            }),
         (Some(_), true) => Err(Error::new(
             ruby.exception_arg_error(),
             "read_cache cannot specify a TTL and be disabled",
