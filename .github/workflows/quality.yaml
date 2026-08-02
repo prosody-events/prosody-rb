@@ -15,7 +15,6 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_TEST_DEBUG: 0
-  RUSTFLAGS: -C link-arg=-fuse-ld=mold
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   plan:
@@ -45,10 +44,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Set up mold
-        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
-        with:
-          make-default: false
       - name: Install clippy-sarif from crates.io
         uses: baptiste0928/cargo-install@v3
         with:
