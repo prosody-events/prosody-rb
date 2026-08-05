@@ -492,7 +492,7 @@ module Prosody
   # {Prosody::ValueState}. Every operation is fiber-yield async: it crosses the
   # bridge and yields the fiber while the Rust core drives the operation.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
+  # @see ext/prosody/src/handler/state/mod.rs for implementation
   module NativeValueOperations
     # @private
     def initialize
@@ -551,7 +551,7 @@ module Prosody
   # +#scan+, which opens the cursor synchronously; each native cursor pull
   # yields the fiber.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
+  # @see ext/prosody/src/handler/state/mod.rs for implementation
   module NativeMapOperations
     # @private
     def initialize
@@ -658,7 +658,7 @@ module Prosody
   # which opens the cursor synchronously; each native cursor pull yields the
   # fiber.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
+  # @see ext/prosody/src/handler/state/mod.rs for implementation
   module NativeDequeOperations
     # @private
     def initialize
@@ -781,7 +781,7 @@ module Prosody
   # by the {Prosody::MapState} / {Prosody::DequeState} traversal methods. Each
   # pull crosses the bridge and yields the fiber; +close+ is idempotent.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
+  # @see ext/prosody/src/handler/state/scan.rs for implementation
   module NativeScanOperations
     # @private
     def initialize

@@ -206,7 +206,8 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
             @sink.push({
               ev: "read", topic: got.topic, partition: got.partition,
               offset: got.offset, key: got.key, payload: got.payload,
-              live_offset: message.offset
+              live_offset: message.offset,
+              native_class: value.instance_variable_get(:@native).class.name
             })
           end
         end
@@ -226,6 +227,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       expect(read[:payload]).to eq({"step" => 1})
       expect(read[:offset]).to eq(stored[:offset])
       expect(read[:offset]).not_to eq(read[:live_offset])
+      expect(read[:native_class]).to eq("Prosody::NativeMessageValueState")
     end
 
     it "round-trips a stored message through a message deque collection" do
@@ -244,9 +246,17 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
             @sink.push({ev: "stored", offset: message.offset})
           when 2
             got = deque.get(0)
+            scanned = []
+            deque.each { |item| scanned << item.offset }
+            native = deque.instance_variable_get(:@native)
+            cursor = native.scan(:forward)
+            cursor_class = cursor.class.name
+            cursor.close
             @sink.push({
               ev: "read", topic: got.topic, offset: got.offset,
-              key: got.key, payload: got.payload, live_offset: message.offset
+              key: got.key, payload: got.payload, live_offset: message.offset,
+              scanned: scanned, native_class: native.class.name,
+              cursor_class: cursor_class
             })
           end
         end
@@ -265,6 +275,9 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       expect(read[:payload]).to eq({"step" => 1})
       expect(read[:offset]).to eq(stored[:offset])
       expect(read[:offset]).not_to eq(read[:live_offset])
+      expect(read[:scanned]).to eq([stored[:offset]])
+      expect(read[:native_class]).to eq("Prosody::NativeMessageDequeState")
+      expect(read[:cursor_class]).to eq("Prosody::NativeMessageDequeScan")
     end
 
     it "round-trips messages through a message map collection with unicode keys and get_many" do
@@ -286,6 +299,15 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
             primary = map.get("primary")
             unicode = map.get("café")
             batch = map.get_many(["primary", "café", "absent"])
+            scanned = []
+            map.each_pair { |key, value| scanned << [key, value.offset] }
+            native = map.instance_variable_get(:@native)
+            value_cursor = native.scan(:forward)
+            value_cursor_class = value_cursor.class.name
+            value_cursor.close
+            key_cursor = native.keys(:forward)
+            key_cursor_class = key_cursor.class.name
+            key_cursor.close
             @sink.push({
               ev: "read",
               primary_offset: primary.offset,
@@ -294,7 +316,10 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
               absent: map.get("absent"),
               batch_length: batch.length,
               batch_nils: batch.count(&:nil?),
-              live_offset: message.offset
+              live_offset: message.offset,
+              scanned: scanned, native_class: native.class.name,
+              value_cursor_class: value_cursor_class,
+              key_cursor_class: key_cursor_class
             })
           end
         end
@@ -316,6 +341,10 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       expect(read[:absent]).to be_nil
       expect(read[:batch_length]).to eq(3)
       expect(read[:batch_nils]).to eq(1)
+      expect(read[:scanned]).to eq([["café", stored[:offset]], ["primary", stored[:offset]]])
+      expect(read[:native_class]).to eq("Prosody::NativeMessageMapState")
+      expect(read[:value_cursor_class]).to eq("Prosody::NativeMessageMapScan")
+      expect(read[:key_cursor_class]).to eq("Prosody::NativeMapKeyScan")
     end
   end
 

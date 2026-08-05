@@ -1,6 +1,4 @@
 module Prosody
-  type state_item = json_value | Message[json_value]
-  type map_state_item = [String, state_item]
   type state_config_value = String | Integer | bool
 
   # --- error taxonomy -----------------------------------------------------
@@ -373,7 +371,7 @@ module Prosody
     # Shared native-scan driving mixed into the traversal handles.
     module Scanning
       private
-      def scan_each: (Symbol direction, ?Symbol opener) { (state_item | map_state_item | String) -> void } -> void
+      def scan_each: [T] (Symbol direction, ?Symbol opener) { (T) -> void } -> void
       def scan_items: [T] (_NativeScan[T] scan) { (T) -> void } -> void
     end
   end

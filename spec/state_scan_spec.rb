@@ -4,7 +4,7 @@ require "spec_helper"
 require "async"
 require "async/barrier"
 
-# Scan concurrency and close coverage (00-plan flattening rules + plan P3).
+# Scan concurrency and close coverage.
 #
 # The strong close/ordering guarantees are asserted at the Ruby level against a
 # recording fake scan (fast, deterministic): every traversal path closes the
