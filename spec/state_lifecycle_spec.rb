@@ -2,10 +2,8 @@
 
 require "spec_helper"
 
-# Keyed-state lifecycle scenarios (Appendix 1 items 6, 7, and the item-8
-# remainder): unregistered/identity-mismatch permanence, rethrow classification
-# through the existing result bridge, attempt-fenced leaks, and iterator early
-# break. Driven against real Kafka + Cassandra.
+# Keyed-state lifecycle scenarios cover permanent errors, retry classification,
+# attempt-fenced leaks, and early cursor closure. They use Kafka and Cassandra.
 RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true do
   include_context "keyed state integration"
 
@@ -242,8 +240,8 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
 
     # Deterministically forcing a mid-pull cancellation against real Cassandra is
     # not drivable from Ruby (there is no fake-cursor injection into the native
-    # StateScan). The cancellation-honesty contract is covered by the design
-    # (`state.rs` module docs), the early-break close above, and the leaked-
+    # cursor). The cancellation contract is covered by the design
+    # (`state/scan.rs` module docs), the early-break close above, and the leaked-
     # enumerator terminated test in state_scan_spec.rb.
     it "closes cleanly on cancellation during a blocked pull"
   end

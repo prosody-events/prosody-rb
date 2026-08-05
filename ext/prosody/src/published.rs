@@ -2,7 +2,8 @@
 
 use crate::bridge::Bridge;
 use crate::handler::{
-    StateScan, parse_direction, published_deque_scan, published_map_key_scan, published_map_scan,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, parse_direction,
+    published_deque_scan, published_map_key_scan, published_map_scan,
 };
 use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
@@ -106,7 +107,7 @@ impl NativePublishedMap {
         this: &Self,
         key: String,
         direction: StaticSymbol,
-    ) -> Result<StateScan, Error> {
+    ) -> Result<NativeJsonMapScan, Error> {
         let direction = erased_direction(parse_direction(ruby, direction)?);
         let inner = Arc::clone(&this.inner);
         let cursor = this
@@ -130,7 +131,7 @@ impl NativePublishedMap {
         this: &Self,
         key: String,
         direction: StaticSymbol,
-    ) -> Result<StateScan, Error> {
+    ) -> Result<NativeMapKeyScan, Error> {
         let direction = erased_direction(parse_direction(ruby, direction)?);
         let inner = Arc::clone(&this.inner);
         let cursor = this
@@ -229,7 +230,7 @@ impl NativePublishedDeque {
         this: &Self,
         key: String,
         direction: StaticSymbol,
-    ) -> Result<StateScan, Error> {
+    ) -> Result<NativeJsonDequeScan, Error> {
         let direction = erased_direction(parse_direction(ruby, direction)?);
         let inner = Arc::clone(&this.inner);
         let cursor = this

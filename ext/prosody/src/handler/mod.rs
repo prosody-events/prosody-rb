@@ -42,7 +42,8 @@ mod state;
 mod trigger;
 
 pub(crate) use state::{
-    StateScan, parse_direction, published_deque_scan, published_map_key_scan, published_map_scan,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, parse_direction,
+    published_deque_scan, published_map_key_scan, published_map_scan,
 };
 
 /// A handler that bridges between Kafka messages and Ruby message processing
@@ -345,7 +346,7 @@ pub enum RubyHandlerError {
 pub fn init(ruby: &Ruby) -> Result<(), Error> {
     context::init(ruby)?;
     message::init(ruby)?;
-    state::init(ruby)?;
+    state::register(ruby)?;
     trigger::init(ruby)?;
 
     Ok(())

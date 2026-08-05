@@ -186,7 +186,7 @@ module Prosody
     # +context.state(definition)+.
     #
     # @param name [String] the registered collection name
-    # @return [NativeValueState] the native handle
+    # @return [NativeJsonValueState] the native handle
     # @raise [PermanentStateError] if the name is unregistered or mismatched
     # @private
     def value_state(name)
@@ -199,7 +199,7 @@ module Prosody
     # +context.state(definition)+.
     #
     # @param name [String] the registered collection name
-    # @return [NativeMapState] the native handle
+    # @return [NativeJsonMapState] the native handle
     # @raise [PermanentStateError] if the name is unregistered or mismatched
     # @private
     def map_state(name)
@@ -212,7 +212,7 @@ module Prosody
     # +context.state(definition)+.
     #
     # @param name [String] the registered collection name
-    # @return [NativeDequeState] the native handle
+    # @return [NativeJsonDequeState] the native handle
     # @raise [PermanentStateError] if the name is unregistered or mismatched
     # @private
     def deque_state(name)
@@ -226,7 +226,7 @@ module Prosody
     # +context.state(definition)+.
     #
     # @param name [String] the registered collection name
-    # @return [NativeValueState] the native handle
+    # @return [NativeMessageValueState] the native handle
     # @raise [PermanentStateError] if the name is unregistered or mismatched
     # @private
     def message_value_state(name)
@@ -240,7 +240,7 @@ module Prosody
     # +context.state(definition)+.
     #
     # @param name [String] the registered collection name
-    # @return [NativeMapState] the native handle
+    # @return [NativeMessageMapState] the native handle
     # @raise [PermanentStateError] if the name is unregistered or mismatched
     # @private
     def message_map_state(name)
@@ -253,7 +253,7 @@ module Prosody
     # +context.state(definition)+.
     #
     # @param name [String] the registered collection name
-    # @return [NativeDequeState] the native handle
+    # @return [NativeMessageDequeState] the native handle
     # @raise [PermanentStateError] if the name is unregistered or mismatched
     # @private
     def message_deque_state(name)
@@ -492,8 +492,8 @@ module Prosody
   # {Prosody::ValueState}. Every operation is fiber-yield async: it crosses the
   # bridge and yields the fiber while the Rust core drives the operation.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
-  class NativeValueState
+  # @see ext/prosody/src/handler/state/mod.rs for implementation
+  module NativeValueOperations
     # @private
     def initialize
       raise NotImplementedError, "This class is implemented natively in Rust"
@@ -538,13 +538,21 @@ module Prosody
     end
   end
 
+  class NativeJsonValueState
+    include NativeValueOperations
+  end
+
+  class NativeMessageValueState
+    include NativeValueOperations
+  end
+
   # Native String-keyed ordered-map keyed-state handle, vended by the context and
   # wrapped by {Prosody::MapState}. Every operation is fiber-yield async, except
-  # +#scan+, which opens the cursor synchronously; each {StateScan#next} pull
+  # +#scan+, which opens the cursor synchronously; each native cursor pull
   # yields the fiber.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
-  class NativeMapState
+  # @see ext/prosody/src/handler/state/mod.rs for implementation
+  module NativeMapOperations
     # @private
     def initialize
       raise NotImplementedError, "This class is implemented natively in Rust"
@@ -605,7 +613,7 @@ module Prosody
     # Opens a native ordered scan over the live entries.
     #
     # @param direction [Symbol] +:forward+ or +:backward+
-    # @return [StateScan] the native cursor
+    # @return [Object] the native cursor
     # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
     def scan(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
@@ -616,7 +624,7 @@ module Prosody
     # with zero Kafka fetches), though not no-I/O.
     #
     # @param direction [Symbol] +:forward+ or +:backward+
-    # @return [StateScan] the native key cursor
+    # @return [NativeMapKeyScan] the native key cursor
     # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
     def keys(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
@@ -637,13 +645,21 @@ module Prosody
     end
   end
 
+  class NativeJsonMapState
+    include NativeMapOperations
+  end
+
+  class NativeMessageMapState
+    include NativeMapOperations
+  end
+
   # Native deque keyed-state handle, vended by the context and wrapped by
   # {Prosody::DequeState}. Every operation is fiber-yield async, except +#scan+,
-  # which opens the cursor synchronously; each {StateScan#next} pull yields the
+  # which opens the cursor synchronously; each native cursor pull yields the
   # fiber.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
-  class NativeDequeState
+  # @see ext/prosody/src/handler/state/mod.rs for implementation
+  module NativeDequeOperations
     # @private
     def initialize
       raise NotImplementedError, "This class is implemented natively in Rust"
@@ -732,7 +748,7 @@ module Prosody
     # Opens a native scan over the live elements.
     #
     # @param direction [Symbol] +:forward+ or +:backward+
-    # @return [StateScan] the native cursor
+    # @return [Object] the native cursor
     # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
     def scan(direction)
       raise NotImplementedError, "This method is implemented natively in Rust"
@@ -753,12 +769,20 @@ module Prosody
     end
   end
 
-  # Native scan cursor over a keyed-state collection, driven one chunk at a time
+  class NativeJsonDequeState
+    include NativeDequeOperations
+  end
+
+  class NativeMessageDequeState
+    include NativeDequeOperations
+  end
+
+  # Native cursor over a keyed-state collection, driven one chunk at a time
   # by the {Prosody::MapState} / {Prosody::DequeState} traversal methods. Each
   # pull crosses the bridge and yields the fiber; +close+ is idempotent.
   #
-  # @see ext/prosody/src/handler/state.rs for implementation
-  class StateScan
+  # @see ext/prosody/src/handler/state/scan.rs for implementation
+  module NativeScanOperations
     # @private
     def initialize
       raise NotImplementedError, "This class is implemented natively in Rust"
@@ -777,6 +801,26 @@ module Prosody
     def close
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
+  end
+
+  class NativeJsonDequeScan
+    include NativeScanOperations
+  end
+
+  class NativeJsonMapScan
+    include NativeScanOperations
+  end
+
+  class NativeMessageDequeScan
+    include NativeScanOperations
+  end
+
+  class NativeMessageMapScan
+    include NativeScanOperations
+  end
+
+  class NativeMapKeyScan
+    include NativeScanOperations
   end
 
   # @private
