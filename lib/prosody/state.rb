@@ -322,7 +322,7 @@ module Prosody
   # made durable by {#commit}. All operations are fiber-yield async: they look
   # blocking but never block the thread.
   class ValueState
-    # @param native [Prosody::NativeValueState] the vended native handle
+    # @param native [Prosody::NativeJsonValueState, Prosody::NativeMessageValueState] the native handle
     def initialize(native)
       @native = native
     end
@@ -376,7 +376,7 @@ module Prosody
   class MapState
     include State::Scanning
 
-    # @param native [Prosody::NativeMapState] the vended native handle
+    # @param native [Prosody::NativeJsonMapState, Prosody::NativeMessageMapState] the native handle
     def initialize(native)
       @native = native
     end
@@ -617,7 +617,7 @@ module Prosody
   class DequeState
     include State::Scanning
 
-    # @param native [Prosody::NativeDequeState] the vended native handle
+    # @param native [Prosody::NativeJsonDequeState, Prosody::NativeMessageDequeState] the native handle
     def initialize(native)
       @native = native
     end

@@ -118,7 +118,7 @@ module Prosody
     def value=: (T value) -> T      # alias of #set (assignment yields value)
 
     private
-    def initialize: (NativeValueState native) -> void
+    def initialize: ((NativeJsonValueState | NativeMessageValueState) native) -> void
   end
 
   # A String-keyed ordered-map keyed-state handle.
@@ -165,7 +165,7 @@ module Prosody
                     | [R] (*String keys) { (String) -> R } -> Array[V | R]
 
     private
-    def initialize: (NativeMapState native) -> void
+    def initialize: ((NativeJsonMapState | NativeMessageMapState) native) -> void
     def traverse: (Symbol direction) { (String, V) -> void } -> void
                 | (Symbol direction) -> Enumerator[[ String, V ], void]
     def traverse_keys: (Symbol direction) { (String) -> void } -> void
@@ -206,56 +206,96 @@ module Prosody
              | [R] (Integer index) { (Integer) -> R } -> (T | R)
 
     private
-    def initialize: (NativeDequeState native) -> void
+    def initialize: ((NativeJsonDequeState | NativeMessageDequeState) native) -> void
     def at_negative: (Integer index) -> T?
     def traverse: (Symbol direction) { (T) -> void } -> void
                 | (Symbol direction) -> Enumerator[T, void]
   end
 
-  # Native single-value handle (Prosody::NativeValueState), wrapped by ValueState.
-  class NativeValueState
-    def get: () -> state_item?
-    def set: (state_item value) -> void
+  interface _NativeValueHandle[T]
+    def get: () -> T?
+    def set: (T value) -> void
     def clear: () -> void
     def commit: () -> nil
     def rollback: () -> nil
   end
 
-  # Native ordered-map handle (Prosody::NativeMapState), wrapped by MapState.
-  class NativeMapState
-    def get: (String key) -> state_item?
+  class NativeJsonValueState
+    include _NativeValueHandle[json_value]
+  end
+
+  class NativeMessageValueState
+    include _NativeValueHandle[Message[json_value]]
+  end
+
+  interface _NativeMapHandle[V, S]
+    def get: (String key) -> V?
     def contains_key: (String key) -> bool
-    def get_many: (Array[String] keys) -> Array[state_item?]
-    def set: (String key, state_item value) -> void
+    def get_many: (Array[String] keys) -> Array[V?]
+    def set: (String key, V value) -> void
     def remove: (String key) -> void
     def clear: () -> void
-    def scan: (Symbol direction) -> StateScan[map_state_item]
-    def keys: (Symbol direction) -> StateScan[String]
+    def scan: (Symbol direction) -> S
+    def keys: (Symbol direction) -> NativeMapKeyScan
     def commit: () -> nil
     def rollback: () -> nil
   end
 
-  # Native deque handle (Prosody::NativeDequeState), wrapped by DequeState.
-  class NativeDequeState
+  class NativeJsonMapState
+    include _NativeMapHandle[json_value, NativeJsonMapScan]
+  end
+
+  class NativeMessageMapState
+    include _NativeMapHandle[Message[json_value], NativeMessageMapScan]
+  end
+
+  interface _NativeDequeHandle[T, S]
     def len: () -> Integer
     def is_empty: () -> bool
-    def get: (Integer index) -> state_item?
-    def peek_front: () -> state_item?
-    def peek_back: () -> state_item?
-    def push_back: (state_item value) -> void
-    def push_front: (state_item value) -> void
-    def pop_front: () -> state_item?
-    def pop_back: () -> state_item?
+    def get: (Integer index) -> T?
+    def peek_front: () -> T?
+    def peek_back: () -> T?
+    def push_back: (T value) -> void
+    def push_front: (T value) -> void
+    def pop_front: () -> T?
+    def pop_back: () -> T?
     def clear: () -> void
-    def scan: (Symbol direction) -> StateScan[state_item]
+    def scan: (Symbol direction) -> S
     def commit: () -> nil
     def rollback: () -> nil
   end
 
-  # Native scan cursor (Prosody::StateScan), driven by the wrapper traversal.
-  class StateScan[T]
+  class NativeJsonDequeState
+    include _NativeDequeHandle[json_value, NativeJsonDequeScan]
+  end
+
+  class NativeMessageDequeState
+    include _NativeDequeHandle[Message[json_value], NativeMessageDequeScan]
+  end
+
+  interface _NativeScan[T]
     def next: () -> T?
     def close: () -> void
+  end
+
+  class NativeJsonDequeScan
+    include _NativeScan[json_value]
+  end
+
+  class NativeJsonMapScan
+    include _NativeScan[[String, json_value]]
+  end
+
+  class NativeMessageDequeScan
+    include _NativeScan[Message[json_value]]
+  end
+
+  class NativeMessageMapScan
+    include _NativeScan[[String, Message[json_value]]]
+  end
+
+  class NativeMapKeyScan
+    include _NativeScan[String]
   end
 
   class NativePublishedValue
@@ -266,8 +306,8 @@ module Prosody
     def get: (String key, String map_key) -> json_value?
     def get_many: (String key, Array[String] map_keys) -> Array[json_value?]
     def contains_key: (String key, String map_key) -> bool
-    def scan: (String key, Symbol direction) -> StateScan[[String, json_value]]
-    def keys: (String key, Symbol direction) -> StateScan[String]
+    def scan: (String key, Symbol direction) -> NativeJsonMapScan
+    def keys: (String key, Symbol direction) -> NativeMapKeyScan
   end
 
   class NativePublishedDeque
@@ -276,7 +316,7 @@ module Prosody
     def is_empty: (String key) -> bool
     def peek_front: (String key) -> json_value?
     def peek_back: (String key) -> json_value?
-    def scan: (String key, Symbol direction) -> StateScan[json_value]
+    def scan: (String key, Symbol direction) -> NativeJsonDequeScan
   end
 
   class PublishedValue[T = json_value]
@@ -334,7 +374,7 @@ module Prosody
     module Scanning
       private
       def scan_each: (Symbol direction, ?Symbol opener) { (state_item | map_state_item | String) -> void } -> void
-      def scan_items: [T] (StateScan[T] scan) { (T) -> void } -> void
+      def scan_items: [T] (_NativeScan[T] scan) { (T) -> void } -> void
     end
   end
 
@@ -342,11 +382,11 @@ module Prosody
   class Context
     include State::Vending
 
-    def value_state: (String name) -> NativeValueState
-    def map_state: (String name) -> NativeMapState
-    def deque_state: (String name) -> NativeDequeState
-    def message_value_state: (String name) -> NativeValueState
-    def message_map_state: (String name) -> NativeMapState
-    def message_deque_state: (String name) -> NativeDequeState
+    def value_state: (String name) -> NativeJsonValueState
+    def map_state: (String name) -> NativeJsonMapState
+    def deque_state: (String name) -> NativeJsonDequeState
+    def message_value_state: (String name) -> NativeMessageValueState
+    def message_map_state: (String name) -> NativeMessageMapState
+    def message_deque_state: (String name) -> NativeMessageDequeState
   end
 end

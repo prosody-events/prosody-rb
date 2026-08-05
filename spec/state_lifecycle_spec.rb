@@ -242,7 +242,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
 
     # Deterministically forcing a mid-pull cancellation against real Cassandra is
     # not drivable from Ruby (there is no fake-cursor injection into the native
-    # StateScan). The cancellation-honesty contract is covered by the design
+    # native cursor). The cancellation contract is covered by the design
     # (`state.rs` module docs), the early-break close above, and the leaked-
     # enumerator terminated test in state_scan_spec.rb.
     it "closes cleanly on cancellation during a blocked pull"

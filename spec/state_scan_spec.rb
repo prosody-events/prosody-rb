@@ -12,7 +12,7 @@ require "async/barrier"
 # block exception. The native permit's "one pull at a time / exactly one close"
 # are Rust-enforced and not Ruby-observable; the falsifiable proxy is the
 # no-duplicate / no-loss / ordered union of concurrent `#next` calls across a
-# chunk boundary, plus close idempotence, exercised against a real StateScan.
+# chunk boundary, plus close idempotence, exercised against a real native cursor.
 RSpec.describe "Prosody keyed state scans" do
   # A fake native handle whose `scan` returns a recording cursor: it replays
   # `items` then the `nil` exhaustion sentinel, and records each `close` call so
@@ -92,7 +92,7 @@ RSpec.describe "Prosody keyed state scans" do
           @count.times { |i| map.set(format("k%04d", i), i) }
           map.commit
 
-          # Drive the raw native StateScan (obtained directly from the native
+          # Drive the raw native cursor (obtained directly from the native
           # handle via the surviving @native.scan seam) from N concurrent
           # sub-tasks so the one-token permit is exercised; reaching through the
           # ivar keeps this test-only with no new public surface.

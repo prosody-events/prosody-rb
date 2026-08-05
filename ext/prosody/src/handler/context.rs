@@ -6,8 +6,8 @@
 
 use crate::bridge::Bridge;
 use crate::handler::state::{
-    DequeStateVariant, MapStateVariant, NativeDequeState, NativeMapState, NativeValueState,
-    ValueStateVariant, state_error,
+    NativeJsonDequeState, NativeJsonMapState, NativeJsonValueState, NativeMessageDequeState,
+    NativeMessageMapState, NativeMessageValueState, state_error,
 };
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
@@ -334,13 +334,13 @@ impl Context {
     /// Returns a permanent state error if the name is unregistered or its
     /// registered identity mismatches.
     #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn value_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeValueState, Error> {
+    fn value_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeJsonValueState, Error> {
         let handle = this
             .inner
             .value_state(&name)
             .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeValueState::new(
-            ValueStateVariant::Json(Arc::from(handle)),
+        Ok(NativeJsonValueState::new(
+            Arc::from(handle),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         ))
@@ -352,13 +352,13 @@ impl Context {
     ///
     /// See [`value_state`](Self::value_state).
     #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn map_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeMapState, Error> {
+    fn map_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeJsonMapState, Error> {
         let handle = this
             .inner
             .map_state(&name)
             .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeMapState::new(
-            MapStateVariant::Json(Arc::from(handle)),
+        Ok(NativeJsonMapState::new(
+            Arc::from(handle),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         ))
@@ -370,13 +370,13 @@ impl Context {
     ///
     /// See [`value_state`](Self::value_state).
     #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn deque_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeDequeState, Error> {
+    fn deque_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeJsonDequeState, Error> {
         let handle = this
             .inner
             .deque_state(&name)
             .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeDequeState::new(
-            DequeStateVariant::Json(Arc::from(handle)),
+        Ok(NativeJsonDequeState::new(
+            Arc::from(handle),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         ))
@@ -392,13 +392,13 @@ impl Context {
         ruby: &Ruby,
         this: &Self,
         name: String,
-    ) -> Result<NativeValueState, Error> {
+    ) -> Result<NativeMessageValueState, Error> {
         let handle = this
             .inner
             .message_value_state(&name)
             .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeValueState::new(
-            ValueStateVariant::Message(Arc::from(handle)),
+        Ok(NativeMessageValueState::new(
+            Arc::from(handle),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         ))
@@ -410,13 +410,17 @@ impl Context {
     ///
     /// See [`value_state`](Self::value_state).
     #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn message_map_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeMapState, Error> {
+    fn message_map_state(
+        ruby: &Ruby,
+        this: &Self,
+        name: String,
+    ) -> Result<NativeMessageMapState, Error> {
         let handle = this
             .inner
             .message_map_state(&name)
             .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeMapState::new(
-            MapStateVariant::Message(Arc::from(handle)),
+        Ok(NativeMessageMapState::new(
+            Arc::from(handle),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         ))
@@ -432,13 +436,13 @@ impl Context {
         ruby: &Ruby,
         this: &Self,
         name: String,
-    ) -> Result<NativeDequeState, Error> {
+    ) -> Result<NativeMessageDequeState, Error> {
         let handle = this
             .inner
             .message_deque_state(&name)
             .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeDequeState::new(
-            DequeStateVariant::Message(Arc::from(handle)),
+        Ok(NativeMessageDequeState::new(
+            Arc::from(handle),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         ))
