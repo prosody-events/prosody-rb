@@ -27,6 +27,7 @@ use prosody::consumer::message::ConsumerMessage;
 use prosody::consumer::middleware::FallibleHandler;
 use prosody::consumer::{DemandType, Keyed};
 use prosody::error::{ClassifyError, ErrorCategory};
+use prosody::high_level::{ClientHandler, JsonCodecs};
 use prosody::propagator::new_propagator;
 use prosody::timers::{TimerType, Trigger as ProsodyTrigger};
 use std::collections::HashMap;
@@ -93,7 +94,7 @@ impl RubyHandler {
 
 impl FallibleHandler for RubyHandler {
     type Error = RubyHandlerError;
-    type Output = ();
+    type Output = serde_json::Value;
     type Payload = serde_json::Value;
 
     /// Processes a Kafka message by dispatching it to the Ruby handler.
@@ -121,7 +122,7 @@ impl FallibleHandler for RubyHandler {
         context: C,
         message: ConsumerMessage<Self::Payload>,
         _demand_type: DemandType,
-    ) -> Result<(), Self::Error>
+    ) -> Result<Self::Output, Self::Error>
     where
         C: EventContext<Payload = Self::Payload>,
     {
@@ -174,11 +175,9 @@ impl FallibleHandler for RubyHandler {
             let task_handle = self
                 .scheduler
                 .schedule(task_id, &cloned_span, event_context, move |ruby| {
-                    let _: Value = handler
+                    handler
                         .get(ruby)
-                        .funcall(id!(ruby, "on_message"), (context, message))?;
-
-                    Ok(())
+                        .funcall(id!(ruby, "on_message"), (context, message))
                 })
                 .await?;
 
@@ -187,20 +186,20 @@ impl FallibleHandler for RubyHandler {
             pin_mut!(result_future);
 
             // Wait for either task completion or shutdown signal
-            select! {
+            let result = select! {
                 result = &mut result_future => {
-                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?
                 }
                 () = cancel_future => {
                     // A cancel() failure is a genuine bridge error; mark the span.
                     // The subsequent result_future error is expected cancellation, not a handler bug.
                     task_handle.cancellation_token.cancel(&self.bridge).await
                         .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
-                    result_future.await?;
+                    result_future.await?
                 }
-            }
+            };
 
-            Ok(())
+            Ok(result)
         }
         .instrument(span)
         .await
@@ -211,13 +210,13 @@ impl FallibleHandler for RubyHandler {
         context: C,
         trigger: ProsodyTrigger,
         _demand_type: DemandType,
-    ) -> Result<(), Self::Error>
+    ) -> Result<Self::Output, Self::Error>
     where
         C: EventContext<Payload = Self::Payload>,
     {
         // Only process application timers; internal timers are handled by middleware
         if trigger.timer_type != TimerType::Application {
-            return Ok(());
+            return Ok(serde_json::Value::Null);
         }
 
         // Create a new span for the on_timer operation as a child of the trigger's span
@@ -259,11 +258,9 @@ impl FallibleHandler for RubyHandler {
             let task_handle = self
                 .scheduler
                 .schedule(task_id, &cloned_span, event_context, move |ruby| {
-                    let _: Value = handler
+                    handler
                         .get(ruby)
-                        .funcall(id!(ruby, "on_timer"), (context, timer))?;
-
-                    Ok(())
+                        .funcall(id!(ruby, "on_timer"), (context, timer))
                 })
                 .await?;
 
@@ -272,20 +269,20 @@ impl FallibleHandler for RubyHandler {
             pin_mut!(result_future);
 
             // Wait for either task completion or shutdown signal
-            select! {
+            let result = select! {
                 result = &mut result_future => {
-                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
+                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?
                 }
                 () = cancel_future => {
                     // A cancel() failure is a genuine bridge error; mark the span.
                     // The subsequent result_future error is expected cancellation, not a handler bug.
                     task_handle.cancellation_token.cancel(&self.bridge).await
                         .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
-                    result_future.await?;
+                    result_future.await?
                 }
-            }
+            };
 
-            Ok(())
+            Ok(result)
         }
         .instrument(span)
         .await
@@ -298,6 +295,10 @@ impl FallibleHandler for RubyHandler {
     async fn shutdown(self) {
         // No cleanup required - Ruby handles resource cleanup via GC
     }
+}
+
+impl ClientHandler for RubyHandler {
+    type Codecs = JsonCodecs;
 }
 
 impl ClassifyError for RubyHandlerError {

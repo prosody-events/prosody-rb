@@ -197,7 +197,7 @@ RSpec.describe Prosody::Client, integration: true do
   # Test variables
   let(:topic) { generate_topic_name }
   let(:message_stream) { MessageStream.new }
-  let(:config) { TestConfig.create_configuration(topic) }
+  let(:config) { TestConfig.create_configuration(topic, subsystem: "inventory") }
   let(:client) { Prosody::Client.new(config) }
   let(:admin_client_class) { Prosody.const_get(:AdminClient) }
   let(:admin) { admin_client_class.new([TestConfig::BOOTSTRAP_SERVERS]) }
@@ -336,6 +336,25 @@ RSpec.describe Prosody::Client, integration: true do
       # Compare with string keys since JSON serializes to string keys
       expect(received_message.payload).to eq(test_message[:payload].transform_keys(&:to_s))
     end
+  end
+
+  it "returns the local handler response for a request" do
+    handler_class = Class.new(Prosody::EventHandler) do
+      def on_message(_context, message)
+        {"key" => message.key, "accepted" => true}
+      end
+    end
+
+    client.subscribe(handler_class.new)
+    results = client.request(
+      topic,
+      "order-1",
+      {"type" => "order.created"},
+      ["inventory"],
+      10
+    )
+
+    expect(results).to eq([Prosody::Ok.new({"key" => "order-1", "accepted" => true})])
   end
 
   # Verify correct handling of multiple messages with ordering guarantees

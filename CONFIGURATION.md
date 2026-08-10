@@ -17,6 +17,16 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 | `mode` / -                              | Processing mode: `pipeline`, `low_latency`, or `best_effort` | `pipeline` |
 | - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info` |
 
+## Peer requests
+
+| Option / Environment Variable | Description | Default |
+|--------------------------------|-------------|---------|
+| `peer_bind_address` / `PROSODY_PEER_BIND_ADDRESS` | Address for the peer listener | `0.0.0.0:0` |
+| `peer_advertised_connect` / `PROSODY_PEER_ADVERTISED_CONNECT` | gRPC connect URI that other clients use | - |
+| `peer_network_name` / `PROSODY_PEER_NETWORK_NAME` | Network name used to identify direct routes | - |
+| `peer_cache_capacity` / `PROSODY_PEER_CACHE_CAPACITY` | Peer channels and registrations held in each cache | 256 |
+| `peer_registration_ttl` / `PROSODY_PEER_REGISTRATION_TTL` | Duration of each peer registration lease | 30s |
+
 ## Consumer
 
 | Option / Environment Variable           | Description                                          | Default                |

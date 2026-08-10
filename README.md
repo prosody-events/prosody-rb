@@ -86,6 +86,43 @@ client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 client.unsubscribe
 ```
 
+## Peer Requests
+
+Peer requests collect one result from each named subsystem. The result order matches the subsystem order.
+
+Return a JSON response from each handler:
+
+```ruby
+class InventoryHandler < Prosody::EventHandler
+  def on_message(_context, message)
+    {"accepted" => message.key}
+  end
+end
+```
+
+Send a request without a subscription on the requester:
+
+```ruby
+results = client.request(
+  "orders",
+  "order-1",
+  {"type" => "order.created"},
+  ["inventory", "billing"],
+  2
+)
+
+results.each do |result|
+  case result
+  in Prosody::Ok[value]
+    puts value
+  in Prosody::Err[error]
+    warn error
+  end
+end
+```
+
+Each error identifies a handler failure, timeout, format mismatch, or malformed response. Handler failures also include their category and message.
+
 ## Architecture
 
 Prosody enables efficient, parallel processing of Kafka messages while maintaining order for messages with the same key:

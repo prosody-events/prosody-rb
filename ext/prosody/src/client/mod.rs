@@ -16,19 +16,27 @@ use crate::handler::RubyHandler;
 use crate::published::{NativePublishedDeque, NativePublishedMap, NativePublishedValue};
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
-use crate::{BRIDGE, ROOT_MOD, id};
+use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
 use educe::Educe;
 use magnus::value::ReprValue;
-use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
+use magnus::{
+    Class, Error, Module, Object, RClass, RModule, Ruby, StaticSymbol, Value, function, method,
+};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
+use prosody::error::ErrorCategory;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::erased::{
     ErasedConsumerState, ErasedReadCache, SharedHighLevelClient, new_erased,
 };
 use prosody::high_level::mode::Mode;
 use prosody::propagator::new_propagator;
+use prosody::requester::ResponseError;
+use prosody::subsystem::SubsystemName;
+use serde::Deserialize;
 use serde_magnus::deserialize;
+use serde_magnus::serialize;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{Span, debug, info_span};
@@ -48,13 +56,24 @@ mod config;
 pub struct Client {
     /// The underlying Prosody client
     #[educe(Debug(ignore))]
-    inner: SharedHighLevelClient<RubyHandler, prosody::JsonCodec>,
+    inner: SharedHighLevelClient<RubyHandler>,
     /// Bridge for communicating between Rust and Ruby
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
     propagator: Arc<TextMapCompositePropagator>,
     /// PID at construction time, used to detect post-fork usage
     pid: u32,
+}
+
+#[derive(Deserialize)]
+struct NativeRequest {
+    topic: String,
+    key: String,
+    payload: serde_json::Value,
+    subsystems: Vec<String>,
+    timeout: f64,
+    #[serde(default)]
+    headers: HashMap<String, String>,
 }
 
 impl Client {
@@ -101,7 +120,13 @@ impl Client {
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
         let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
-        let client = new_erased(mode, &mut config_ref.into(), &consumer_builders, &cassandra)
+        let client = RUNTIME
+            .block_on(new_erased(
+                mode,
+                &mut config_ref.into(),
+                &consumer_builders,
+                &cassandra,
+            ))
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let bridge = BRIDGE
@@ -218,6 +243,65 @@ impl Client {
                 span,
             )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
+    }
+
+    fn request(ruby: &Ruby, this: &Self, request: Value) -> Result<Value, Error> {
+        Self::check_fork(ruby, this)?;
+        let request: NativeRequest = deserialize(ruby, request)?;
+        let subsystems = request
+            .subsystems
+            .into_iter()
+            .map(SubsystemName::try_new)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?;
+        let timeout = Duration::try_from_secs_f64(request.timeout).map_err(|_| {
+            Error::new(
+                ruby.exception_arg_error(),
+                "timeout must be a finite, non-negative duration",
+            )
+        })?;
+        let topic = prosody::Topic::from(request.topic.as_str());
+        let inner = this.inner.clone();
+        let results = this
+            .bridge
+            .wait_for(
+                ruby,
+                async move {
+                    inner
+                        .request(
+                            request.headers.into_iter().collect(),
+                            topic,
+                            request.key,
+                            request.payload,
+                            subsystems,
+                            timeout,
+                        )
+                        .await
+                },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+
+        let module = ruby.get_inner(&ROOT_MOD);
+        let ok: RClass = module.const_get(id!(ruby, "Ok"))?;
+        let err: RClass = module.const_get(id!(ruby, "Err"))?;
+        let values = results
+            .into_iter()
+            .map(|result| -> Result<Value, Error> {
+                match result {
+                    Ok(value) => {
+                        let value: Value = serialize(ruby, &value)?;
+                        ok.new_instance((value,))
+                    }
+                    Err(error) => err.new_instance((response_error(ruby, module, error)?,)),
+                }
+            })
+            .collect::<Result<Vec<Value>, Error>>()?;
+        let array = ruby.ary_new_capa(values.len());
+        for value in values {
+            array.push(value)?;
+        }
+        Ok(array.as_value())
     }
 
     /// Subscribes to events using the provided Ruby handler.
@@ -461,6 +545,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(Client::consumer_state, 0),
     )?;
     class.define_method(id!(ruby, "send_message"), method!(Client::send, 3))?;
+    class.define_method(id!(ruby, "native_request"), method!(Client::request, 1))?;
     class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
     class.define_method(
         id!(ruby, "assigned_partitions"),
@@ -486,4 +571,23 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
 
     Ok(())
+}
+
+fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<Value, Error> {
+    let (name, arguments) = match error {
+        ResponseError::Handler { category, message } => {
+            let category = match category {
+                ErrorCategory::Transient => "transient",
+                ErrorCategory::Permanent => "permanent",
+                ErrorCategory::Terminal => "terminal",
+            };
+            let class: RClass = module.const_get(id!(ruby, "HandlerResponseError"))?;
+            return class.new_instance((ruby.sym_new(category), message));
+        }
+        ResponseError::Timeout => ("ResponseTimeoutError", ()),
+        ResponseError::FormatMismatch => ("ResponseFormatMismatchError", ()),
+        ResponseError::Malformed => ("MalformedResponseError", ()),
+    };
+    let class: RClass = module.const_get(name)?;
+    class.new_instance(arguments)
 }

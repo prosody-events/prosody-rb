@@ -14,7 +14,7 @@ use crate::bridge::{Bridge, BridgeError};
 use crate::scheduler::handle::TaskHandle;
 use crate::scheduler::processor::RubyProcessor;
 use crate::scheduler::result::result_channel;
-use magnus::{Error, Ruby};
+use magnus::{Error, Ruby, Value};
 use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
 use prosody::propagator::new_propagator;
 use std::collections::HashMap;
@@ -99,7 +99,7 @@ impl Scheduler {
         function: F,
     ) -> Result<TaskHandle, SchedulerError>
     where
-        F: FnOnce(&Ruby) -> Result<(), Error> + Send + 'static,
+        F: FnOnce(&Ruby) -> Result<Value, Error> + Send + 'static,
     {
         let mut carrier: HashMap<String, String> = HashMap::with_capacity(2);
         self.propagator

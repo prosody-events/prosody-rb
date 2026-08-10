@@ -69,7 +69,7 @@ module Prosody
     #
     # @param [Symbol] method_name the name of the method to wrap
     # @param [Class<Exception>] exception_classes one or more Exception subclasses to catch
-    # @return [void]
+    # @return [Prosody::json_value] The response for peer requests
     # @raise [ArgumentError] if no exception classes given
     # @raise [NameError] if method_name is not defined on this class or its ancestors
     def permanent(method_name, *exception_classes)
@@ -81,7 +81,7 @@ module Prosody
     #
     # @param [Symbol] method_name the name of the method to wrap
     # @param [Class<Exception>] exception_classes one or more Exception subclasses to catch
-    # @return [void]
+    # @return [Prosody::json_value] The response for peer requests
     # @raise [ArgumentError] if no exception classes given
     # @raise [NameError] if method_name is not defined on this class or its ancestors
     def transient(method_name, *exception_classes)

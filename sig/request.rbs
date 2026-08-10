@@ -1,0 +1,43 @@
+module Prosody
+  type error_category = :transient | :permanent | :terminal
+
+  class Ok[Value]
+    attr_reader value: Value
+  end
+
+  class Err
+    attr_reader error: response_error
+  end
+
+  class HandlerResponseError
+    attr_reader category: error_category
+    attr_reader message: String
+  end
+
+  class ResponseTimeoutError
+  end
+
+  class ResponseFormatMismatchError
+  end
+
+  class MalformedResponseError
+  end
+
+  type response_error = HandlerResponseError | ResponseTimeoutError | ResponseFormatMismatchError | MalformedResponseError
+  type request_result[Value] = Ok[Value] | Err
+
+  class Client
+    def request: [Value] (
+      String topic,
+      String key,
+      json_value payload,
+      Array[String] subsystems,
+      (Integer | Float) timeout,
+      ?headers: Hash[String, String]
+    ) -> Array[request_result[Value]]
+
+    private
+
+    def native_request: (Hash[Symbol, untyped] request) -> Array[request_result[json_value]]
+  end
+end

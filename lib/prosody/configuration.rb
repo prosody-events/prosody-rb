@@ -156,6 +156,21 @@ module Prosody
     # Identifier for the system producing messages.
     config_param :source_system, converter: lambda(&:to_s)
 
+    # Address for the peer listener.
+    config_param :peer_bind_address, converter: lambda(&:to_s)
+
+    # gRPC connect URI that other clients use for this client.
+    config_param :peer_advertised_connect, converter: lambda(&:to_s)
+
+    # Network name used to identify direct routes.
+    config_param :peer_network_name, converter: lambda(&:to_s)
+
+    # Maximum number of peer channels and registrations in each cache.
+    config_param :peer_cache_capacity, converter: ->(v) { Integer(v) }
+
+    # Duration of each peer registration lease.
+    config_param :peer_registration_ttl, converter: ->(v) { duration_converter(v) }
+
     # Topic to send failed messages to.
     config_param :failure_topic, converter: lambda(&:to_s)
 
