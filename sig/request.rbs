@@ -27,14 +27,14 @@ module Prosody
   type request_result[Value] = Ok[Value] | Err
 
   class Client
-    def request: [Value] (
+    def request: (
       String topic,
       String key,
       json_value payload,
       Array[String] subsystems,
       (Integer | Float) timeout,
       ?headers: Hash[String, String]
-    ) -> Array[request_result[Value]]
+    ) -> Array[request_result[json_value]]
 
     private
 
