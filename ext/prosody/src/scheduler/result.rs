@@ -81,14 +81,9 @@ impl ResultSender {
         };
 
         if is_success {
-            let result = match deserialize(ruby, result) {
-                Ok(value) => value,
-                Err(error) => {
-                    debug!(%error, "handler returned a value that is not JSON; using null");
-                    serde_json::Value::Null
-                }
-            };
-            if result_tx.send(Ok(result)).is_err() {
+            let result = deserialize(ruby, result)
+                .map_err(|error| ProcessingError::Transient(error.to_string()));
+            if result_tx.send(result).is_err() {
                 debug!("discarding result; receiver went away");
             }
 

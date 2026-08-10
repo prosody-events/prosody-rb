@@ -19,13 +19,18 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 
 ## Peer requests
 
+Peer requests work with the defaults on one network. Set an advertised connect string only when another network cannot use the listener address.
+Use a different bind address for each client that shares a host.
+
 | Option / Environment Variable | Description | Default |
 |--------------------------------|-------------|---------|
-| `peer_bind_address` / `PROSODY_PEER_BIND_ADDRESS` | Address for the peer listener | `0.0.0.0:0` |
-| `peer_advertised_connect` / `PROSODY_PEER_ADVERTISED_CONNECT` | gRPC connect URI that other clients use | - |
-| `peer_network_name` / `PROSODY_PEER_NETWORK_NAME` | Network name used to identify direct routes | - |
-| `peer_cache_capacity` / `PROSODY_PEER_CACHE_CAPACITY` | Peer channels and registrations held in each cache | 256 |
-| `peer_registration_ttl` / `PROSODY_PEER_REGISTRATION_TTL` | Duration of each peer registration lease | 30s |
+| `peer_bind_address` / `PROSODY_PEER_BIND_ADDRESS` | Socket address for the peer gRPC listener | `0.0.0.0:9099` |
+| `peer_advertised_connect` / `PROSODY_PEER_ADVERTISED_CONNECT` | gRPC connect URI that peers on another network use | (none) |
+| `peer_network_name` / `PROSODY_PEER_NETWORK_NAME` | Nonempty network name, with a maximum size of 63 UTF-8 bytes | (none) |
+| `peer_cache_capacity` / `PROSODY_PEER_CACHE_CAPACITY` | Maximum channels and peer records in each node-keyed cache | 256 |
+| `peer_registration_ttl` / `PROSODY_PEER_REGISTRATION_TTL` | Directory lease duration; use 5 through 3600 seconds | 30s |
+
+Set `subsystem` to make this client answer requests. Without it, the client consumes messages but does not answer requests.
 
 ## Consumer
 

@@ -20,7 +20,8 @@ use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
 use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{
-    Class, Error, Module, Object, RClass, RModule, Ruby, StaticSymbol, Value, function, method,
+    Class, Error, Module, Object, RClass, RModule, Ruby, StaticSymbol, Value, function, kwargs,
+    method,
 };
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
@@ -247,6 +248,7 @@ impl Client {
 
     fn request(ruby: &Ruby, this: &Self, request: Value) -> Result<Value, Error> {
         Self::check_fork(ruby, this)?;
+        let _guard = ensure_runtime_context(ruby);
         let request: NativeRequest = deserialize(ruby, request)?;
         let subsystems = request
             .subsystems
@@ -261,6 +263,11 @@ impl Client {
             )
         })?;
         let topic = prosody::Topic::from(request.topic.as_str());
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+        let span = info_span!("ruby-request", topic = %request.topic, key = %request.key);
+        if let Err(error) = span.set_parent(context) {
+            debug!("failed to set parent span: {error:#}");
+        }
         let inner = this.inner.clone();
         let results = this
             .bridge
@@ -278,27 +285,25 @@ impl Client {
                         )
                         .await
                 },
-                Span::current(),
+                span,
             )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let module = ruby.get_inner(&ROOT_MOD);
         let ok: RClass = module.const_get(id!(ruby, "Ok"))?;
         let err: RClass = module.const_get(id!(ruby, "Err"))?;
-        let values = results
-            .into_iter()
-            .map(|result| -> Result<Value, Error> {
-                match result {
-                    Ok(value) => {
-                        let value: Value = serialize(ruby, &value)?;
-                        ok.new_instance((value,))
-                    }
-                    Err(error) => err.new_instance((response_error(ruby, module, error)?,)),
+        let array = ruby.ary_new_capa(results.len());
+        for result in results {
+            let value = match result {
+                Ok(value) => {
+                    let value: Value = serialize(ruby, &value)?;
+                    ok.new_instance((kwargs!("value" => value),))?
                 }
-            })
-            .collect::<Result<Vec<Value>, Error>>()?;
-        let array = ruby.ary_new_capa(values.len());
-        for value in values {
+                Err(error) => {
+                    let error = response_error(ruby, module, error)?;
+                    err.new_instance((kwargs!("error" => error),))?
+                }
+            };
             array.push(value)?;
         }
         Ok(array.as_value())
@@ -582,7 +587,9 @@ fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<
                 ErrorCategory::Terminal => "terminal",
             };
             let class: RClass = module.const_get(id!(ruby, "HandlerResponseError"))?;
-            return class.new_instance((ruby.sym_new(category), message));
+            return class.new_instance((
+                kwargs!("category" => ruby.sym_new(category), "message" => message),
+            ));
         }
         ResponseError::Timeout => ("ResponseTimeoutError", ()),
         ResponseError::FormatMismatch => ("ResponseFormatMismatchError", ()),

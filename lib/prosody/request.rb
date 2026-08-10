@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 module Prosody
-  Ok = Struct.new(:value)
-  Err = Struct.new(:error)
-  HandlerResponseError = Struct.new(:category, :message)
-  ResponseTimeoutError = Class.new
-  ResponseFormatMismatchError = Class.new
-  MalformedResponseError = Class.new
+  Ok = Data.define(:value)
+  Err = Data.define(:error)
+  HandlerResponseError = Data.define(:category, :message)
+  ResponseTimeoutError = Data.define
+  ResponseFormatMismatchError = Data.define
+  MalformedResponseError = Data.define
 
   class Client
     def request(topic, key, payload, subsystems, timeout, headers: {})
@@ -15,7 +15,7 @@ module Prosody
         key: key,
         payload: payload,
         subsystems: subsystems,
-        timeout: timeout.to_f,
+        timeout: timeout,
         headers: headers
       )
     end
