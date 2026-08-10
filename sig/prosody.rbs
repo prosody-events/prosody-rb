@@ -98,7 +98,7 @@ module Prosody
 
     # Returns the deserialized message payload.
     # @return [Payload] The message content
-    def payload: () -> Payload
+    def payload: () -> Payload?
   end
 
   # Represents a timer that was scheduled to fire at a specific time.
@@ -156,6 +156,9 @@ module Prosody
     # @return [void]
     # @raise [RuntimeError] If the message cannot be sent
     def send_message: (String topic, String key, json_value payload) -> void
+
+    # Sends an excise record for a key.
+    def excise: (String topic, String key) -> void
 
     # Subscribes to Kafka topics using the provided handler.
     # The handler must implement an `on_message(context, message)` method.

@@ -206,6 +206,75 @@ impl FallibleHandler for RubyHandler {
         .await
     }
 
+    async fn on_excise<C>(
+        &self,
+        context: C,
+        message: ConsumerMessage<Self::Payload>,
+        _demand_type: DemandType,
+    ) -> Result<(), Self::Error>
+    where
+        C: EventContext<Payload = Self::Payload>,
+    {
+        let span = info_span!(
+            parent: message.span(),
+            "on_excise",
+            topic = %message.topic(),
+            partition = message.partition(),
+            offset = message.offset(),
+            key = %message.key()
+        );
+        let cancel_context = context.clone();
+        let cancel_future = cancel_context.on_cancel();
+        let handler = self.handler.clone();
+        let task_id = format!(
+            "{}/{}:{}",
+            message.topic(),
+            message.partition(),
+            message.offset()
+        );
+        let event_context = HashMap::from([
+            ("event_type".into(), "excise".into()),
+            ("topic".into(), message.topic().to_string()),
+            ("partition".into(), message.partition().to_string()),
+            ("key".into(), message.key().to_string()),
+            ("offset".into(), message.offset().to_string()),
+        ]);
+        let context = Context::new(
+            context.boxed(),
+            self.bridge.clone(),
+            self.propagator.clone(),
+        );
+        let message: Message = message.into();
+        let cloned_span = span.clone();
+
+        async move {
+            let task_handle = self
+                .scheduler
+                .schedule(task_id, &cloned_span, event_context, move |ruby| {
+                    let _: Value = handler
+                        .get(ruby)
+                        .funcall(id!(ruby, "on_excise"), (context, message))?;
+                    Ok(())
+                })
+                .await?;
+            let result_future = task_handle.result.receive();
+            pin_mut!(result_future);
+            select! {
+                result = &mut result_future => {
+                    result.inspect_err(|error| cloned_span.set_status(Status::error(error.to_string())))?;
+                }
+                () = cancel_future => {
+                    task_handle.cancellation_token.cancel(&self.bridge).await
+                        .inspect_err(|error| cloned_span.set_status(Status::error(error.to_string())))?;
+                    result_future.await?;
+                }
+            }
+            Ok(())
+        }
+        .instrument(span)
+        .await
+    }
+
     async fn on_timer<C>(
         &self,
         context: C,

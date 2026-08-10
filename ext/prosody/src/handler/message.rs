@@ -9,6 +9,7 @@ use magnus::value::ReprValue;
 use magnus::{Error, Module, RClass, Ruby, Value, method};
 use prosody::consumer::Keyed;
 use prosody::consumer::message::ConsumerMessage;
+use prosody::consumer::message::Record;
 use serde_magnus::serialize;
 
 /// Ruby-accessible wrapper for Kafka consumer messages.
@@ -106,7 +107,11 @@ impl Message {
     /// to deserialize JSON into ordinary Ruby objects without runtime schema
     /// validation.
     fn payload(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-        serialize(ruby, this.inner.payload())
+        let payload = match this.inner.record() {
+            Record::Message(payload) => payload,
+            Record::Excise => return Ok(ruby.qnil().as_value()),
+        };
+        serialize(ruby, payload)
     }
 
     /// Clones the wrapped `ConsumerMessage` for a message-collection write.

@@ -338,6 +338,25 @@ RSpec.describe Prosody::Client, integration: true do
     end
   end
 
+  it "sends and receives an excise record" do
+    handler_class = Class.new(Prosody::EventHandler) do
+      def initialize(stream)
+        @stream = stream
+      end
+
+      def on_excise(_context, message)
+        @stream.push(message)
+      end
+    end
+
+    client.subscribe(handler_class.new(message_stream))
+    client.excise(topic, "obsolete-key")
+    message = message_stream.wait_for_messages(1, TestConfig::MESSAGE_TIMEOUT).first
+
+    expect(message.key).to eq("obsolete-key")
+    expect(message.payload).to be_nil
+  end
+
   # Verify correct handling of multiple messages with ordering guarantees
   it "handles multiple messages with correct ordering" do
     tracer.in_span("test.multiple_messages") do |span|

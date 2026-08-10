@@ -220,6 +220,25 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
+    /// Sends an excise record for a key.
+    fn excise(ruby: &Ruby, this: &Self, topic: String, key: String) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
+        let _guard = ensure_runtime_context(ruby);
+        let client = this.inner.clone();
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+        let span = info_span!("ruby-excise", %topic, %key);
+        if let Err(err) = span.set_parent(context) {
+            debug!("failed to set parent span: {err:#}");
+        }
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { client.excise(topic.as_str().into(), key).await },
+                span,
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
+    }
+
     /// Subscribes to events using the provided Ruby handler.
     ///
     /// The handler must implement an `on_message(context, message)` method
@@ -461,6 +480,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(Client::consumer_state, 0),
     )?;
     class.define_method(id!(ruby, "send_message"), method!(Client::send, 3))?;
+    class.define_method(id!(ruby, "excise"), method!(Client::excise, 2))?;
     class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
     class.define_method(
         id!(ruby, "assigned_partitions"),

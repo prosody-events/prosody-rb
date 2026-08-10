@@ -426,6 +426,16 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Sends an excise record to the specified Kafka topic.
+    #
+    # @param topic [String] The destination topic name
+    # @param key [String] The message key for partitioning
+    # @return [void]
+    # @raise [RuntimeError] If the excise record cannot be sent
+    def excise(topic, key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Subscribes to Kafka topics using the provided handler.
     # The handler must implement an `on_message(context, message)` method.
     #

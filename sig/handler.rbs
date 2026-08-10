@@ -70,6 +70,9 @@ module Prosody
     # @raise [NotImplementedError] if not overridden by subclass
     def on_message: (Context context, Message[Payload] message) -> void
 
+    # Process an excise record.
+    def on_excise: (Context context, Message[Payload] message) -> void
+
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.
     # This method must be implemented by subclasses to define

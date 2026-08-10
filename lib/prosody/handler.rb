@@ -167,6 +167,16 @@ module Prosody
       raise NotImplementedError, "Subclasses must implement #on_message"
     end
 
+    # Process an excise record for a key.
+    #
+    # @param [Context] context the event context
+    # @param [Message<Payload>] message the message metadata with no payload
+    # @raise [NotImplementedError] if not overridden by a subclass
+    # @return [void]
+    def on_excise(context, message)
+      raise NotImplementedError, "Subclasses must implement #on_excise"
+    end
+
     # Process a timer event when it fires.
     # This method must be implemented by subclasses to handle
     # scheduled timer events if they can fire.

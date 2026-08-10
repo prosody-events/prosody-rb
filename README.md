@@ -59,6 +59,10 @@ client = Prosody::Client.new(
 
 # Define a custom message handler
 class MyHandler < Prosody::EventHandler
+  def on_excise(_context, message)
+    puts "Excise key: #{message.key}"
+  end
+
   def on_message(context, message)
     # Process the received message
     puts "Received message: #{message.payload.inspect}"
@@ -81,10 +85,17 @@ client.subscribe(MyHandler.new)
 
 # Send a message to a topic
 client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
+client.excise("my-topic", "obsolete-key")
 
 # Ensure proper shutdown when done
 client.unsubscribe
 ```
+
+## Excise records
+
+Call `excise(topic, key)` to send a Kafka record with a key and no payload. Use this record to delete the key from compacted views.
+
+Each handler must implement `on_excise`. It receives the same arguments as `on_message`. The message payload is `nil`.
 
 ## Architecture
 
@@ -981,6 +992,7 @@ type order_event = { "order_id" => String, "total" => Integer }
 
 class OrderHandler < Prosody::EventHandler[order_event]
   def on_message: (Prosody::Context, Prosody::Message[order_event]) -> void
+  def on_excise: (Prosody::Context, Prosody::Message[order_event]) -> void
 end
 ```
 

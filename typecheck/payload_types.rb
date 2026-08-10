@@ -7,9 +7,16 @@ ORDER_BACKLOG = Prosody.message_deque("order-backlog")
 ORDER_TOTALS = Prosody.map("order-totals")
 
 class TypedOrderHandler < Prosody::EventHandler
+  def on_excise(_context, message)
+    message.payload # nil
+  end
+
   def on_message(context, message)
-    order_id = message.payload["order_id"]
-    total = message.payload["total"]
+    payload = message.payload
+    return unless payload
+
+    order_id = payload["order_id"]
+    total = payload["total"]
 
     # Message-backed state preserves the handler's payload type.
     backlog = context.state(ORDER_BACKLOG)
@@ -21,7 +28,8 @@ class TypedOrderHandler < Prosody::EventHandler
     consume_totals(context.state(ORDER_TOTALS))
 
     consume_order(order_id, total)
-    consume_order(oldest.payload["order_id"], oldest.payload["total"]) if oldest
+    oldest_payload = oldest&.payload
+    consume_order(oldest_payload["order_id"], oldest_payload["total"]) if oldest_payload
   end
 
   private
