@@ -110,7 +110,7 @@ jobs:
           pre-script: >-
             sudo mkdir -p /var/lib/apt/lists/partial &&
             sudo apt-get update -qq &&
-            sudo apt-get install -y -q cmake libcurl4-openssl-dev &&
+            sudo apt-get install -y -q cmake libcurl4-openssl-dev protobuf-compiler &&
             curl_include=$(dirname $(find /usr/include -name curl.h | head -1)) &&
             sudo ln -sf $curl_include /usr/include/curl &&
             if [[ $CARGO_BUILD_TARGET == *musl* ]]; then
@@ -149,7 +149,7 @@ jobs:
 
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev protobuf-compiler
 
       - name: Install dependencies
         run: bundle install --jobs 4 --retry 3
