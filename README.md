@@ -90,7 +90,7 @@ client.unsubscribe
 
 Peer requests collect one result from each named subsystem. The result order matches the subsystem order.
 
-Return a JSON response from each handler:
+Return a JSON response from each message handler:
 
 ```ruby
 class InventoryHandler < Prosody::EventHandler
