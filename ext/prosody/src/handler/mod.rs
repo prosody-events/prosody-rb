@@ -166,6 +166,7 @@ impl FallibleHandler for RubyHandler {
             self.bridge.clone(),
             self.propagator.clone(),
         );
+        let response_requested = message.response_requested();
         let message: Message = message.into();
 
         // Execute the entire message handling operation within the span
@@ -175,9 +176,14 @@ impl FallibleHandler for RubyHandler {
             let task_handle = self
                 .scheduler
                 .schedule(task_id, &cloned_span, event_context, move |ruby| {
-                    handler
+                    let result = handler
                         .get(ruby)
-                        .funcall(id!(ruby, "on_message"), (context, message))
+                        .funcall(id!(ruby, "on_message"), (context, message))?;
+                    if response_requested {
+                        Ok(result)
+                    } else {
+                        Ok(ruby.qnil().as_value())
+                    }
                 })
                 .await?;
 
@@ -258,9 +264,10 @@ impl FallibleHandler for RubyHandler {
             let task_handle = self
                 .scheduler
                 .schedule(task_id, &cloned_span, event_context, move |ruby| {
-                    handler
+                    let _: Value = handler
                         .get(ruby)
-                        .funcall(id!(ruby, "on_timer"), (context, timer))
+                        .funcall(id!(ruby, "on_timer"), (context, timer))?;
+                    Ok(ruby.qnil().as_value())
                 })
                 .await?;
 
