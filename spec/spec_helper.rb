@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-ENV["PROSODY_PEER_BIND_ADDRESS"] ||= "127.0.0.1:0"
+ENV["PROSODY_PEER_BIND_ADDRESS"] = "127.0.0.1:0"
 
 require "async"
 require "async/rspec"
