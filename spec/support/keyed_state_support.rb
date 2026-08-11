@@ -79,9 +79,9 @@ RSpec.shared_context "keyed state integration" do
 
   after do
     @clients&.each do |client|
-      client.unsubscribe if client.consumer_state == :running
+      client.shutdown unless client.consumer_state == :shut_down
     rescue => e
-      puts "Could not unsubscribe client: #{e.message}"
+      puts "Could not shut down client: #{e.message}"
     end
     ([topic] + (@extra_topics || [])).each do |name|
       admin.delete_topic(name)
@@ -90,7 +90,7 @@ RSpec.shared_context "keyed state integration" do
     end
   end
 
-  # Builds and tracks a client (subscribed to `topic`) so `after` unsubscribes it.
+  # Builds and tracks a client so `after` shuts it down.
   def build_client(*definitions, **options)
     client = Prosody::Client.new(state_config(topic, *definitions, **options))
     (@clients ||= []) << client

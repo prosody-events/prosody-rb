@@ -171,6 +171,12 @@ module Prosody
     # @raise [RuntimeError] If unsubscription fails
     def unsubscribe: () -> void
 
+    # Shuts down the consumer and all client services.
+    #
+    # @return [void]
+    # @raise [RuntimeError] If shutdown fails
+    def shutdown: () -> void
+
     # Returns the configured source system identifier.
     #
     # The source system is used to identify the originating service or

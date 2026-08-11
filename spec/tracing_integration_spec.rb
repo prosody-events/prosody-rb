@@ -117,7 +117,7 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
     # Sleep to allow natural span flushing
     sleep 5
     logger.info "Unsubscribing"
-    client.unsubscribe if client.consumer_state == :running
+    client.shutdown unless client.consumer_state == :shut_down
 
     logger.info "Deleting topic"
     admin.delete_topic(topic)

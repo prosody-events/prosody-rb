@@ -83,7 +83,7 @@ client.subscribe(MyHandler.new)
 client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 
 # Ensure proper shutdown when done
-client.unsubscribe
+client.shutdown
 ```
 
 ## Peer Requests
@@ -811,11 +811,10 @@ Strategies for achieving idempotence:
 
 ### Proper Shutdown
 
-Always unsubscribe from topics before exiting your application:
+Shut down the client before your application exits:
 
 ```ruby
-# Ensure proper shutdown
-client.unsubscribe
+client.shutdown
 ```
 
 This ensures:
@@ -850,7 +849,7 @@ shutdown.pop # This blocks until something is pushed to the queue by a signal ha
 
 # Clean shutdown
 puts "Shutting down gracefully..."
-client.unsubscribe
+client.shutdown
 ```
 
 ### Error Handling
@@ -978,7 +977,8 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
 - `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
-- `unsubscribe`: Unsubscribe from messages and shut down the consumer.
+- `unsubscribe`: Stop the consumer. You can subscribe again later.
+- `shutdown`: Stop the consumer and all client services.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
 - `is_stalled?`: Check if the consumer has stalled partitions.
 

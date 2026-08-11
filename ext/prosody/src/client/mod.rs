@@ -185,6 +185,7 @@ impl Client {
             ruby,
             async move {
                 match inner.consumer_state().await {
+                    ErasedConsumerState::ShutDown => Ok("shut_down"),
                     ErasedConsumerState::Unconfigured => Ok("unconfigured"),
                     ErasedConsumerState::ConfigurationFailed(error) => {
                         Err(format!("consumer configuration failed: {error}"))
@@ -415,6 +416,25 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
+    /// Shuts down the client and all its services.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if shutdown fails.
+    fn shutdown(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
+        let _guard = ensure_runtime_context(ruby);
+        let client = this.inner.clone();
+
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { client.shutdown().await },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
+    }
+
     /// Returns the configured source system identifier.
     ///
     /// The source system is used to identify the originating service or
@@ -558,6 +578,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
     class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
+    class.define_method(id!(ruby, "shutdown"), method!(Client::shutdown, 0))?;
     class.define_method(
         id!(ruby, "source_system"),
         method!(Client::source_system, 0),

@@ -459,6 +459,17 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Shuts down the consumer and all client services.
+    #
+    # @return [void]
+    # @raise [RuntimeError] If shutdown fails
+    #
+    # @example Shutting down a client
+    #   client.shutdown
+    def shutdown
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Returns the configured source system identifier.
     #
     # The source system is used to identify the originating service or

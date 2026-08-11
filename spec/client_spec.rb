@@ -210,11 +210,10 @@ RSpec.describe Prosody::Client, integration: true do
     sleep 1
   end
 
-  # Test cleanup: unsubscribe client and delete topic
+  # Test cleanup: shut down the client and delete the topic.
   after do
-    # Clean up after each test - only unsubscribe if running
-    if client.respond_to?(:consumer_state) && client.consumer_state == :running
-      client.unsubscribe
+    if client.respond_to?(:consumer_state) && client.consumer_state != :shut_down
+      client.shutdown
     end
 
     begin
