@@ -200,7 +200,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -1903,7 +1903,7 @@ dependencies = [
 [[package]]
 name = "prosody"
 version = "0.5.0"
-source = "git+https://github.com/prosody-events/prosody?rev=9f7f0ad0dde46b567e2e33f2ab7c26f0a44993f4#9f7f0ad0dde46b567e2e33f2ab7c26f0a44993f4"
+source = "git+https://github.com/prosody-events/prosody?rev=9a71094b72ae61a21bc46f22e5530f785d65176f#9a71094b72ae61a21bc46f22e5530f785d65176f"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -1973,7 +1973,7 @@ dependencies = [
 [[package]]
 name = "prosody-macros"
 version = "0.5.0"
-source = "git+https://github.com/prosody-events/prosody?rev=9f7f0ad0dde46b567e2e33f2ab7c26f0a44993f4#9f7f0ad0dde46b567e2e33f2ab7c26f0a44993f4"
+source = "git+https://github.com/prosody-events/prosody?rev=9a71094b72ae61a21bc46f22e5530f785d65176f#9a71094b72ae61a21bc46f22e5530f785d65176f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2018,7 +2018,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
