@@ -185,7 +185,7 @@ impl Client {
             ruby,
             async move {
                 match inner.consumer_state().await {
-                    ErasedConsumerState::ShutDown => Ok("shut_down"),
+                    ErasedConsumerState::Shutdown => Ok("shut_down"),
                     ErasedConsumerState::Unconfigured => Ok("unconfigured"),
                     ErasedConsumerState::ConfigurationFailed(error) => {
                         Err(format!("consumer configuration failed: {error}"))
