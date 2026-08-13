@@ -973,6 +973,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
+- `request(topic, key, payload, subsystems, timeout, headers: {})`: Return one ordered result for each subsystem.
 - `consumer_state`: Get the current state of the consumer (`:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.

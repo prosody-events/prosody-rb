@@ -575,7 +575,7 @@ Understanding this architecture helps you write better Prosody applications:
 
    # Clean shutdown
    puts "Shutting down gracefully..."
-   client.unsubscribe
+   client.shutdown
    ```
 
 4. **Monitor with Traces**: Use OpenTelemetry to understand message processing

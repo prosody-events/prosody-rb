@@ -453,8 +453,6 @@ module Prosody
     # @return [void]
     # @raise [RuntimeError] If unsubscription fails
     #
-    # @example Shutting down a consumer
-    #   client.unsubscribe
     def unsubscribe
       raise NotImplementedError, "This method is implemented natively in Rust"
     end

@@ -25,6 +25,14 @@ module Prosody
 
   type response_error = HandlerResponseError | ResponseTimeoutError | ResponseFormatMismatchError | MalformedResponseError
   type request_result[Value] = Ok[Value] | Err
+  type native_request = {
+    topic: String,
+    key: String,
+    payload: json_value,
+    subsystems: Array[String],
+    timeout: Integer | Float,
+    headers: Hash[String, String]
+  }
 
   class Client
     def request: (
@@ -38,6 +46,6 @@ module Prosody
 
     private
 
-    def native_request: (Hash[Symbol, untyped] request) -> Array[request_result[json_value]]
+    def native_request: (native_request request) -> Array[request_result[json_value]]
   end
 end
