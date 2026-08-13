@@ -92,7 +92,7 @@ Peer requests collect one result from each named subsystem. The result order mat
 
 Do not wait for a request from a handler for the same key and subsystem. The request cannot finish until that handler returns.
 
-Prosody now uses handler return values as request results. Ensure that each handler return value has a JSON representation.
+Prosody uses requested message handler return values as request results. Ensure that each returned result has a JSON representation.
 
 Return a JSON response from each message handler:
 

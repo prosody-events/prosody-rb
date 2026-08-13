@@ -132,7 +132,7 @@ module Prosody
 
     # Returns the current state of the consumer.
     #
-    # @return [Symbol] The consumer state: :unconfigured, :configured, or :running
+    # @return [Symbol] The consumer state: :shut_down, :unconfigured, :configured, or :running
     def consumer_state: () -> Symbol
 
     # Returns the number of Kafka partitions currently assigned to this consumer.

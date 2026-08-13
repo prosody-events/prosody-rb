@@ -17,10 +17,10 @@ use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use mimalloc::MiMalloc;
+use std::io::{self, Write};
 use std::process;
 use std::sync::{LazyLock, OnceLock};
 use tokio::runtime::Runtime;
-use tracing::error;
 
 mod admin;
 mod bridge;
@@ -50,7 +50,10 @@ pub static TRACING_INIT: OnceLock<()> = OnceLock::new();
 static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| match Runtime::new() {
     Ok(runtime) => runtime,
     Err(error) => {
-        error!(%error, "failed to create Tokio runtime");
+        drop(writeln!(
+            io::stderr().lock(),
+            "failed to create Tokio runtime: {error:#}"
+        ));
         process::abort();
     }
 });

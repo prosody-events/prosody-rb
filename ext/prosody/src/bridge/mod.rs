@@ -247,8 +247,7 @@ fn poll(rx: &Receiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError> {
         while commands.len() < POLL_BATCH_SIZE {
             match rx.try_recv() {
                 Ok(command) => commands.push(command),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => return Err(BridgeError::Shutdown),
+                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
             }
         }
 
