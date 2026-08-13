@@ -90,6 +90,10 @@ client.shutdown
 
 Peer requests collect one result from each named subsystem. The result order matches the subsystem order.
 
+Do not wait for a request from a handler for the same key and subsystem. The request cannot finish until that handler returns.
+
+Prosody now uses handler return values as request results. Ensure that each handler return value has a JSON representation.
+
 Return a JSON response from each message handler:
 
 ```ruby
@@ -974,7 +978,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `request(topic, key, payload, subsystems, timeout, headers: {})`: Return one ordered result for each subsystem.
-- `consumer_state`: Get the current state of the consumer (`:unconfigured`, `:configured`, or `:running`).
+- `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
 - `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.

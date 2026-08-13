@@ -379,13 +379,18 @@ module Prosody
 
     # Returns the current state of the consumer.
     #
-    # The consumer can be in one of three states:
+    # The consumer can be in one of four states:
+    # - `:shut_down` - The client is shut down
     # - `:unconfigured` - The consumer has not been configured yet
     # - `:configured` - The consumer is configured but not running
     # - `:running` - The consumer is actively consuming messages
     #
     # @return [Symbol] The current consumer state
     def consumer_state
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def native_request(_request)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 

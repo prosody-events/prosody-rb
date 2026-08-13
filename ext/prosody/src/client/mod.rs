@@ -16,7 +16,7 @@ use crate::handler::RubyHandler;
 use crate::published::{NativePublishedDeque, NativePublishedMap, NativePublishedValue};
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
-use crate::{BRIDGE, ROOT_MOD, RUNTIME, id};
+use crate::{BRIDGE, ROOT_MOD, id};
 use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{
@@ -120,16 +120,6 @@ impl Client {
             .try_into()
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
-        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
-        let client = RUNTIME
-            .block_on(new_erased(
-                mode,
-                &mut config_ref.into(),
-                &consumer_builders,
-                &cassandra,
-            ))
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
-
         let bridge = BRIDGE
             .get()
             .ok_or(Error::new(
@@ -137,10 +127,21 @@ impl Client {
                 "Bridge not initialized",
             ))?
             .clone();
+        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
+        let mut producer = config_ref.into();
+        let client = bridge
+            .wait_for(
+                ruby,
+                async move {
+                    new_erased(mode, &mut producer, &consumer_builders, &cassandra).await
+                },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(Self {
             inner: client,
-            bridge: bridge.clone(),
+            bridge,
             propagator: Arc::new(new_propagator()),
             pid: std::process::id(),
         })
@@ -159,7 +160,8 @@ impl Client {
 
     /// Returns the current state of the consumer.
     ///
-    /// The consumer can be in one of three states:
+    /// The consumer can be in one of four states:
+    /// - `:shut_down` - The client is shut down
     /// - `:unconfigured` - The consumer has not been configured yet
     /// - `:configured` - The consumer is configured but not running
     /// - `:running` - The consumer is actively consuming messages

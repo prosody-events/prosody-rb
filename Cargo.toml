@@ -9,13 +9,14 @@ resolver = "2"
 [workspace.dependencies]
 atomic-take = "1.1"
 bumpalo = "3.20"
+crossbeam-channel = "0.5"
 educe = "0.7"
 futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
 # TODO: Use the released version after Prosody publishes peer requests.
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "d7daf54ed7dcd4f0a6032528c29c0d89000988de", features = [
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "955110209d22691ae6a287a7d50655cad951c535", features = [
     "libz-static",
 ] }
 rb-sys = "0.9"

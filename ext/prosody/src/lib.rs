@@ -17,10 +17,9 @@ use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use mimalloc::MiMalloc;
-use std::ops::Deref;
 use std::process;
 use std::sync::{LazyLock, OnceLock};
-use tokio::runtime::{Handle, Runtime};
+use tokio::runtime::Runtime;
 use tracing::error;
 
 mod admin;
@@ -48,45 +47,13 @@ pub static TRACING_INIT: OnceLock<()> = OnceLock::new();
 ///
 /// This runtime powers all async operations in the extension, including
 /// message processing, scheduling, and communication with Ruby.
-static RUNTIME: LazyLock<RuntimeOwner> = LazyLock::new(RuntimeOwner::new);
-
-/// Owns the runtime without blocking Ruby process exit.
-struct RuntimeOwner {
-    handle: Handle,
-    runtime: Option<Runtime>,
-}
-
-impl RuntimeOwner {
-    fn new() -> Self {
-        let runtime = match Runtime::new() {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                error!(%error, "failed to create Tokio runtime");
-                process::abort();
-            }
-        };
-        Self {
-            handle: runtime.handle().clone(),
-            runtime: Some(runtime),
-        }
+static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| match Runtime::new() {
+    Ok(runtime) => runtime,
+    Err(error) => {
+        error!(%error, "failed to create Tokio runtime");
+        process::abort();
     }
-}
-
-impl Deref for RuntimeOwner {
-    type Target = Handle;
-
-    fn deref(&self) -> &Self::Target {
-        &self.handle
-    }
-}
-
-impl Drop for RuntimeOwner {
-    fn drop(&mut self) {
-        if let Some(runtime) = self.runtime.take() {
-            runtime.shutdown_background();
-        }
-    }
-}
+});
 
 /// Reference to the root Ruby module for this extension.
 ///

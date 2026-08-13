@@ -350,10 +350,31 @@ RSpec.describe Prosody::Client, integration: true do
       "order-1",
       {"type" => "order.created"},
       ["inventory"],
-      10
+      TestConfig::MESSAGE_TIMEOUT
     )
 
     expect(results).to eq([Prosody::Ok.new({"key" => "order-1", "accepted" => true})])
+  end
+
+  it "classifies a handler result conversion failure as permanent" do
+    handler_class = Class.new(Prosody::EventHandler) do
+      def on_message(_context, _message)
+        Object.new
+      end
+    end
+
+    client.subscribe(handler_class.new)
+    result = client.request(
+      topic,
+      "order-1",
+      {"type" => "order.created"},
+      ["inventory"],
+      TestConfig::MESSAGE_TIMEOUT
+    ).fetch(0)
+
+    expect(result).to be_a(Prosody::Err)
+    expect(result.error).to be_a(Prosody::HandlerResponseError)
+    expect(result.error.category).to eq(:permanent)
   end
 
   # Verify correct handling of multiple messages with ordering guarantees

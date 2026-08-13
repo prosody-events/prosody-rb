@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 atomic-take.workspace = true
 bumpalo = { workspace = true, features = ["collections"] }
+crossbeam-channel.workspace = true
 educe.workspace = true
 futures.workspace = true
 magnus = { workspace = true, default-features = false }
