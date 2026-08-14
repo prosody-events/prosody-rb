@@ -88,11 +88,11 @@ client.shutdown
 
 ## Peer Requests
 
-Peer requests collect one result from each named subsystem. The result order matches the subsystem order.
+Peer requests collect one result from each named subsystem. Results follow the subsystem order.
 
-Do not wait for a request from a handler for the same key and subsystem. The request cannot finish until that handler returns.
+Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
 
-Prosody uses requested message handler return values as request results. Ensure that each returned result has a JSON representation.
+Message handler return values become request results. Each return value must have a JSON representation.
 
 Return a JSON response from each message handler:
 
@@ -107,25 +107,34 @@ end
 Send a request without a subscription on the requester:
 
 ```ruby
+subsystems = ["inventory", "billing"]
 results = client.request(
   "orders",
   "order-1",
   {"type" => "order.created"},
-  ["inventory", "billing"],
+  subsystems,
   2
 )
 
-results.each do |result|
+subsystems.zip(results).each do |subsystem, result|
   case result
-  in Prosody::Ok[value]
-    puts value
-  in Prosody::Err[error]
-    warn error
+  in Prosody::ResponseTimeoutError
+    warn "#{subsystem}: timed out"
+  in Prosody::HandlerResponseError => error
+    warn "#{subsystem}: #{error.category}: #{error.handler_message}"
+  in Prosody::ResponseError => error
+    warn "#{subsystem}: #{error}"
+  else
+    puts "#{subsystem}: #{result}"
   end
 end
 ```
 
-Each error identifies a handler failure, timeout, format mismatch, or malformed response. Handler failures also include their category and message.
+For example, a successful inventory handler prints `inventory: {"accepted"=>"order-1"}`.
+
+Each array element is a JSON response or a Ruby exception. Its type identifies the failure.
+
+Handler exceptions keep their category and original handler text. Every exception uses Prosody's message.
 
 ## Architecture
 

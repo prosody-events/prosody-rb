@@ -293,19 +293,11 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let module = ruby.get_inner(&ROOT_MOD);
-        let ok: RClass = module.const_get(id!(ruby, "Ok"))?;
-        let err: RClass = module.const_get(id!(ruby, "Err"))?;
         let array = ruby.ary_new_capa(results.len());
         for result in results {
             let value = match result {
-                Ok(value) => {
-                    let value: Value = serialize(ruby, &value)?;
-                    ok.new_instance((kwargs!("value" => value),))?
-                }
-                Err(error) => {
-                    let error = response_error(ruby, module, error)?;
-                    err.new_instance((kwargs!("error" => error),))?
-                }
+                Ok(value) => serialize(ruby, &value)?,
+                Err(error) => response_error(ruby, module, error)?,
             };
             array.push(value)?;
         }
@@ -602,8 +594,12 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
 }
 
 fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<Value, Error> {
+    let display = error.to_string();
     let (name, arguments) = match error {
-        ResponseError::Handler { category, message } => {
+        ResponseError::Handler {
+            category,
+            message: handler_message,
+        } => {
             let category = match category {
                 ErrorCategory::Transient => "transient",
                 ErrorCategory::Permanent => "permanent",
@@ -611,12 +607,12 @@ fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<
             };
             let class: RClass = module.const_get(id!(ruby, "HandlerResponseError"))?;
             return class.new_instance((
-                kwargs!("category" => ruby.sym_new(category), "message" => message),
+                kwargs!("category" => ruby.sym_new(category), "handler_message" => handler_message, "message" => display),
             ));
         }
-        ResponseError::Timeout => ("ResponseTimeoutError", ()),
-        ResponseError::FormatMismatch => ("ResponseFormatMismatchError", ()),
-        ResponseError::Malformed => ("MalformedResponseError", ()),
+        ResponseError::Timeout => ("ResponseTimeoutError", (display,)),
+        ResponseError::FormatMismatch => ("ResponseFormatMismatchError", (display,)),
+        ResponseError::Malformed => ("MalformedResponseError", (display,)),
     };
     let class: RClass = module.const_get(name)?;
     class.new_instance(arguments)

@@ -1,30 +1,25 @@
 module Prosody
   type error_category = :transient | :permanent | :terminal
 
-  class Ok[Value]
-    attr_reader value: Value
+  class ResponseError < Error
   end
 
-  class Err
-    attr_reader error: response_error
-  end
-
-  class HandlerResponseError
+  class HandlerResponseError < ResponseError
     attr_reader category: error_category
-    attr_reader message: String
+    attr_reader handler_message: String
+    def initialize: (category: error_category, handler_message: String, message: String) -> void
   end
 
-  class ResponseTimeoutError
+  class ResponseTimeoutError < ResponseError
   end
 
-  class ResponseFormatMismatchError
+  class ResponseFormatMismatchError < ResponseError
   end
 
-  class MalformedResponseError
+  class MalformedResponseError < ResponseError
   end
 
-  type response_error = HandlerResponseError | ResponseTimeoutError | ResponseFormatMismatchError | MalformedResponseError
-  type request_result[Value] = Ok[Value] | Err
+  type request_result[Value] = Value | ResponseError
   type native_request = {
     topic: String,
     key: String,
