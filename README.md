@@ -996,6 +996,12 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
 - `is_stalled?`: Check if the consumer has stalled partitions.
 
+### Prosody::AdminClient
+
+- `new(bootstrap_servers)`: Create an admin client for the specified Kafka servers.
+- `create_topic(name, partitions, replication_factor)`: Create a Kafka topic.
+- `delete_topic(name)`: Delete a Kafka topic.
+
 ### Prosody::EventHandler
 
 A base class for user-defined handlers. Its RBS payload parameter flows into

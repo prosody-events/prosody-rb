@@ -6,8 +6,7 @@
 use crate::bridge::Bridge;
 use crate::util::ensure_runtime_context;
 use crate::{ROOT_MOD, id};
-use magnus::value::ReprValue;
-use magnus::{Error, Module, Object, Ruby, Value, function, method};
+use magnus::{Error, Module, Object, Ruby, function, method};
 use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
 use std::sync::Arc;
 use tracing::Span;
@@ -163,9 +162,6 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         id!(ruby, "delete_topic"),
         method!(AdminClient::delete_topic, 1),
     )?;
-
-    // Make the admin client class private
-    let _: Value = module.funcall(id!(ruby, "private_constant"), (class_id,))?;
 
     Ok(())
 }
