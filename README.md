@@ -117,20 +117,20 @@ results = client.request(
 )
 
 subsystems.zip(results).each do |subsystem, result|
-  case result
-  in Prosody::ResponseTimeoutError
-    warn "#{subsystem}: timed out"
-  in Prosody::HandlerResponseError => error
-    warn "#{subsystem}: #{error.category}: #{error.handler_message}"
-  in Prosody::ResponseError => error
-    warn "#{subsystem}: #{error}"
+  if result.is_a?(Prosody::ResponseError)
+    warn "#{subsystem}: #{result}"
   else
     puts "#{subsystem}: #{result}"
   end
 end
 ```
 
-For example, a successful inventory handler prints `inventory: {"accepted"=>"order-1"}`.
+The example can print these results:
+
+```text
+inventory: {"accepted"=>"order-1"}
+billing: no response arrived before the deadline
+```
 
 Each array element is a JSON response or a Ruby exception. Its type identifies the failure.
 
