@@ -134,7 +134,7 @@ For example, a successful inventory handler prints `inventory: {"accepted"=>"ord
 
 Each array element is a JSON response or a Ruby exception. Its type identifies the failure.
 
-Handler exceptions keep their category and original handler text. Every exception uses Prosody's message.
+Core exceptions use Prosody's message. Handler exceptions also keep their category and original text.
 
 ## Architecture
 
