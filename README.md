@@ -992,7 +992,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
 - `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
-- `shutdown`: Stop the consumer and all client services.
+- `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
 - `is_stalled?`: Check if the consumer has stalled partitions.
 

@@ -18,6 +18,8 @@ use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
 use crate::{BRIDGE, ROOT_MOD, id};
 use educe::Educe;
+use futures::FutureExt;
+use futures::future::{BoxFuture, Shared};
 use magnus::value::ReprValue;
 use magnus::{
     Class, Error, Module, Object, RClass, RModule, Ruby, StaticSymbol, Value, function, kwargs,
@@ -46,6 +48,8 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 /// Configuration types and conversion between Ruby and Rust representations
 mod config;
 
+type Shutdown = Shared<BoxFuture<'static, Result<(), Arc<str>>>>;
+
 /// A Ruby-compatible wrapper around the Prosody high-level client.
 ///
 /// This struct bridges Ruby applications with the Prosody messaging system,
@@ -58,6 +62,9 @@ pub struct Client {
     /// The underlying Prosody client
     #[educe(Debug(ignore))]
     inner: SharedHighLevelClient<RubyHandler>,
+    /// One shutdown operation shared by all callers
+    #[educe(Debug(ignore))]
+    shutdown: Shutdown,
     /// Bridge for communicating between Rust and Ruby
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
@@ -140,6 +147,7 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(Self {
+            shutdown: shutdown(&client),
             inner: client,
             bridge,
             propagator: Arc::new(new_propagator()),
@@ -411,6 +419,7 @@ impl Client {
     }
 
     /// Shuts down the client and all its services.
+    /// Concurrent and repeated calls wait for the same operation.
     ///
     /// # Errors
     ///
@@ -418,14 +427,10 @@ impl Client {
     fn shutdown(ruby: &Ruby, this: &Self) -> Result<(), Error> {
         Self::check_fork(ruby, this)?;
         let _guard = ensure_runtime_context(ruby);
-        let client = this.inner.clone();
+        let shutdown = this.shutdown.clone();
 
         this.bridge
-            .wait_for(
-                ruby,
-                async move { client.shutdown().await },
-                Span::current(),
-            )?
+            .wait_for(ruby, shutdown, Span::current())?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
@@ -521,6 +526,18 @@ impl Client {
             propagator: Arc::clone(&this.propagator),
         })
     }
+}
+
+fn shutdown(client: &SharedHighLevelClient<RubyHandler>) -> Shutdown {
+    let client = client.clone();
+    async move {
+        client
+            .shutdown()
+            .await
+            .map_err(|error| Arc::from(error.to_string()))
+    }
+    .boxed()
+    .shared()
 }
 
 fn read_cache(ruby: &Ruby, seconds: Option<f64>, disabled: bool) -> Result<ErasedReadCache, Error> {

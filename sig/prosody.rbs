@@ -183,7 +183,8 @@ module Prosody
     # @raise [RuntimeError] If unsubscription fails
     def unsubscribe: () -> void
 
-    # Shuts down the consumer and all client services.
+    # Shuts down all client services.
+    # Concurrent and repeated calls wait for the same shutdown operation.
     #
     # @return [void]
     # @raise [RuntimeError] If shutdown fails

@@ -15,6 +15,16 @@ RSpec.describe Prosody::Client, integration: true do
     expect(@client).to be_a(Prosody::Client)
   end
 
+  it "permits repeated shutdown calls" do
+    @client = Prosody::Client.new(
+      bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
+      source_system: "init-test-system"
+    )
+
+    @client.shutdown
+    @client.shutdown
+  end
+
   it "initializes a client when given a Configuration object" do
     # Build a Configuration object explicitly
     config = Prosody::Configuration.new(
