@@ -103,23 +103,23 @@ module Prosody
     def source_system: () -> String?
     def source_system=: (_ToS) -> String
 
-    # Address for the peer listener.
+    # Address for the peer listener. Prosody reads PROSODY_PEER_BIND_ADDRESS when absent.
     def peer_bind_address: () -> String?
     def peer_bind_address=: (_ToS) -> String
 
-    # gRPC connect URI that other clients use for this client.
+    # Connect URI for remote peers. Prosody reads PROSODY_PEER_ADVERTISED_CONNECT when absent.
     def peer_advertised_connect: () -> String?
     def peer_advertised_connect=: (_ToS) -> String
 
-    # Network name used to identify direct routes.
+    # Network name for direct routes. Prosody reads PROSODY_PEER_NETWORK_NAME when absent.
     def peer_network_name: () -> String?
     def peer_network_name=: (_ToS) -> String
 
-    # Maximum number of peer channels and registrations in each cache.
+    # Peer cache capacity. Prosody reads PROSODY_PEER_CACHE_CAPACITY when absent.
     def peer_cache_capacity: () -> Integer?
     def peer_cache_capacity=: (Integer | _ToInt) -> Integer
 
-    # Duration of each peer registration lease.
+    # Peer registration lease. Prosody reads PROSODY_PEER_REGISTRATION_TTL when absent.
     def peer_registration_ttl: () -> Float?
     def peer_registration_ttl=: (Numeric) -> Float
 
