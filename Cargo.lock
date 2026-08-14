@@ -2061,7 +2061,7 @@ dependencies = [
 [[package]]
 name = "prosody"
 version = "0.5.0"
-source = "git+https://github.com/prosody-events/prosody?rev=955110209d22691ae6a287a7d50655cad951c535#955110209d22691ae6a287a7d50655cad951c535"
+source = "git+https://github.com/prosody-events/prosody?rev=da1665d5b82cfd1c60f418bc7ac3bc5899d2f95e#da1665d5b82cfd1c60f418bc7ac3bc5899d2f95e"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -2133,7 +2133,7 @@ dependencies = [
 [[package]]
 name = "prosody-macros"
 version = "0.5.0"
-source = "git+https://github.com/prosody-events/prosody?rev=955110209d22691ae6a287a7d50655cad951c535#955110209d22691ae6a287a7d50655cad951c535"
+source = "git+https://github.com/prosody-events/prosody?rev=da1665d5b82cfd1c60f418bc7ac3bc5899d2f95e#da1665d5b82cfd1c60f418bc7ac3bc5899d2f95e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2157,7 +2157,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
  "heck",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "log",
  "multimap",
  "petgraph",
@@ -2178,7 +2178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
