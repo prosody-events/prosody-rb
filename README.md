@@ -103,6 +103,8 @@ Return a JSON value from `on_excise`. Prosody sends this value when the excise r
 
 Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
 
+Use `request_excise` to send an excise record and collect the same outcome type.
+
 Do not rely on hash iteration order.
 
 Prosody raises an error if the request cannot produce the complete result hash.
@@ -1005,7 +1007,8 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
-- `request(topic:, key:, payload:, subsystems:, timeout:, headers: {})`: Return one outcome for each subsystem.
+- `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.
+- `request_excise(topic:, key:, subsystems:, timeout:)`: Send an excise request.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.

@@ -31,8 +31,13 @@ module Prosody
     key: String,
     payload: json_value,
     subsystems: Array[String],
-    timeout: Integer | Float,
-    headers: Hash[String, String]
+    timeout: Integer | Float
+  }
+  type native_excise_request = {
+    topic: String,
+    key: String,
+    subsystems: Array[String],
+    timeout: Integer | Float
   }
 
   class Client
@@ -43,12 +48,19 @@ module Prosody
       key: String,
       payload: json_value,
       subsystems: Array[String],
-      timeout: Integer | Float,
-      ?headers: Hash[String, String]
+      timeout: Integer | Float
+    ) -> outcomes[json_value]
+
+    def request_excise: (
+      topic: String,
+      key: String,
+      subsystems: Array[String],
+      timeout: Integer | Float
     ) -> outcomes[json_value]
 
     private
 
     def native_request: (native_request request) -> outcomes[json_value]
+    def native_request_excise: (native_excise_request request) -> outcomes[json_value]
   end
 end
