@@ -86,7 +86,7 @@ client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 client.shutdown
 ```
 
-## Subsystem Requests
+## Requests
 
 Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
 
