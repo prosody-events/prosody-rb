@@ -86,13 +86,13 @@ client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 client.shutdown
 ```
 
-## Peer Requests
+## Subsystem Requests
 
-Peer requests collect one result from each named subsystem. Results follow the subsystem order.
+Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
 
 Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
 
-Message handler return values become request results. Each return value must have a JSON representation.
+Message handler return values become successful request outcomes. Each return value must have a JSON representation.
 
 Return a JSON response from each message handler:
 
@@ -109,18 +109,18 @@ Send a request without a subscription on the requester:
 ```ruby
 subsystems = ["inventory", "billing"]
 results = client.request(
-  "orders",
-  "order-1",
-  {"type" => "order.created"},
-  subsystems,
-  2
+  topic: "orders",
+  key: "order-1",
+  payload: {"type" => "order.created"},
+  subsystems: subsystems,
+  timeout: 2
 )
 
-subsystems.zip(results).each do |subsystem, result|
-  if result.is_a?(Prosody::ResponseError)
-    warn "#{subsystem}: #{result}"
+results.each do |subsystem, outcome|
+  if outcome.is_a?(Prosody::Failure)
+    warn "#{subsystem}: #{outcome.error.message}"
   else
-    puts "#{subsystem}: #{result}"
+    puts "#{subsystem}: #{outcome.value}"
   end
 end
 ```
@@ -132,9 +132,9 @@ inventory: {"accepted"=>"order-1"}
 billing: no response arrived before the deadline
 ```
 
-Each array element is a JSON response or a Ruby exception. Its type identifies the failure.
+Each value is a `Success` or `Failure`. Each failure contains one typed response error.
 
-Core exceptions use Prosody's message. Handler exceptions also keep their category and original text.
+Each response error has one message.
 
 ## Architecture
 
@@ -986,7 +986,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
-- `request(topic, key, payload, subsystems, timeout, headers: {})`: Return one ordered result for each subsystem.
+- `request(topic:, key:, payload:, subsystems:, timeout:, headers: {})`: Return one outcome for each subsystem.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.

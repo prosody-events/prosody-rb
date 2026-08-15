@@ -346,17 +346,19 @@ RSpec.describe Prosody::Client, integration: true do
 
     client.subscribe(handler_class.new)
     results = client.request(
-      topic,
-      "order-1",
-      {"type" => "order.created"},
-      ["inventory"],
-      TestConfig::MESSAGE_TIMEOUT
+      topic: topic,
+      key: "order-1",
+      payload: {"type" => "order.created"},
+      subsystems: ["inventory"],
+      timeout: TestConfig::MESSAGE_TIMEOUT
     )
 
-    expect(results).to eq([{"key" => "order-1", "accepted" => true}])
+    expect(results).to eq(
+      "inventory" => Prosody::Success.new(value: {"key" => "order-1", "accepted" => true})
+    )
   end
 
-  it "classifies a handler result conversion failure as permanent" do
+  it "returns a handler failure when a result cannot encode" do
     handler_class = Class.new(Prosody::EventHandler) do
       def on_message(_context, _message)
         Object.new
@@ -364,18 +366,17 @@ RSpec.describe Prosody::Client, integration: true do
     end
 
     client.subscribe(handler_class.new)
-    result = client.request(
-      topic,
-      "order-1",
-      {"type" => "order.created"},
-      ["inventory"],
-      TestConfig::MESSAGE_TIMEOUT
-    ).fetch(0)
+    outcome = client.request(
+      topic: topic,
+      key: "order-1",
+      payload: {"type" => "order.created"},
+      subsystems: ["inventory"],
+      timeout: TestConfig::MESSAGE_TIMEOUT
+    ).fetch("inventory")
 
-    expect(result).to be_a(Prosody::HandlerResponseError)
-    expect(result).to be_a(Prosody::Error)
-    expect(result.category).to eq(:permanent)
-    expect(result.message).to eq("handler failed: #{result.handler_message}")
+    expect(outcome).to be_a(Prosody::Failure)
+    expect(outcome.error).to be_a(Prosody::HandlerError)
+    expect(outcome.error.message).not_to be_empty
   end
 
   # Verify correct handling of multiple messages with ordering guarantees

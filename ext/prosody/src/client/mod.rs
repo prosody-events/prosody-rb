@@ -27,7 +27,6 @@ use magnus::{
 };
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
-use prosody::error::ErrorCategory;
 use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::erased::{
     ErasedConsumerState, ErasedReadCache, SharedHighLevelClient, new_erased,
@@ -301,15 +300,23 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         let module = ruby.get_inner(&ROOT_MOD);
-        let array = ruby.ary_new_capa(results.len());
-        for result in results {
-            let value = match result {
-                Ok(value) => serialize(ruby, &value)?,
-                Err(error) => response_error(ruby, module, error)?,
+        let outcomes = ruby.hash_new();
+        let success: RClass = module.const_get(id!(ruby, "Success"))?;
+        let failure: RClass = module.const_get(id!(ruby, "Failure"))?;
+        for (subsystem, result) in results {
+            let outcome = match result {
+                Ok(value) => {
+                    let value: Value = serialize(ruby, &value)?;
+                    success.new_instance((kwargs!(ruby, "value" => value),))?
+                }
+                Err(error) => failure.new_instance((kwargs!(
+                    ruby,
+                    "error" => response_error(ruby, module, error)?
+                ),))?,
             };
-            array.push(value)?;
+            outcomes.aset(subsystem.as_str(), outcome)?;
         }
-        Ok(array.as_value())
+        Ok(outcomes.as_value())
     }
 
     /// Subscribes to events using the provided Ruby handler.
@@ -611,26 +618,15 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
 }
 
 fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<Value, Error> {
-    let display = error.to_string();
-    let (name, arguments) = match error {
-        ResponseError::Handler {
-            category,
-            message: handler_message,
-        } => {
-            let category = match category {
-                ErrorCategory::Transient => "transient",
-                ErrorCategory::Permanent => "permanent",
-                ErrorCategory::Terminal => "terminal",
-            };
-            let class: RClass = module.const_get(id!(ruby, "HandlerResponseError"))?;
-            return class.new_instance((
-                kwargs!("category" => ruby.sym_new(category), "handler_message" => handler_message, "message" => display),
-            ));
-        }
-        ResponseError::Timeout => ("ResponseTimeoutError", (display,)),
-        ResponseError::FormatMismatch => ("ResponseFormatMismatchError", (display,)),
-        ResponseError::Malformed => ("MalformedResponseError", (display,)),
+    let (name, message) = match error {
+        ResponseError::Handler { message } => ("HandlerError", Some(message)),
+        ResponseError::Timeout => ("Timeout", None),
+        ResponseError::FormatMismatch => ("FormatMismatch", None),
+        ResponseError::Malformed => ("MalformedResponse", None),
     };
     let class: RClass = module.const_get(name)?;
-    class.new_instance(arguments)
+    match message {
+        Some(message) => class.new_instance((kwargs!(ruby, "message" => message),)),
+        None => class.new_instance(()),
+    }
 }

@@ -1,24 +1,24 @@
 # frozen_string_literal: true
 
 module Prosody
-  class ResponseError < Error; end
+  Success = Data.define(:value)
+  Failure = Data.define(:error)
+  HandlerError = Data.define(:message)
 
-  class HandlerResponseError < ResponseError
-    attr_reader :category, :handler_message
-
-    def initialize(category:, handler_message:, message:)
-      @category = category
-      @handler_message = handler_message
-      super(message)
-    end
+  Timeout = Data.define do
+    def message = "no response arrived before the deadline"
   end
 
-  class ResponseTimeoutError < ResponseError; end
-  class ResponseFormatMismatchError < ResponseError; end
-  class MalformedResponseError < ResponseError; end
+  FormatMismatch = Data.define do
+    def message = "the responder answered in another format"
+  end
+
+  MalformedResponse = Data.define do
+    def message = "the response did not decode"
+  end
 
   class Client
-    def request(topic, key, payload, subsystems, timeout, headers: {})
+    def request(topic:, key:, payload:, subsystems:, timeout:, headers: {})
       native_request(
         topic: topic,
         key: key,
