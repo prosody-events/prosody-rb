@@ -17,6 +17,8 @@ use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
 use mimalloc::MiMalloc;
+use std::io::{self, Write};
+use std::process;
 use std::sync::{LazyLock, OnceLock};
 use tokio::runtime::Runtime;
 
@@ -45,9 +47,16 @@ pub static TRACING_INIT: OnceLock<()> = OnceLock::new();
 ///
 /// This runtime powers all async operations in the extension, including
 /// message processing, scheduling, and communication with Ruby.
-#[allow(clippy::expect_used)]
-static RUNTIME: LazyLock<Runtime> =
-    LazyLock::new(|| Runtime::new().expect("Failed to create Tokio runtime"));
+static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| match Runtime::new() {
+    Ok(runtime) => runtime,
+    Err(error) => {
+        drop(writeln!(
+            io::stderr().lock(),
+            "failed to create Tokio runtime: {error:#}"
+        ));
+        process::abort();
+    }
+});
 
 /// Reference to the root Ruby module for this extension.
 ///

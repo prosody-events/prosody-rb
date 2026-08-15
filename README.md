@@ -83,8 +83,64 @@ client.subscribe(MyHandler.new)
 client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
 
 # Ensure proper shutdown when done
-client.unsubscribe
+client.shutdown
 ```
+
+## Subsystem Requests
+
+Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
+
+Do not rely on hash iteration order.
+
+Prosody raises an error if the request cannot produce the complete result hash.
+
+Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
+
+Message handler return values become successful request outcomes. Each return value must have a JSON representation.
+
+Return a JSON response from each message handler:
+
+```ruby
+class InventoryHandler < Prosody::EventHandler
+  def on_message(_context, message)
+    {"accepted" => message.key}
+  end
+end
+```
+
+Send a request without a subscription on the requester:
+
+Set `timeout` in seconds.
+
+```ruby
+subsystems = ["inventory", "billing"]
+results = client.request(
+  topic: "orders",
+  key: "order-1",
+  payload: {"type" => "order.created"},
+  subsystems: subsystems,
+  timeout: 2.0
+)
+
+results.each do |subsystem, outcome|
+  if outcome.is_a?(Prosody::Failure)
+    warn "#{subsystem}: #{outcome.error.message}"
+  else
+    puts "#{subsystem}: #{outcome.value}"
+  end
+end
+```
+
+The example can print these results:
+
+```text
+inventory: {"accepted"=>"order-1"}
+billing: no response arrived before the deadline
+```
+
+Each value is a `Success` or `Failure`. Each failure contains one typed response error.
+
+Each response error has one message.
 
 ## Architecture
 
@@ -774,11 +830,10 @@ Strategies for achieving idempotence:
 
 ### Proper Shutdown
 
-Always unsubscribe from topics before exiting your application:
+Shut down the client before your application exits:
 
 ```ruby
-# Ensure proper shutdown
-client.unsubscribe
+client.shutdown
 ```
 
 This ensures:
@@ -813,7 +868,7 @@ shutdown.pop # This blocks until something is pushed to the queue by a signal ha
 
 # Clean shutdown
 puts "Shutting down gracefully..."
-client.unsubscribe
+client.shutdown
 ```
 
 ### Error Handling
@@ -937,13 +992,21 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
-- `consumer_state`: Get the current state of the consumer (`:unconfigured`, `:configured`, or `:running`).
+- `request(topic:, key:, payload:, subsystems:, timeout:, headers: {})`: Return one outcome for each subsystem.
+- `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
 - `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
-- `unsubscribe`: Unsubscribe from messages and shut down the consumer.
+- `unsubscribe`: Stop the consumer. You can subscribe again later.
+- `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
 - `is_stalled?`: Check if the consumer has stalled partitions.
+
+### Prosody::AdminClient
+
+- `new(bootstrap_servers)`: Create an admin client for the specified Kafka servers.
+- `create_topic(name, partitions, replication_factor)`: Create a Kafka topic.
+- `delete_topic(name)`: Delete a Kafka topic.
 
 ### Prosody::EventHandler
 

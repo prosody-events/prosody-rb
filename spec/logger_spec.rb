@@ -7,6 +7,10 @@ RSpec.describe "Prosody.logger" do
     expect(Prosody).to respond_to(:flush_telemetry, :shutdown_telemetry)
   end
 
+  it "exposes the admin client" do
+    expect(Prosody::AdminClient).to be_a(Class)
+  end
+
   around do |example|
     original = Prosody.logger
     Prosody.logger = nil

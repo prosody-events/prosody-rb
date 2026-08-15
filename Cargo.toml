@@ -9,13 +9,14 @@ resolver = "2"
 [workspace.dependencies]
 atomic-take = "1.1"
 bumpalo = "3.20"
+crossbeam-channel = "0.5"
 educe = "0.7"
 futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
-# TODO: replace with the published prosody crate release once the backend change ships.
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "1add1b742a4118142ea536b96d3dc8237ae16897", features = [
+# TODO: Use the released version after Prosody publishes peer requests.
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "91a4fc4730e1befbac6d87e8331000906bc367e3", features = [
     "libz-static",
 ] }
 rb-sys = "0.9"

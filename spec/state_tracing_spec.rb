@@ -162,7 +162,7 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
 
       OpenTelemetry.tracer_provider.force_flush
     ensure
-      client.unsubscribe if client.consumer_state == :running
+      client.shutdown unless client.consumer_state == :shut_down
     end
 
     expected_core = %w[value.set value.get map.set map.stream]

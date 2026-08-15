@@ -15,7 +15,8 @@ RSpec.describe "Prosody keyed state" do
   # ambient `PROSODY_BOOTSTRAP_SERVERS`; mock mode never connects to it. Callers
   # may override it via `options`.
   def client_error(**options)
-    Prosody::Client.new(mock: true, group_id: "state-spec", bootstrap_servers: "localhost:9094", **options)
+    client = Prosody::Client.new(mock: true, group_id: "state-spec", bootstrap_servers: "localhost:9094", **options)
+    client.shutdown
     nil
   rescue => e
     e

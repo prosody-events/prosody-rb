@@ -7,6 +7,8 @@
 //! builders.
 
 use magnus::{Error, Ruby, Value};
+use prosody::PeerConfiguration;
+use prosody::PeerEndpoint;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::KeyedStateConfiguration;
@@ -35,6 +37,7 @@ use prosody::{ByteSize, JsonCodec};
 use serde::{Deserialize, Deserializer};
 use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -215,6 +218,21 @@ pub struct NativeConfiguration {
 
     /// Span linking for timer execution spans (`child` or `follows_from`).
     timer_spans: Option<String>,
+
+    /// Address for the peer listener.
+    peer_bind_address: Option<String>,
+
+    /// gRPC connect URI that peers use for this client.
+    peer_advertised_connect: Option<String>,
+
+    /// Network name used to identify direct routes.
+    peer_network_name: Option<String>,
+
+    /// Maximum number of peer channels and registrations held in each cache.
+    peer_cache_capacity: Option<usize>,
+
+    /// Duration of each peer registration lease, in seconds.
+    peer_registration_ttl: Option<f64>,
 
     // Keyed-state configuration
     /// Keyed-state collections to register before subscribe.
@@ -925,6 +943,36 @@ fn whole_number_field(value: f64, field: &str, min: u32, max: u32) -> Result<u32
     }
 }
 
+fn build_peer_config(config: &NativeConfiguration) -> Result<PeerConfiguration, String> {
+    let mut builder = PeerConfiguration::builder();
+    if let Some(value) = &config.peer_bind_address {
+        builder.bind_address(
+            value
+                .parse::<SocketAddr>()
+                .map_err(|error| format!("peer_bind_address: {error}"))?,
+        );
+    }
+    if let Some(value) = &config.peer_advertised_connect {
+        builder.advertised_connect(
+            PeerEndpoint::try_from(value.clone())
+                .map_err(|error| format!("peer_advertised_connect: {error}"))?,
+        );
+    }
+    if let Some(value) = &config.peer_network_name {
+        builder.network_name(value.clone());
+    }
+    if let Some(value) = config.peer_cache_capacity {
+        builder.peer_cache_capacity(value);
+    }
+    if let Some(value) = config.peer_registration_ttl {
+        builder.registration_ttl(
+            Duration::try_from_secs_f64(value)
+                .map_err(|_| "peer_registration_ttl: must be a valid duration".to_owned())?,
+        );
+    }
+    builder.build().map_err(|error| error.to_string())
+}
+
 /// Applies the shared descriptor options (TTL, commit mode) fluently.
 fn with_def<D: StateDescriptor>(
     descriptor: D,
@@ -1246,6 +1294,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             dedup: config.try_into()?,
             emitter: config.try_into()?,
             keyed_state: build_keyed_state_config(config)?,
+            peer: build_peer_config(config)?,
         })
     }
 }

@@ -17,6 +17,22 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 | `mode` / -                              | Processing mode: `pipeline`, `low_latency`, or `best_effort` | `pipeline` |
 | - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info` |
 
+## Peer requests
+
+Peer requests work with the defaults on one network. Without a network name, peers always use the direct listener address.
+With a network name, peers with the same name use the direct address. Other peers use the advertised connect URI.
+Use a different bind address for each client that shares a host.
+
+| Option / Environment Variable | Description | Default |
+|--------------------------------|-------------|---------|
+| `peer_bind_address` / `PROSODY_PEER_BIND_ADDRESS` | Socket address for the peer gRPC listener | Default network interface address on port 9099 |
+| `peer_advertised_connect` / `PROSODY_PEER_ADVERTISED_CONNECT` | gRPC connect URI that peers on another network use | (none) |
+| `peer_network_name` / `PROSODY_PEER_NETWORK_NAME` | Nonempty network name for direct peer routes | (none) |
+| `peer_cache_capacity` / `PROSODY_PEER_CACHE_CAPACITY` | Maximum channels and peer records in each peer cache | 256 |
+| `peer_registration_ttl` / `PROSODY_PEER_REGISTRATION_TTL` | Directory lease duration; use 5 seconds through 20 years | 30s |
+
+Set `subsystem` to make this client answer requests. Without it, the client consumes messages but does not answer requests.
+
 ## Consumer
 
 | Option / Environment Variable           | Description                                          | Default                |

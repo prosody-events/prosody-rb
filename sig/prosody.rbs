@@ -18,6 +18,18 @@ module Prosody
   # Exports buffered telemetry and shuts down the process-global pipeline.
   def self.shutdown_telemetry: () -> void
 
+  # Manages Kafka topics.
+  class AdminClient
+    # Creates an admin client for the specified Kafka bootstrap servers.
+    def self.new: (Array[String]) -> AdminClient
+
+    # Creates a topic.
+    def create_topic: (String, Integer, Integer) -> void
+
+    # Deletes a topic.
+    def delete_topic: (String) -> void
+  end
+
   # Wrapper for dynamically-typed results from async operations.
   # This is an internal class used for bridging Rust and Ruby.
   class DynamicResult
@@ -132,7 +144,7 @@ module Prosody
 
     # Returns the current state of the consumer.
     #
-    # @return [Symbol] The consumer state: :unconfigured, :configured, or :running
+    # @return [Symbol] The consumer state: :shut_down, :unconfigured, :configured, or :running
     def consumer_state: () -> Symbol
 
     # Returns the number of Kafka partitions currently assigned to this consumer.
@@ -170,6 +182,13 @@ module Prosody
     # @return [void]
     # @raise [RuntimeError] If unsubscription fails
     def unsubscribe: () -> void
+
+    # Shuts down all client services.
+    # Concurrent and repeated calls wait for the same shutdown operation.
+    #
+    # @return [void]
+    # @raise [RuntimeError] If shutdown fails
+    def shutdown: () -> void
 
     # Returns the configured source system identifier.
     #

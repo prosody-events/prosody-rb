@@ -1,0 +1,54 @@
+module Prosody
+  class Success[Value] < Data
+    attr_reader value: Value
+  end
+
+  class Failure < Data
+    attr_reader error: response_error
+  end
+
+  class HandlerError < Data
+    attr_reader message: String
+  end
+
+  class Timeout < Data
+    def message: () -> String
+  end
+
+  class FormatMismatch < Data
+    def message: () -> String
+  end
+
+  class MalformedResponse < Data
+    def message: () -> String
+  end
+
+  type response_error = HandlerError | Timeout | FormatMismatch | MalformedResponse
+  type outcome[Value] = Success[Value] | Failure
+  type outcomes[Value] = Hash[String, outcome[Value]]
+  type native_request = {
+    topic: String,
+    key: String,
+    payload: json_value,
+    subsystems: Array[String],
+    timeout: Integer | Float,
+    headers: Hash[String, String]
+  }
+
+  class Client
+    # The timeout value uses seconds.
+    # The method raises if it cannot produce all outcomes.
+    def request: (
+      topic: String,
+      key: String,
+      payload: json_value,
+      subsystems: Array[String],
+      timeout: Integer | Float,
+      ?headers: Hash[String, String]
+    ) -> outcomes[json_value]
+
+    private
+
+    def native_request: (native_request request) -> outcomes[json_value]
+  end
+end
