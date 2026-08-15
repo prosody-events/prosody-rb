@@ -90,6 +90,10 @@ client.shutdown
 
 Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
 
+Do not rely on hash iteration order.
+
+Prosody raises an error if the request cannot produce the complete result hash.
+
 Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
 
 Message handler return values become successful request outcomes. Each return value must have a JSON representation.
@@ -106,6 +110,8 @@ end
 
 Send a request without a subscription on the requester:
 
+Set `timeout` in seconds.
+
 ```ruby
 subsystems = ["inventory", "billing"]
 results = client.request(
@@ -113,7 +119,7 @@ results = client.request(
   key: "order-1",
   payload: {"type" => "order.created"},
   subsystems: subsystems,
-  timeout: 2
+  timeout: 2.0
 )
 
 results.each do |subsystem, outcome|

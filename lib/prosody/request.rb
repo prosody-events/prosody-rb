@@ -18,6 +18,10 @@ module Prosody
   end
 
   class Client
+    # Returns one outcome for each subsystem.
+    # @param timeout [Numeric] The response deadline in seconds.
+    # @raise [ArgumentError] if a subsystem name or timeout is invalid
+    # @raise [RuntimeError] if the request cannot produce all outcomes
     def request(topic:, key:, payload:, subsystems:, timeout:, headers: {})
       native_request(
         topic: topic,

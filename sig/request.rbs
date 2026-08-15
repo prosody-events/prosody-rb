@@ -36,6 +36,8 @@ module Prosody
   }
 
   class Client
+    # The timeout value uses seconds.
+    # The method raises if it cannot produce all outcomes.
     def request: (
       topic: String,
       key: String,
