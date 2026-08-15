@@ -17,9 +17,9 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 | `mode` / -                              | Processing mode: `pipeline`, `low_latency`, or `best_effort` | `pipeline` |
 | - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info` |
 
-## Peer requests
+## Requests
 
-Peer requests work with the defaults on one network. Without a network name, peers always use the direct listener address.
+Requests work with the defaults on one network. Without a network name, peers always use the direct listener address.
 With a network name, peers with the same name use the direct address. Other peers use the advertised connect URI.
 Use a different bind address for each client that shares a host.
 
