@@ -8,6 +8,7 @@
 
 use magnus::{Error, Ruby, Value};
 use prosody::PeerConfiguration;
+use prosody::PeerEndpoint;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::consumer::KeyedStateConfiguration;
@@ -40,7 +41,6 @@ use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
-use tonic::transport::Endpoint;
 
 /// Configuration structure for the Prosody client that maps Ruby configuration
 /// values to their native Rust equivalents.
@@ -954,7 +954,7 @@ fn build_peer_config(config: &NativeConfiguration) -> Result<PeerConfiguration, 
     }
     if let Some(value) = &config.peer_advertised_connect {
         builder.advertised_connect(
-            Endpoint::from_shared(value.clone())
+            PeerEndpoint::try_from(value.clone())
                 .map_err(|error| format!("peer_advertised_connect: {error}"))?,
         );
     }
