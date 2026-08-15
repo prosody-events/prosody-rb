@@ -14,6 +14,7 @@ use magnus::block::Proc;
 use magnus::value::ReprValue;
 use magnus::{Error, Ruby, TryConvert, Value, kwargs};
 use prosody::error::{ClassifyError, ErrorCategory};
+use serde_magnus::deserialize;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::debug;
@@ -40,7 +41,7 @@ pub fn result_channel() -> (ResultSender, ResultReceiver) {
 #[educe(Debug)]
 pub struct ResultSender {
     #[educe(Debug(ignore))]
-    result_tx: AtomicTake<oneshot::Sender<Result<(), ProcessingError>>>,
+    result_tx: AtomicTake<oneshot::Sender<Result<serde_json::Value, ProcessingError>>>,
 }
 
 /// Receives task results in Rust from Ruby.
@@ -51,7 +52,7 @@ pub struct ResultSender {
 #[educe(Debug)]
 pub struct ResultReceiver {
     #[educe(Debug(ignore))]
-    result_rx: oneshot::Receiver<Result<(), ProcessingError>>,
+    result_rx: oneshot::Receiver<Result<serde_json::Value, ProcessingError>>,
 }
 
 impl ResultSender {
@@ -80,7 +81,9 @@ impl ResultSender {
         };
 
         if is_success {
-            if result_tx.send(Ok(())).is_err() {
+            let result = deserialize(ruby, result)
+                .map_err(|error| ProcessingError::Permanent(error.to_string()));
+            if result_tx.send(result).is_err() {
                 debug!("discarding result; receiver went away");
             }
 
@@ -153,7 +156,7 @@ impl ResultReceiver {
     /// Returns a `ProcessingError` if:
     /// - The task failed (with either a permanent or transient error)
     /// - The channel was closed unexpectedly (e.g., the Ruby VM terminated)
-    pub async fn receive(self) -> Result<(), ProcessingError> {
+    pub async fn receive(self) -> Result<serde_json::Value, ProcessingError> {
         self.result_rx.await.map_err(|_| ProcessingError::Closed)?
     }
 }

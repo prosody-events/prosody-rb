@@ -9,15 +9,12 @@ use crate::bridge::callback::AsyncCallback;
 use crate::gvl::{GvlError, without_gvl};
 use crate::{ROOT_MOD, RUNTIME, id};
 use atomic_take::AtomicTake;
+use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError, bounded, select, unbounded};
 use educe::Educe;
-use futures::executor::block_on;
 use magnus::value::{Lazy, ReprValue};
 use magnus::{Error, Module, RClass, Ruby, Value};
 use std::any::Any;
 use thiserror::Error;
-use tokio::select;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 use tracing::{Instrument, Span, debug, error, warn};
 
@@ -63,7 +60,7 @@ pub struct Bridge {
     /// Channel sender for submitting functions to be executed in the Ruby
     /// context.
     #[educe(Debug(ignore))]
-    tx: UnboundedSender<RubyFunction>,
+    tx: Sender<RubyFunction>,
 }
 
 impl Bridge {
@@ -83,12 +80,12 @@ impl Bridge {
     ///
     /// A new `Bridge` instance.
     pub fn new(ruby: &Ruby) -> Self {
-        let (tx, mut rx) = unbounded_channel();
+        let (tx, rx) = unbounded();
 
         // Create a dedicated Ruby thread to process functions
         ruby.thread_create_from_fn(move |ruby| {
             loop {
-                let Err(error) = poll(&mut rx, ruby) else {
+                let Err(error) = poll(&rx, ruby) else {
                     continue;
                 };
 
@@ -208,8 +205,8 @@ impl Bridge {
     /// Unlike [`run`](Self::run), this method does not await a result and can
     /// be called from synchronous contexts such as `Drop` implementations.
     /// Returns `Err` only if the bridge receiver has been dropped (shutdown).
-    pub(crate) fn send(&self, function: RubyFunction) -> Result<(), SendError<RubyFunction>> {
-        self.tx.send(function)
+    pub(crate) fn send(&self, function: RubyFunction) -> Result<(), BridgeError> {
+        self.tx.send(function).map_err(|_| BridgeError::Shutdown)
     }
 }
 
@@ -233,32 +230,24 @@ impl Bridge {
 ///
 /// Returns a `BridgeError` if there was an issue with polling or executing
 /// commands.
-fn poll(rx: &mut UnboundedReceiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError> {
-    // Set up cancellation channel
-    let (cancel_tx, cancel_rx) = oneshot::channel();
-    let mut maybe_cancel_tx = Some(cancel_tx);
+fn poll(rx: &Receiver<RubyFunction>, ruby: &Ruby) -> Result<(), BridgeError> {
+    let (cancel_tx, cancel_rx) = bounded(1);
 
     // Function to be executed without the GVL (Global VM Lock)
     let poll_fn = || {
-        // Wait for either a command or cancellation
-        let maybe_command = block_on(async {
-            select! {
-                _ = cancel_rx => Err(BridgeError::Cancelled),
-                result = rx.recv() => Ok(result),
-            }
-        })?;
-
-        let first_command = maybe_command.ok_or(BridgeError::Shutdown)?;
+        let first_command = select! {
+            recv(cancel_rx) -> _ => return Err(BridgeError::Cancelled),
+            recv(rx) -> result => result.map_err(|_| BridgeError::Shutdown)?,
+        };
 
         // Batch up to POLL_BATCH_SIZE commands
         let mut commands = Vec::with_capacity(POLL_BATCH_SIZE);
         commands.push(first_command);
 
         while commands.len() < POLL_BATCH_SIZE {
-            if let Ok(command) = rx.try_recv() {
-                commands.push(command);
-            } else {
-                break;
+            match rx.try_recv() {
+                Ok(command) => commands.push(command),
+                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
             }
         }
 
@@ -266,12 +255,8 @@ fn poll(rx: &mut UnboundedReceiver<RubyFunction>, ruby: &Ruby) -> Result<(), Bri
     };
 
     // Function to cancel polling if needed
-    let cancel_fn = || {
-        let Some(cancel_tx) = maybe_cancel_tx.take() else {
-            return;
-        };
-
-        if cancel_tx.send(()).is_err() {
+    let cancel_fn = move || {
+        if matches!(cancel_tx.try_send(()), Err(TrySendError::Disconnected(()))) {
             warn!("Failed to cancel poll operation");
         }
     };

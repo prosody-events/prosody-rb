@@ -18,8 +18,13 @@ use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
 use crate::{BRIDGE, ROOT_MOD, id};
 use educe::Educe;
+use futures::FutureExt;
+use futures::future::{BoxFuture, Shared};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, Object, RClass, Ruby, StaticSymbol, Value, function, method};
+use magnus::{
+    Class, Error, Module, Object, RClass, RModule, Ruby, StaticSymbol, Value, function, kwargs,
+    method,
+};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
@@ -28,7 +33,12 @@ use prosody::high_level::erased::{
 };
 use prosody::high_level::mode::Mode;
 use prosody::propagator::new_propagator;
+use prosody::requester::ResponseError;
+use prosody::subsystem::SubsystemName;
+use serde::Deserialize;
 use serde_magnus::deserialize;
+use serde_magnus::serialize;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{Span, debug, info_span};
@@ -36,6 +46,8 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
 mod config;
+
+type Shutdown = Shared<BoxFuture<'static, Result<(), Arc<str>>>>;
 
 /// A Ruby-compatible wrapper around the Prosody high-level client.
 ///
@@ -48,13 +60,27 @@ mod config;
 pub struct Client {
     /// The underlying Prosody client
     #[educe(Debug(ignore))]
-    inner: SharedHighLevelClient<RubyHandler, prosody::JsonCodec>,
+    inner: SharedHighLevelClient<RubyHandler>,
+    /// One shutdown operation shared by all callers
+    #[educe(Debug(ignore))]
+    shutdown: Shutdown,
     /// Bridge for communicating between Rust and Ruby
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
     propagator: Arc<TextMapCompositePropagator>,
     /// PID at construction time, used to detect post-fork usage
     pid: u32,
+}
+
+#[derive(Deserialize)]
+struct NativeRequest {
+    topic: String,
+    key: String,
+    payload: serde_json::Value,
+    subsystems: Vec<String>,
+    timeout: f64,
+    #[serde(default)]
+    headers: HashMap<String, String>,
 }
 
 impl Client {
@@ -100,10 +126,6 @@ impl Client {
             .try_into()
             .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
 
-        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
-        let client = new_erased(mode, &mut config_ref.into(), &consumer_builders, &cassandra)
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
-
         let bridge = BRIDGE
             .get()
             .ok_or(Error::new(
@@ -111,10 +133,22 @@ impl Client {
                 "Bridge not initialized",
             ))?
             .clone();
+        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
+        let mut producer = config_ref.into();
+        let client = bridge
+            .wait_for(
+                ruby,
+                async move {
+                    new_erased(mode, &mut producer, &consumer_builders, &cassandra).await
+                },
+                Span::current(),
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
         Ok(Self {
+            shutdown: shutdown(&client),
             inner: client,
-            bridge: bridge.clone(),
+            bridge,
             propagator: Arc::new(new_propagator()),
             pid: std::process::id(),
         })
@@ -133,7 +167,8 @@ impl Client {
 
     /// Returns the current state of the consumer.
     ///
-    /// The consumer can be in one of three states:
+    /// The consumer can be in one of four states:
+    /// - `:shut_down` - The client is shut down
     /// - `:unconfigured` - The consumer has not been configured yet
     /// - `:configured` - The consumer is configured but not running
     /// - `:running` - The consumer is actively consuming messages
@@ -159,6 +194,7 @@ impl Client {
             ruby,
             async move {
                 match inner.consumer_state().await {
+                    ErasedConsumerState::Shutdown => Ok("shut_down"),
                     ErasedConsumerState::Unconfigured => Ok("unconfigured"),
                     ErasedConsumerState::ConfigurationFailed(error) => {
                         Err(format!("consumer configuration failed: {error}"))
@@ -237,6 +273,69 @@ impl Client {
                 span,
             )?
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
+    }
+
+    fn request(ruby: &Ruby, this: &Self, request: Value) -> Result<Value, Error> {
+        Self::check_fork(ruby, this)?;
+        let _guard = ensure_runtime_context(ruby);
+        let request: NativeRequest = deserialize(ruby, request)?;
+        let subsystems = request
+            .subsystems
+            .into_iter()
+            .map(SubsystemName::try_new)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?;
+        let timeout = Duration::try_from_secs_f64(request.timeout).map_err(|_| {
+            Error::new(
+                ruby.exception_arg_error(),
+                "timeout must be a finite, non-negative duration",
+            )
+        })?;
+        let topic = prosody::Topic::from(request.topic.as_str());
+        let context = extract_opentelemetry_context(ruby, &this.propagator)?;
+        let span = info_span!("ruby-request", topic = %request.topic, key = %request.key);
+        if let Err(error) = span.set_parent(context) {
+            debug!("failed to set parent span: {error:#}");
+        }
+        let inner = this.inner.clone();
+        let results = this
+            .bridge
+            .wait_for(
+                ruby,
+                async move {
+                    inner
+                        .request(
+                            request.headers.into_iter().collect(),
+                            topic,
+                            request.key,
+                            request.payload,
+                            subsystems,
+                            timeout,
+                        )
+                        .await
+                },
+                span,
+            )?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+
+        let module = ruby.get_inner(&ROOT_MOD);
+        let outcomes = ruby.hash_new();
+        let success: RClass = module.const_get(id!(ruby, "Success"))?;
+        let failure: RClass = module.const_get(id!(ruby, "Failure"))?;
+        for (subsystem, result) in results {
+            let outcome = match result {
+                Ok(value) => {
+                    let value: Value = serialize(ruby, &value)?;
+                    success.new_instance((kwargs!(ruby, "value" => value),))?
+                }
+                Err(error) => failure.new_instance((kwargs!(
+                    ruby,
+                    "error" => response_error(ruby, module, error)?
+                ),))?,
+            };
+            outcomes.aset(subsystem.as_str(), outcome)?;
+        }
+        Ok(outcomes.as_value())
     }
 
     /// Subscribes to events using the provided Ruby handler.
@@ -345,6 +444,22 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
+    /// Shuts down the client and all its services.
+    /// Concurrent and repeated calls wait for the same operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if shutdown fails.
+    fn shutdown(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        Self::check_fork(ruby, this)?;
+        let _guard = ensure_runtime_context(ruby);
+        let shutdown = this.shutdown.clone();
+
+        this.bridge
+            .wait_for(ruby, shutdown, Span::current())?
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
+    }
+
     /// Returns the configured source system identifier.
     ///
     /// The source system is used to identify the originating service or
@@ -439,6 +554,18 @@ impl Client {
     }
 }
 
+fn shutdown(client: &SharedHighLevelClient<RubyHandler>) -> Shutdown {
+    let client = client.clone();
+    async move {
+        client
+            .shutdown()
+            .await
+            .map_err(|error| Arc::from(error.to_string()))
+    }
+    .boxed()
+    .shared()
+}
+
 fn read_cache(ruby: &Ruby, seconds: Option<f64>, disabled: bool) -> Result<ErasedReadCache, Error> {
     match (seconds, disabled) {
         (None, false) => Ok(ErasedReadCache::Inherit),
@@ -481,6 +608,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(id!(ruby, "send_message"), method!(Client::send, 3))?;
     class.define_method(id!(ruby, "excise"), method!(Client::excise, 2))?;
+    class.define_method(id!(ruby, "native_request"), method!(Client::request, 1))?;
     class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
     class.define_method(
         id!(ruby, "assigned_partitions"),
@@ -488,6 +616,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
     class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
+    class.define_method(id!(ruby, "shutdown"), method!(Client::shutdown, 0))?;
     class.define_method(
         id!(ruby, "source_system"),
         method!(Client::source_system, 0),
@@ -506,4 +635,18 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
 
     Ok(())
+}
+
+fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<Value, Error> {
+    let (name, message) = match error {
+        ResponseError::Handler { message } => ("HandlerError", Some(message)),
+        ResponseError::Timeout => ("Timeout", None),
+        ResponseError::FormatMismatch => ("FormatMismatch", None),
+        ResponseError::Malformed => ("MalformedResponse", None),
+    };
+    let class: RClass = module.const_get(name)?;
+    match message {
+        Some(message) => class.new_instance((kwargs!(ruby, "message" => message),)),
+        None => class.new_instance(()),
+    }
 }

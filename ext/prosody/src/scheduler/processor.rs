@@ -104,7 +104,7 @@ impl RubyProcessor {
         function: F,
     ) -> Result<CancellationToken, Error>
     where
-        F: FnOnce(&Ruby) -> Result<(), Error> + Send + 'static,
+        F: FnOnce(&Ruby) -> Result<Value, Error> + Send + 'static,
     {
         if self.is_shutdown.load(Relaxed) {
             return Err(Error::new(
@@ -122,7 +122,7 @@ impl RubyProcessor {
             if let Some(function) = maybe_function.take() {
                 function(ruby)
             } else {
-                Ok(())
+                Ok(ruby.qnil().as_value())
             }
         });
 

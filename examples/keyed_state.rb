@@ -61,5 +61,5 @@ if __FILE__ == $PROGRAM_NAME
     state_collections: [CART, TOTALS, BACKLOG]
   )
   client.subscribe(KeyedStateHandler.new(logger: Logger.new($stdout)))
-  client.unsubscribe
+  client.shutdown
 end

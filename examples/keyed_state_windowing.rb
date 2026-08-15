@@ -47,5 +47,5 @@ if __FILE__ == $PROGRAM_NAME
     state_collections: [ACTIVITY_WINDOW, PENDING_ACTIVITIES]
   )
   client.subscribe(ActivityWindowHandler.new)
-  client.unsubscribe
+  client.shutdown
 end

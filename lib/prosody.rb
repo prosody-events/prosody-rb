@@ -45,3 +45,4 @@ end
 # subclasses the error hierarchy, so every native class and base error must
 # already exist.
 require_relative "prosody/state"
+require_relative "prosody/request"

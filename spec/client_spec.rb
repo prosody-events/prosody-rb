@@ -197,7 +197,7 @@ RSpec.describe Prosody::Client, integration: true do
   # Test variables
   let(:topic) { generate_topic_name }
   let(:message_stream) { MessageStream.new }
-  let(:config) { TestConfig.create_configuration(topic) }
+  let(:config) { TestConfig.create_configuration(topic, subsystem: "inventory") }
   let(:client) { Prosody::Client.new(config) }
   let(:admin_client_class) { Prosody.const_get(:AdminClient) }
   let(:admin) { admin_client_class.new([TestConfig::BOOTSTRAP_SERVERS]) }
@@ -210,11 +210,10 @@ RSpec.describe Prosody::Client, integration: true do
     sleep 1
   end
 
-  # Test cleanup: unsubscribe client and delete topic
+  # Test cleanup: shut down the client and delete the topic.
   after do
-    # Clean up after each test - only unsubscribe if running
-    if client.respond_to?(:consumer_state) && client.consumer_state == :running
-      client.unsubscribe
+    if client.respond_to?(:consumer_state) && client.consumer_state != :shut_down
+      client.shutdown
     end
 
     begin
@@ -355,6 +354,48 @@ RSpec.describe Prosody::Client, integration: true do
 
     expect(message.key).to eq("obsolete-key")
     expect(message.payload).to be_nil
+  end
+
+  it "returns the local handler response for a request" do
+    handler_class = Class.new(Prosody::EventHandler) do
+      def on_message(_context, message)
+        {"key" => message.key, "accepted" => true}
+      end
+    end
+
+    client.subscribe(handler_class.new)
+    results = client.request(
+      topic: topic,
+      key: "order-1",
+      payload: {"type" => "order.created"},
+      subsystems: ["inventory"],
+      timeout: TestConfig::MESSAGE_TIMEOUT
+    )
+
+    expect(results).to eq(
+      "inventory" => Prosody::Success.new(value: {"key" => "order-1", "accepted" => true})
+    )
+  end
+
+  it "returns a handler failure when a result cannot encode" do
+    handler_class = Class.new(Prosody::EventHandler) do
+      def on_message(_context, _message)
+        Object.new
+      end
+    end
+
+    client.subscribe(handler_class.new)
+    outcome = client.request(
+      topic: topic,
+      key: "order-1",
+      payload: {"type" => "order.created"},
+      subsystems: ["inventory"],
+      timeout: TestConfig::MESSAGE_TIMEOUT
+    ).fetch("inventory")
+
+    expect(outcome).to be_a(Prosody::Failure)
+    expect(outcome.error).to be_a(Prosody::HandlerError)
+    expect(outcome.error.message).not_to be_empty
   end
 
   # Verify correct handling of multiple messages with ordering guarantees
