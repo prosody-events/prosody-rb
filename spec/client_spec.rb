@@ -623,6 +623,9 @@ RSpec.describe Prosody::Client, integration: true do
         # Timer fired - not used in these tests
       end
 
+      def on_excise(_context, _message)
+      end
+
       private
 
       def test_schedule_multiple_timers(context)
@@ -794,6 +797,9 @@ RSpec.describe Prosody::Client, integration: true do
 
       def on_timer(context, timer)
         capture_timer_firing_event(timer)
+      end
+
+      def on_excise(_context, _message)
       end
 
       private
