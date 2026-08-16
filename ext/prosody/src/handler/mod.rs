@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
-use tracing::{Instrument, info_span};
+use tracing::{Instrument, Span, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod context;
@@ -90,6 +90,71 @@ impl RubyHandler {
             propagator: Arc::new(new_propagator()),
         })
     }
+
+    async fn handle_record<C>(
+        &self,
+        context: C,
+        message: ConsumerMessage<serde_json::Value>,
+        method: &'static str,
+        event_type: &'static str,
+        span: Span,
+    ) -> Result<serde_json::Value, RubyHandlerError>
+    where
+        C: EventContext<Payload = serde_json::Value>,
+    {
+        let cancel_future = context.clone().on_cancel();
+        let handler = self.handler.clone();
+        let task_id = format!(
+            "{}/{}:{}",
+            message.topic(),
+            message.partition(),
+            message.offset()
+        );
+        let event_context = HashMap::from([
+            ("event_type".into(), event_type.into()),
+            ("topic".into(), message.topic().to_string()),
+            ("partition".into(), message.partition().to_string()),
+            ("key".into(), message.key().to_string()),
+            ("offset".into(), message.offset().to_string()),
+        ]);
+        let context = Context::new(
+            context.boxed(),
+            self.bridge.clone(),
+            self.propagator.clone(),
+        );
+        let response_requested = message.response_requested();
+        let message: Message = message.into();
+        let cloned_span = span.clone();
+
+        async move {
+            let task_handle = self
+                .scheduler
+                .schedule(task_id, &cloned_span, event_context, move |ruby| {
+                    let result = handler.get(ruby).funcall(method, (context, message))?;
+                    Ok(if response_requested {
+                        result
+                    } else {
+                        ruby.qnil().as_value()
+                    })
+                })
+                .await?;
+            let result_future = task_handle.result.receive();
+            pin_mut!(result_future);
+            let result = select! {
+                result = &mut result_future => {
+                    result.inspect_err(|error| cloned_span.set_status(Status::error(error.to_string())))?
+                }
+                () = cancel_future => {
+                    task_handle.cancellation_token.cancel(&self.bridge).await
+                        .inspect_err(|error| cloned_span.set_status(Status::error(error.to_string())))?;
+                    result_future.await?
+                }
+            };
+            Ok(result)
+        }
+        .instrument(span)
+        .await
+    }
 }
 
 impl FallibleHandler for RubyHandler {
@@ -126,8 +191,6 @@ impl FallibleHandler for RubyHandler {
     where
         C: EventContext<Payload = Self::Payload>,
     {
-        // Create a new span for the on_message operation as a child of the message's
-        // span
         let span = info_span!(
             parent: message.span(),
             "on_message",
@@ -136,79 +199,8 @@ impl FallibleHandler for RubyHandler {
             offset = message.offset(),
             key = %message.key()
         );
-
-        // Get a future that completes when cancellation is signaled
-        let cloned_context = context.clone();
-        let cancel_future = cloned_context.on_cancel();
-
-        // Clone the handler reference for use in the closure
-        let handler = self.handler.clone();
-
-        // Create a unique task ID for this message
-        let task_id = format!(
-            "{}/{}:{}",
-            message.topic(),
-            message.partition(),
-            message.offset()
-        );
-
-        let event_context = HashMap::from([
-            ("event_type".into(), "message".into()),
-            ("topic".into(), message.topic().to_string()),
-            ("partition".into(), message.partition().to_string()),
-            ("key".into(), message.key().to_string()),
-            ("offset".into(), message.offset().to_string()),
-        ]);
-
-        // Convert the Kafka message and context to Ruby-compatible types
-        let context = Context::new(
-            context.boxed(),
-            self.bridge.clone(),
-            self.propagator.clone(),
-        );
-        let response_requested = message.response_requested();
-        let message: Message = message.into();
-
-        // Execute the entire message handling operation within the span
-        let cloned_span = span.clone();
-        async move {
-            // Schedule the task to run in Ruby
-            let task_handle = self
-                .scheduler
-                .schedule(task_id, &cloned_span, event_context, move |ruby| {
-                    let result = handler
-                        .get(ruby)
-                        .funcall(id!(ruby, "on_message"), (context, message))?;
-                    if response_requested {
-                        Ok(result)
-                    } else {
-                        Ok(ruby.qnil().as_value())
-                    }
-                })
-                .await?;
-
-            // Get the future that will complete when the task is done
-            let result_future = task_handle.result.receive();
-            pin_mut!(result_future);
-
-            // Wait for either task completion or shutdown signal
-            let result = select! {
-                result = &mut result_future => {
-                    result.inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?
-                }
-                () = cancel_future => {
-                    // A cancel() failure is a genuine bridge error; mark the span.
-                    // The subsequent result_future error is expected cancellation, not a handler bug.
-                    task_handle.cancellation_token.cancel(&self.bridge).await
-                        .inspect_err(|e| cloned_span.set_status(Status::error(e.to_string())))?;
-                    result_future.await?
-                }
-            };
-
-            Ok(result)
-        }
-        .instrument(span)
-        .await
+        self.handle_record(context, message, "on_message", "message", span)
+            .await
     }
 
     async fn on_excise<C>(
@@ -228,61 +220,8 @@ impl FallibleHandler for RubyHandler {
             offset = message.offset(),
             key = %message.key()
         );
-        let cancel_context = context.clone();
-        let cancel_future = cancel_context.on_cancel();
-        let handler = self.handler.clone();
-        let task_id = format!(
-            "{}/{}:{}",
-            message.topic(),
-            message.partition(),
-            message.offset()
-        );
-        let event_context = HashMap::from([
-            ("event_type".into(), "excise".into()),
-            ("topic".into(), message.topic().to_string()),
-            ("partition".into(), message.partition().to_string()),
-            ("key".into(), message.key().to_string()),
-            ("offset".into(), message.offset().to_string()),
-        ]);
-        let context = Context::new(
-            context.boxed(),
-            self.bridge.clone(),
-            self.propagator.clone(),
-        );
-        let response_requested = message.response_requested();
-        let message: Message = message.into();
-        let cloned_span = span.clone();
-
-        async move {
-            let task_handle = self
-                .scheduler
-                .schedule(task_id, &cloned_span, event_context, move |ruby| {
-                    let result: Value = handler
-                        .get(ruby)
-                        .funcall(id!(ruby, "on_excise"), (context, message))?;
-                    if response_requested {
-                        Ok(result)
-                    } else {
-                        Ok(ruby.qnil().as_value())
-                    }
-                })
-                .await?;
-            let result_future = task_handle.result.receive();
-            pin_mut!(result_future);
-            let result = select! {
-                result = &mut result_future => {
-                    result.inspect_err(|error| cloned_span.set_status(Status::error(error.to_string())))?
-                }
-                () = cancel_future => {
-                    task_handle.cancellation_token.cancel(&self.bridge).await
-                        .inspect_err(|error| cloned_span.set_status(Status::error(error.to_string())))?;
-                    result_future.await?
-                }
-            };
-            Ok(result)
-        }
-        .instrument(span)
-        .await
+        self.handle_record(context, message, "on_excise", "excise", span)
+            .await
     }
 
     async fn on_timer<C>(

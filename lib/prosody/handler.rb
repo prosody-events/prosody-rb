@@ -117,6 +117,7 @@ module Prosody
           Kernel.raise error_class.new(e.message)
         end
       end
+      wrapper.instance_variable_set(:@prosody_error_wrapper, true)
 
       prepend wrapper
     end
@@ -153,6 +154,38 @@ module Prosody
   #   end
   class EventHandler
     extend ErrorClassification
+    HANDLER_METHODS = %i[on_message on_excise on_timer].freeze
+
+    def self.validate_handler!(handler)
+      owners = handler.class.ancestors.take_while { |owner| owner != self }
+
+      HANDLER_METHODS.each do |name|
+        validate_method!(handler, owners, name)
+      end
+    end
+
+    def self.validate_method!(handler, owners, name)
+      implemented = owners.any? do |owner|
+        !owner.instance_variable_get(:@prosody_error_wrapper) &&
+          (owner.instance_methods(false) + owner.private_instance_methods(false)).include?(name)
+      end
+      raise ArgumentError, "handler must implement ##{name}" unless implemented
+      return if accepts_two_parameters?(handler.method(name))
+
+      raise ArgumentError, "handler ##{name} must accept two parameters"
+    end
+    private_class_method :validate_method!
+
+    def self.accepts_two_parameters?(method)
+      parameters = method.parameters
+      required = parameters.count { |kind, _| kind == :req }
+      positional = parameters.count { |kind, _| %i[req opt].include?(kind) }
+      has_rest = parameters.any? { |kind, _| kind == :rest }
+      has_required_keyword = parameters.any? { |kind, _| kind == :keyreq }
+
+      !has_required_keyword && required <= 2 && (has_rest || positional >= 2)
+    end
+    private_class_method :accepts_two_parameters?
 
     # Process a single message received from Prosody.
     # This method must be implemented by subclasses to define
@@ -161,7 +194,7 @@ module Prosody
     # @param [Context] context the message context
     # @param [Message<Payload>] message the message and its typed JSON payload
     # @raise [NotImplementedError] if not overridden by subclass
-    # @return [Prosody::json_value] the excise response
+    # @return [Prosody::json_value] the message response
     def on_message(context, message)
       raise NotImplementedError, "Subclasses must implement #on_message"
     end
@@ -171,7 +204,7 @@ module Prosody
     # @param [Context] context the event context
     # @param [Message<Payload>] message the message metadata with no payload
     # @raise [NotImplementedError] if not overridden by a subclass
-    # @return [void]
+    # @return [Prosody::json_value] the excise response
     def on_excise(context, message)
       raise NotImplementedError, "Subclasses must implement #on_excise"
     end

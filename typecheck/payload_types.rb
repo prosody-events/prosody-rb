@@ -13,8 +13,6 @@ class TypedOrderHandler < Prosody::EventHandler
 
   def on_message(context, message)
     payload = message.payload
-    return unless payload
-
     order_id = payload["order_id"]
     total = payload["total"]
 

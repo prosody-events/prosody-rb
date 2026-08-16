@@ -1,29 +1,14 @@
 use super::{
-    Arc, Class, Client, Duration, ErasedReadCache, Error, FutureExt, HANDLER_METHODS, Module,
-    Object, RClass, RModule, ROOT_MOD, ReprValue, ResponseError, Ruby, RubyHandler,
-    SharedHighLevelClient, Shutdown, Value, function, id, kwargs, method, request,
+    Arc, Class, Client, Duration, ErasedReadCache, Error, FutureExt, Module, Object, RClass,
+    RModule, ROOT_MOD, ReprValue, ResponseError, Ruby, RubyHandler, SharedHighLevelClient,
+    Shutdown, Value, function, id, kwargs, method, request,
 };
 
 pub(super) fn validate_handler(ruby: &Ruby, handler: Value) -> Result<(), Error> {
     let event_handler: RClass = ruby
         .get_inner(&ROOT_MOD)
         .const_get(id!(ruby, "EventHandler"))?;
-    for method_name in HANDLER_METHODS {
-        if !handler.respond_to(method_name, false)? {
-            return Err(Error::new(
-                ruby.exception_arg_error(),
-                format!("handler must implement #{method_name}"),
-            ));
-        }
-        let method: Value = handler.funcall(id!(ruby, "method"), (method_name,))?;
-        let owner: Value = method.funcall(id!(ruby, "owner"), ())?;
-        if owner.equal(event_handler)? {
-            return Err(Error::new(
-                ruby.exception_arg_error(),
-                format!("handler must implement #{method_name}"),
-            ));
-        }
-    }
+    let _: Value = event_handler.funcall(id!(ruby, "validate_handler!"), (handler,))?;
     Ok(())
 }
 

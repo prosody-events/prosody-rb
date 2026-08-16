@@ -25,8 +25,6 @@ class KeyedStateHandler < Prosody::EventHandler
 
   def on_message(context, message)
     payload = message.payload
-    return unless payload
-
     cart = context.state(CART)             # bound for this attempt only
     current = cart.get || {"items" => []}  # Hash, or nil when absent
     cart.set(current.merge("items" => current["items"] + [payload["order_id"]]))

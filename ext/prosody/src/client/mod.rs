@@ -53,8 +53,6 @@ use support::{read_cache, response_error, shutdown, validate_handler};
 
 type Shutdown = Shared<BoxFuture<'static, Result<(), Arc<str>>>>;
 
-const HANDLER_METHODS: [&str; 3] = ["on_message", "on_excise", "on_timer"];
-
 /// A Ruby-compatible wrapper around the Prosody high-level client.
 ///
 /// This struct bridges Ruby applications with the Prosody messaging system,
