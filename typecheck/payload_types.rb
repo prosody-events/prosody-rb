@@ -30,6 +30,9 @@ class TypedOrderHandler < Prosody::EventHandler
     consume_order(oldest_payload["order_id"], oldest_payload["total"]) if oldest_payload
   end
 
+  def on_timer(_context, _timer)
+  end
+
   private
 
   def consume_order(order_id, total)
