@@ -154,6 +154,7 @@ module Prosody
   #   end
   class EventHandler
     extend ErrorClassification
+
     HANDLER_METHODS = %i[on_message on_excise on_timer].freeze
 
     def self.validate_handler!(handler)
