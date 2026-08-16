@@ -99,7 +99,7 @@ Each handler must implement `on_message`, `on_excise`, and `on_timer`. Subscript
 
 Return a JSON value from `on_excise`. Prosody sends this value when the excise record is a subsystem request.
 
-## Subsystem Requests
+## Requests
 
 Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
 
