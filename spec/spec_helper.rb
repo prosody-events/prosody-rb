@@ -6,6 +6,12 @@ require "async"
 require "async/rspec"
 require "prosody"
 
+class CompleteHandler < Prosody::EventHandler
+  def on_message(*) = nil
+  def on_excise(*) = nil
+  def on_timer(*) = nil
+end
+
 # Load shared test configuration
 Dir[File.join(__dir__, "support", "*.rb")].each { |file| require file }
 

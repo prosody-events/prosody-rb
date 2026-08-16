@@ -80,7 +80,7 @@ RSpec.describe "Prosody keyed state scans" do
     it "drives concurrent #next with no duplicates or loss, then closes idempotently" do
       definition = Prosody.map(random_state_name("map"))
       count = ENTRY_COUNT
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition, count)
           @sink = sink
           @def = definition
@@ -145,7 +145,7 @@ RSpec.describe "Prosody keyed state scans" do
 
     it "raises the terminated (transient) error for an enumerator leaked past the handler" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition

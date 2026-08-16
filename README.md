@@ -95,7 +95,7 @@ client.shutdown
 
 Call `excise(topic, key)` to send a Kafka record with a key and no payload. Use this record to delete the key from compacted views.
 
-Each handler must implement `on_excise`. It receives the same arguments as `on_message`. The message payload is `nil`.
+Each handler must implement `on_message`, `on_excise`, and `on_timer`. Subscription fails before consumption if a method is missing.
 
 Return a JSON value from `on_excise`. Prosody sends this value when the excise record is a subsystem request.
 

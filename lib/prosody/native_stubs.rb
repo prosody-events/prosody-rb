@@ -442,10 +442,11 @@ module Prosody
     end
 
     # Subscribes to Kafka topics using the provided handler.
-    # The handler must implement an `on_message(context, message)` method.
+    # The handler must implement `on_message`, `on_excise`, and `on_timer`.
     #
     # @param handler [EventHandler<untyped>] A handler object that processes messages
     # @return [void]
+    # @raise [ArgumentError] If a required handler method is missing
     # @raise [RuntimeError] If subscription fails
     #
     # @example Subscribing with a handler

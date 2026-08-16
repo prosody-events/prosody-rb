@@ -96,7 +96,7 @@ module Prosody
     # @param [Symbol] method_name the method to wrap
     # @param [Array<Class<Exception>>] exception_classes exceptions to catch
     # @param [Class<EventHandlerError>] error_class the error class to wrap caught exceptions in
-    # @return [void]
+    # @return [Prosody::json_value] the message response
     def wrap_errors(method_name, exception_classes, error_class)
       # Must specify at least one exception class
       if exception_classes.empty?
@@ -131,8 +131,7 @@ module Prosody
   # {Message}; it defaults to +Prosody::json_value+. Declare a narrower payload
   # shape in your application's RBS (for example,
   # +EventHandler[order_event]+) to type-check payload access.
-  # Subclasses **must** implement `#on_message` to process received messages.
-  # Subclasses **may** implement `#on_timer` to process timer events.
+  # Subclasses must implement `#on_message`, `#on_excise`, and `#on_timer`.
   # They may also use `permanent` or `transient` decorators to control retry logic.
   #
   # @example
@@ -162,7 +161,7 @@ module Prosody
     # @param [Context] context the message context
     # @param [Message<Payload>] message the message and its typed JSON payload
     # @raise [NotImplementedError] if not overridden by subclass
-    # @return [void]
+    # @return [Prosody::json_value] the excise response
     def on_message(context, message)
       raise NotImplementedError, "Subclasses must implement #on_message"
     end

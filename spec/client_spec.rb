@@ -273,7 +273,7 @@ RSpec.describe Prosody::Client, integration: true do
   it "subscribes and unsubscribes" do
     tracer.in_span("test.subscribe_unsubscribe") do |span|
       # Create handler class that pushes messages to our stream
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(stream)
           @stream = stream
         end
@@ -302,7 +302,7 @@ RSpec.describe Prosody::Client, integration: true do
   it "sends and receives a message" do
     tracer.in_span("test.send_receive") do |span|
       # Create handler class that forwards messages to our stream
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(stream)
           @stream = stream
         end
@@ -338,7 +338,7 @@ RSpec.describe Prosody::Client, integration: true do
   end
 
   it "sends and receives an excise record" do
-    handler_class = Class.new(Prosody::EventHandler) do
+    handler_class = Class.new(CompleteHandler) do
       def initialize(stream)
         @stream = stream
       end
@@ -357,7 +357,7 @@ RSpec.describe Prosody::Client, integration: true do
   end
 
   it "returns the local handler response for a request" do
-    handler_class = Class.new(Prosody::EventHandler) do
+    handler_class = Class.new(CompleteHandler) do
       def on_message(_context, message)
         {"key" => message.key, "accepted" => true}
       end
@@ -378,7 +378,7 @@ RSpec.describe Prosody::Client, integration: true do
   end
 
   it "returns a handler failure when a result cannot encode" do
-    handler_class = Class.new(Prosody::EventHandler) do
+    handler_class = Class.new(CompleteHandler) do
       def on_message(_context, _message)
         Object.new
       end
@@ -402,7 +402,7 @@ RSpec.describe Prosody::Client, integration: true do
   it "handles multiple messages with correct ordering" do
     tracer.in_span("test.multiple_messages") do |span|
       # Create handler class that forwards messages to our stream
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(stream)
           @stream = stream
         end
@@ -466,7 +466,7 @@ RSpec.describe Prosody::Client, integration: true do
       processing_semaphore = ThreadSafeSemaphore.new(0) # Start locked (0 permits)
 
       # Handler that signals when processing starts and waits on a semaphore
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(events, semaphore)
           @events = events
           @semaphore = semaphore
@@ -518,7 +518,7 @@ RSpec.describe Prosody::Client, integration: true do
       retry_event = EventNotifier.new
 
       # Create a handler that fails on first attempt but succeeds on retry
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         extend Prosody::ErrorClassification
 
         def initialize(retry_event, message_count)
@@ -562,7 +562,7 @@ RSpec.describe Prosody::Client, integration: true do
       error_event = EventNotifier.new
 
       # Create a handler that permanently fails
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(error_event, message_count)
           @error_event = error_event
           @message_count = message_count

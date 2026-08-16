@@ -48,6 +48,8 @@ mod config;
 
 type Shutdown = Shared<BoxFuture<'static, Result<(), Arc<str>>>>;
 
+const HANDLER_METHODS: [&str; 3] = ["on_message", "on_excise", "on_timer"];
+
 /// A Ruby-compatible wrapper around the Prosody high-level client.
 ///
 /// This struct bridges Ruby applications with the Prosody messaging system,
@@ -416,6 +418,7 @@ impl Client {
     /// - The client cannot subscribe with the handler
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
         Self::check_fork(ruby, this)?;
+        validate_handler(ruby, handler)?;
         let _guard = ensure_runtime_context(ruby);
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
         let inner = this.inner.clone();
@@ -612,6 +615,29 @@ impl Client {
             propagator: Arc::clone(&this.propagator),
         })
     }
+}
+
+fn validate_handler(ruby: &Ruby, handler: Value) -> Result<(), Error> {
+    let event_handler: RClass = ruby
+        .get_inner(&ROOT_MOD)
+        .const_get(id!(ruby, "EventHandler"))?;
+    for method_name in HANDLER_METHODS {
+        if !handler.respond_to(method_name, false)? {
+            return Err(Error::new(
+                ruby.exception_arg_error(),
+                format!("handler must implement #{method_name}"),
+            ));
+        }
+        let method: Value = handler.funcall(id!(ruby, "method"), (method_name,))?;
+        let owner: Value = method.funcall(id!(ruby, "owner"), ())?;
+        if owner.equal(event_handler)? {
+            return Err(Error::new(
+                ruby.exception_arg_error(),
+                format!("handler must implement #{method_name}"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn shutdown(client: &SharedHighLevelClient<RubyHandler>) -> Shutdown {
