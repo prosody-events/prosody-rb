@@ -40,6 +40,9 @@ class KeyedStateHandler < Prosody::EventHandler
     @logger.info("oldest order: #{format_order_id(oldest.payload["order_id"])}") if oldest
   end
 
+  def on_timer(_context, _timer)
+  end
+
   private
 
   def format_total(key, total)

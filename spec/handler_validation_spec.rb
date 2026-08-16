@@ -45,4 +45,16 @@ RSpec.describe "handler validation" do
     expect { Prosody::EventHandler.validate_handler!(handler_class.new) }
       .to raise_error(ArgumentError, "handler #on_excise must accept two parameters")
   end
+
+  it "rejects a wrapped handler with the wrong arity" do
+    handler_class = Class.new(Prosody::EventHandler) do
+      permanent :on_message, StandardError
+      define_method(:on_message) { |_| nil }
+      define_method(:on_excise) { |_, _| nil }
+      define_method(:on_timer) { |_, _| nil }
+    end
+
+    expect { Prosody::EventHandler.validate_handler!(handler_class.new) }
+      .to raise_error(ArgumentError, "handler #on_message must accept two parameters")
+  end
 end

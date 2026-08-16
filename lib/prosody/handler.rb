@@ -148,6 +148,10 @@ module Prosody
   #       # Process message...
   #     end
   #
+  #     def on_excise(context, message)
+  #       # Process excise record...
+  #     end
+  #
   #     def on_timer(context, trigger)
   #       # Process timer event...
   #     end
@@ -171,7 +175,12 @@ module Prosody
           (owner.instance_methods(false) + owner.private_instance_methods(false)).include?(name)
       end
       raise ArgumentError, "handler must implement ##{name}" unless implemented
-      return if accepts_two_parameters?(handler.method(name))
+      method = handler.method(name)
+      while method.owner.instance_variable_get(:@prosody_error_wrapper)
+        method = method.super_method
+        raise ArgumentError, "handler must implement ##{name}" unless method
+      end
+      return if accepts_two_parameters?(method)
 
       raise ArgumentError, "handler ##{name} must accept two parameters"
     end

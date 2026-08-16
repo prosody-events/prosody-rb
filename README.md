@@ -120,6 +120,13 @@ class InventoryHandler < Prosody::EventHandler
   def on_message(_context, message)
     {"accepted" => message.key}
   end
+
+  def on_excise(_context, message)
+    {"excised" => message.key}
+  end
+
+  def on_timer(_context, _timer)
+  end
 end
 ```
 

@@ -454,6 +454,13 @@ module Prosody
     #     def on_message(context, message)
     #       puts "Received message: #{message.payload}"
     #     end
+    #
+    #     def on_excise(_context, message)
+    #       puts "Excised key: #{message.key}"
+    #     end
+    #
+    #     def on_timer(_context, _timer)
+    #     end
     #   end
     #
     #   client.subscribe(MyHandler.new)
