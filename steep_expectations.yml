@@ -38,11 +38,10 @@
         character: 57
     severity: ERROR
     message: |-
-      Cannot pass a value of type `(::negative_event | nil)` as an argument of type `::Prosody::Message[untyped]`
-        (::negative_event | nil) <: ::Prosody::Message[untyped]
-          ::negative_event <: ::Prosody::Message[untyped]
-            { "amount" => ::Integer } <: ::Prosody::Message[untyped]
-              ::Hash["amount", ::Integer] <: ::Prosody::Message[untyped]
-                ::Object <: ::Prosody::Message[untyped]
-                  ::BasicObject <: ::Prosody::Message[untyped]
+      Cannot pass a value of type `::negative_event` as an argument of type `::Prosody::Message[untyped]`
+        ::negative_event <: ::Prosody::Message[untyped]
+          { "amount" => ::Integer } <: ::Prosody::Message[untyped]
+            ::Hash["amount", ::Integer] <: ::Prosody::Message[untyped]
+              ::Object <: ::Prosody::Message[untyped]
+                ::BasicObject <: ::Prosody::Message[untyped]
     code: Ruby::ArgumentTypeMismatch

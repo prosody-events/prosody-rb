@@ -179,7 +179,9 @@ module Prosody
     def self.accepts_two_parameters?(method)
       parameters = method.parameters
       required = parameters.count { |kind, _| kind == :req }
-      positional = parameters.count { |kind, _| %i[req opt].include?(kind) }
+      positional = parameters.count do |parameter|
+        parameter.first == :req || parameter.first == :opt
+      end
       has_rest = parameters.any? { |kind, _| kind == :rest }
       has_required_keyword = parameters.any? { |kind, _| kind == :keyreq }
 

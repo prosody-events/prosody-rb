@@ -61,6 +61,10 @@ module Prosody
   class EventHandler[Payload = json_value]
     extend ErrorClassification
 
+    def self.validate_handler!: (EventHandler[untyped] handler) -> void
+    def self.validate_method!: (untyped handler, untyped owners, Symbol name) -> void
+    def self.accepts_two_parameters?: (Method method) -> bool
+
     # Process a single message received from Prosody.
     # This method must be implemented by subclasses to define
     # custom message handling logic.
@@ -71,7 +75,7 @@ module Prosody
     def on_message: (Context context, Message[Payload] message) -> json_value
 
     # Process an excise record.
-    def on_excise: (Context context, Message[Payload] message) -> json_value
+    def on_excise: (Context context, Message[nil] message) -> json_value
 
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.

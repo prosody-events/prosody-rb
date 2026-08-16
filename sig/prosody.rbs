@@ -110,7 +110,7 @@ module Prosody
 
     # Returns the deserialized message payload.
     # @return [Payload] The message content
-    def payload: () -> Payload?
+    def payload: () -> Payload
   end
 
   # Represents a timer that was scheduled to fire at a specific time.
