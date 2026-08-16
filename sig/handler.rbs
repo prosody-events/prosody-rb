@@ -63,12 +63,8 @@ module Prosody
 
     def self.validate_handler!: (EventHandler[untyped] handler) -> void
 
-    private
-
-    def self.validate_method!: (untyped handler, untyped owners, Symbol name) -> void
-    def self.accepts_two_parameters?: (Method method) -> bool
-
-    public
+    private def self.validate_method!: (untyped handler, untyped owners, Symbol name) -> void
+    private def self.accepts_two_parameters?: (Method method) -> bool
 
     # Process a single message received from Prosody.
     # This method must be implemented by subclasses to define

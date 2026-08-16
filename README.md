@@ -564,6 +564,9 @@ class CountHandler < Prosody::EventHandler
     count = context.state(COUNTER)
     count.set((count.get || 0) + 1)
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 
 client = Prosody::Client.new(
@@ -607,6 +610,8 @@ class ActivityHandler < Prosody::EventHandler
     pending.clear
     context.state(WINDOW).clear
   end
+
+  def on_excise(_context, _message); end
 end
 ```
 
@@ -672,6 +677,8 @@ class MyHandler < Prosody::EventHandler
     puts "Key: #{timer.key}"
     puts "Scheduled time: #{timer.time}"
   end
+
+  def on_excise(_context, _message); end
 end
 ```
 
@@ -796,6 +803,9 @@ class MyHandler < Prosody::EventHandler
       })
     end
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 ```
 
@@ -914,6 +924,9 @@ class MyHandler < Prosody::EventHandler
     # JSON::ParserError will be treated as transient
     # All other exceptions will be treated as transient (default behavior)
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 ```
 
@@ -951,6 +964,9 @@ class MyHandler < Prosody::EventHandler
       release_resource(resource)
     end
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 ```
 
@@ -1048,6 +1064,10 @@ class MyHandler < Prosody::EventHandler
 
   def on_timer(context, timer)
     # Implement your timer handling logic here
+  end
+
+  def on_excise(_context, _message)
+    # Implement your excise handling logic here
   end
 end
 ```
