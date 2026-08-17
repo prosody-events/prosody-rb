@@ -353,7 +353,8 @@ RSpec.describe Prosody::Client, integration: true do
     message = message_stream.wait_for_messages(1, TestConfig::MESSAGE_TIMEOUT).first
 
     expect(message.key).to eq("obsolete-key")
-    expect(message.payload).to be_nil
+    expect(message).to be_a(Prosody::ExciseMessage)
+    expect(message).not_to respond_to(:payload)
   end
 
   it "returns the local handler response for a request" do

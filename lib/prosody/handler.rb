@@ -214,7 +214,7 @@ module Prosody
     # Process an excise record for a key.
     #
     # @param [Context] context the event context
-    # @param [Message<Payload>] message the message metadata with no payload
+    # @param [ExciseMessage] message the excise record metadata
     # @raise [NotImplementedError] if not overridden by a subclass
     # @return [Prosody::json_value] the excise response
     def on_excise(context, message)
