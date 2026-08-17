@@ -11,7 +11,7 @@
 
 use crate::bridge::{Bridge, BridgeError};
 use crate::handler::context::Context;
-use crate::handler::message::Message;
+use crate::handler::message::{ExciseMessage, Message};
 use crate::handler::trigger::Timer;
 use crate::id;
 use crate::scheduler::result::ProcessingError;
@@ -19,7 +19,7 @@ use crate::scheduler::{Scheduler, SchedulerError};
 use crate::util::ThreadSafeValue;
 use futures::pin_mut;
 use magnus::value::ReprValue;
-use magnus::{Error, Ruby, Value};
+use magnus::{Error, IntoValue, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::Status;
 use prosody::consumer::event_context::EventContext;
@@ -91,16 +91,18 @@ impl RubyHandler {
         })
     }
 
-    async fn handle_record<C>(
+    async fn handle_record<C, P, M>(
         &self,
         context: C,
-        message: ConsumerMessage<serde_json::Value>,
+        message: ConsumerMessage<P>,
         method: &'static str,
         event_type: &'static str,
         span: Span,
     ) -> Result<serde_json::Value, RubyHandlerError>
     where
         C: EventContext<Payload = serde_json::Value>,
+        M: From<ConsumerMessage<P>> + IntoValue + Send + 'static,
+        P: Send + Sync + 'static,
     {
         let cancel_future = context.clone().on_cancel();
         let handler = self.handler.clone();
@@ -123,7 +125,7 @@ impl RubyHandler {
             self.propagator.clone(),
         );
         let response_requested = message.response_requested();
-        let message: Message = message.into();
+        let message = M::from(message);
         let cloned_span = span.clone();
 
         async move {
@@ -199,14 +201,14 @@ impl FallibleHandler for RubyHandler {
             offset = message.offset(),
             key = %message.key()
         );
-        self.handle_record(context, message, "on_message", "message", span)
+        self.handle_record::<_, _, Message>(context, message, "on_message", "message", span)
             .await
     }
 
     async fn on_excise<C>(
         &self,
         context: C,
-        message: ConsumerMessage<Self::Payload>,
+        message: ConsumerMessage<()>,
         _demand_type: DemandType,
     ) -> Result<Self::Output, Self::Error>
     where
@@ -220,7 +222,7 @@ impl FallibleHandler for RubyHandler {
             offset = message.offset(),
             key = %message.key()
         );
-        self.handle_record(context, message, "on_excise", "excise", span)
+        self.handle_record::<_, _, ExciseMessage>(context, message, "on_excise", "excise", span)
             .await
     }
 

@@ -76,7 +76,7 @@ module Prosody
     def on_message: (Context context, Message[Payload] message) -> json_value
 
     # Process an excise record.
-    def on_excise: (Context context, Message[nil] message) -> json_value
+    def on_excise: (Context context, ExciseMessage message) -> json_value
 
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.

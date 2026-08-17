@@ -315,6 +315,24 @@ module Prosody
     end
   end
 
+  # An excise record with Kafka metadata and no payload.
+  class ExciseMessage
+    # @return [String] The topic name
+    def topic = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Integer] The partition number
+    def partition = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Integer] The message offset
+    def offset = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [String] The message key
+    def key = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Time] The record timestamp
+    def timestamp = raise NotImplementedError, "This method is implemented natively in Rust"
+  end
+
   # Represents a timer that was scheduled to fire at a specific time.
   #
   # Timer instances are created by the native code and passed to your

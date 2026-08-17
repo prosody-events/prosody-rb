@@ -1087,7 +1087,7 @@ type order_event = { "order_id" => String, "total" => Integer }
 
 class OrderHandler < Prosody::EventHandler[order_event]
   def on_message: (Prosody::Context, Prosody::Message[order_event]) -> Prosody::json_value
-  def on_excise: (Prosody::Context, Prosody::Message[order_event]) -> Prosody::json_value
+  def on_excise: (Prosody::Context, Prosody::ExciseMessage) -> Prosody::json_value
 end
 ```
 

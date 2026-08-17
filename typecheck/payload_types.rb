@@ -8,7 +8,7 @@ ORDER_TOTALS = Prosody.map("order-totals")
 
 class TypedOrderHandler < Prosody::EventHandler
   def on_excise(_context, message)
-    message.payload # nil
+    message.key
   end
 
   def on_message(context, message)

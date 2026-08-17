@@ -113,6 +113,15 @@ module Prosody
     def payload: () -> Payload
   end
 
+  # Represents an excise record with no payload.
+  class ExciseMessage
+    def topic: () -> String
+    def partition: () -> Integer
+    def offset: () -> Integer
+    def key: () -> String
+    def timestamp: () -> Time
+  end
+
   # Represents a timer that was scheduled to fire at a specific time.
   # Timer instances are passed to EventHandler's on_timer method when timers fire.
   class Timer

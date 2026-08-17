@@ -45,3 +45,13 @@
               ::Object <: ::Prosody::Message[untyped]
                 ::BasicObject <: ::Prosody::Message[untyped]
     code: Ruby::ArgumentTypeMismatch
+  - range:
+      start:
+        line: 18
+        character: 12
+      end:
+        line: 18
+        character: 19
+    severity: ERROR
+    message: Type `::Prosody::ExciseMessage` does not have method `payload`
+    code: Ruby::NoMethod

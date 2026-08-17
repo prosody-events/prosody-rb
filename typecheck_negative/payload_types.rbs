@@ -5,4 +5,5 @@ NEGATIVE_MESSAGES: Prosody::_MessageDequeDefinition[negative_event]
 
 class NegativeTypeChecks
   def check: (Prosody::Client client, Prosody::Context context, Prosody::Message[negative_event] message) -> void
+  def check_excise: (Prosody::ExciseMessage message) -> void
 end

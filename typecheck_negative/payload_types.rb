@@ -13,4 +13,8 @@ class NegativeTypeChecks
     totals.set("key", "not-an-integer")
     context.state(NEGATIVE_MESSAGES).push(message.payload)
   end
+
+  def check_excise(message)
+    message.payload
+  end
 end
