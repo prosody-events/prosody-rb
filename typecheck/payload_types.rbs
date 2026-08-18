@@ -2,12 +2,14 @@ type order_event = {
   "order_id" => String,
   "total" => Integer
 }
+type handler_response = { "accepted" => bool }
 
 ORDER_BACKLOG: Prosody::_MessageDequeDefinition[order_event]
 ORDER_TOTALS: Prosody::_MapDefinition[Integer]
 
-class TypedOrderHandler < Prosody::EventHandler[order_event]
-  def on_message: (Prosody::Context context, Prosody::Message[order_event] message) -> void
+class TypedOrderHandler < Prosody::EventHandler[order_event, handler_response]
+  def on_message: (Prosody::Context context, Prosody::Message[order_event] message) -> handler_response
+  def on_excise: (Prosody::Context context, Prosody::ExciseMessage message) -> handler_response
 
   private
 

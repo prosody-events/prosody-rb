@@ -9,6 +9,7 @@ ORDER_TOTALS = Prosody.map("order-totals")
 class TypedOrderHandler < Prosody::EventHandler
   def on_excise(_context, message)
     message.key
+    {"accepted" => true}
   end
 
   def on_message(context, message)
@@ -28,6 +29,7 @@ class TypedOrderHandler < Prosody::EventHandler
     consume_order(order_id, total)
     oldest_payload = oldest&.payload
     consume_order(oldest_payload["order_id"], oldest_payload["total"]) if oldest_payload
+    {"accepted" => true}
   end
 
   def on_timer(_context, _timer)

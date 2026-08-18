@@ -30,10 +30,10 @@ Or install directly:
 gem install prosody
 ```
 
-The gem ships RBS signatures for the public API. `Prosody::EventHandler[Payload]`
-carries an application payload type into `Prosody::Message[Payload]`, and keyed-
-state definitions carry their item types through `context.state`. A bare handler,
-message, definition, or state handle defaults to `Prosody::json_value`. See the
+The gem ships RBS signatures for the public API. `Prosody::EventHandler[Payload, Response]`
+carries the payload type into `Prosody::Message[Payload]`. It also checks each handler response.
+State definitions carry their item types through `context.state`. A bare handler,
+message, definition, or state handle uses `Prosody::json_value`. See the
 [typed examples](examples/) for Ruby and companion RBS files checked by Steep.
 
 ## Quick Start
@@ -1035,7 +1035,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
-- `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
+- `subscribe: [Payload, Response] (Prosody::EventHandler[Payload, Response]) -> void`: Preserve both handler types.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
@@ -1084,10 +1084,11 @@ your application's RBS:
 
 ```rbs
 type order_event = { "order_id" => String, "total" => Integer }
+type response = { "accepted" => bool }
 
-class OrderHandler < Prosody::EventHandler[order_event]
-  def on_message: (Prosody::Context, Prosody::Message[order_event]) -> Prosody::json_value
-  def on_excise: (Prosody::Context, Prosody::ExciseMessage) -> Prosody::json_value
+class OrderHandler < Prosody::EventHandler[order_event, response]
+  def on_message: (Prosody::Context, Prosody::Message[order_event]) -> response
+  def on_excise: (Prosody::Context, Prosody::ExciseMessage) -> response
 end
 ```
 

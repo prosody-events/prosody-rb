@@ -187,7 +187,7 @@ module Prosody
     # @param handler [EventHandler] A handler object that processes messages
     # @return [void]
     # @raise [RuntimeError] If subscription fails
-    def subscribe: [Payload] (EventHandler[Payload]) -> void
+    def subscribe: [Payload, Response] (EventHandler[Payload, Response]) -> void
 
     # Unsubscribes from all topics, stopping message processing.
     #
