@@ -61,9 +61,9 @@ module Prosody
   class EventHandler[Payload = json_value]
     extend ErrorClassification
 
-    def self.validate_handler!: (EventHandler[untyped] handler) -> void
+    def self.validate_handler!: [Payload] (EventHandler[Payload] handler) -> void
 
-    private def self.validate_method!: (untyped handler, untyped owners, Symbol name) -> void
+    private def self.validate_method!: [Payload] (EventHandler[Payload] handler, Array[Module] owners, Symbol name) -> void
     private def self.accepts_two_parameters?: (Method method) -> bool
 
     # Process a single message received from Prosody.
