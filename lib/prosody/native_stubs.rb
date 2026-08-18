@@ -315,6 +315,24 @@ module Prosody
     end
   end
 
+  # An excise record with Kafka metadata and no payload.
+  class ExciseMessage
+    # @return [String] The topic name
+    def topic = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Integer] The partition number
+    def partition = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Integer] The message offset
+    def offset = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [String] The message key
+    def key = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Time] The record timestamp
+    def timestamp = raise NotImplementedError, "This method is implemented natively in Rust"
+  end
+
   # Represents a timer that was scheduled to fire at a specific time.
   #
   # Timer instances are created by the native code and passed to your
@@ -431,17 +449,35 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
-    # Subscribes to Kafka topics using the provided handler.
-    # The handler must implement an `on_message(context, message)` method.
+    # Sends an excise record to the specified Kafka topic.
     #
-    # @param handler [EventHandler<untyped>] A handler object that processes messages
+    # @param topic [String] The destination topic name
+    # @param key [String] The message key for partitioning
     # @return [void]
+    # @raise [RuntimeError] If the excise record cannot be sent
+    def excise(topic, key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Subscribes to Kafka topics using the provided handler.
+    # The handler must implement `on_message`, `on_excise`, and `on_timer`.
+    #
+    # @param handler [EventHandler] A handler object that processes messages
+    # @return [void]
+    # @raise [ArgumentError] If a required handler method is missing
     # @raise [RuntimeError] If subscription fails
     #
     # @example Subscribing with a handler
     #   class MyHandler < Prosody::EventHandler
     #     def on_message(context, message)
     #       puts "Received message: #{message.payload}"
+    #     end
+    #
+    #     def on_excise(_context, message)
+    #       puts "Excised key: #{message.key}"
+    #     end
+    #
+    #     def on_timer(_context, _timer)
     #     end
     #   end
     #

@@ -14,7 +14,10 @@ RSpec.describe "OpenTelemetry Integration", :integration, :tracing do
   let(:admin) { admin_client_class.new([TestConfig::BOOTSTRAP_SERVERS]) }
 
   # Test handler that creates spans and schedules timers
-  class TracingHandler < Prosody::EventHandler
+  class TracingHandler < CompleteHandler
+    def on_excise(_context, _message)
+    end
+
     attr_reader :message_received_latch, :timer_fired_latch, :tracer, :logger
 
     def initialize

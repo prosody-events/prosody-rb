@@ -22,14 +22,23 @@ module Prosody
     # @param timeout [Numeric] The response deadline in seconds.
     # @raise [ArgumentError] if a subsystem name or timeout is invalid
     # @raise [RuntimeError] if the request cannot produce all outcomes
-    def request(topic:, key:, payload:, subsystems:, timeout:, headers: {})
+    def request(topic:, key:, payload:, subsystems:, timeout:)
       native_request(
         topic: topic,
         key: key,
         payload: payload,
         subsystems: subsystems,
-        timeout: timeout,
-        headers: headers
+        timeout: timeout
+      )
+    end
+
+    # Returns one excise outcome for each subsystem.
+    def request_excise(topic:, key:, subsystems:, timeout:)
+      native_request_excise(
+        topic: topic,
+        key: key,
+        subsystems: subsystems,
+        timeout: timeout
       )
     end
   end

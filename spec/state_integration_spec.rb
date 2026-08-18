@@ -14,7 +14,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     it "persists a value written in one event and read in the next" do
       definition = Prosody.value(random_state_name("val"))
       token = "tok-#{SecureRandom.hex(4)}"
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition, token)
           @sink = sink
           @def = definition
@@ -51,7 +51,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
         "s" => "café 😀", "n" => 3.5, "b" => true,
         "arr" => [1, "x", nil], "nested" => {"z" => [true, 2]}
       }
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition, rich)
           @sink = sink
           @def = definition
@@ -83,7 +83,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
   describe "item 2: map" do
     it "sets, deletes, scans both directions in key order, and round-trips unicode" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -119,7 +119,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
   describe "item 3: deque" do
     it "pushes, unshifts, scans, and pops from both ends" do
       definition = Prosody.deque(random_state_name("deq"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -159,7 +159,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "reports empty-deque behavior" do
       definition = Prosody.deque(random_state_name("deq"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -189,7 +189,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
   describe "item 4: message collections" do
     it "round-trips a stored message through a message value collection" do
       definition = Prosody.message_value(random_state_name("mval"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -232,7 +232,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "round-trips a stored message through a message deque collection" do
       definition = Prosody.message_deque(random_state_name("mdeq"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -282,7 +282,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "round-trips messages through a message map collection with unicode keys and get_many" do
       definition = Prosody.message_map(random_state_name("mmap"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -352,7 +352,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     it "keeps a committed value visible on the retry of a later-failed attempt" do
       definition = Prosody.value(random_state_name("val"))
       committed = {"v" => "committed-#{SecureRandom.hex(4)}"}
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition, committed)
           @sink = sink
           @def = definition
@@ -384,7 +384,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "discards uncommitted value writes on rollback, back to the committed floor" do
       definition = Prosody.value(random_state_name("val"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -413,7 +413,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "keeps a committed map entry through rollback of later writes" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -447,7 +447,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       value_def = Prosody.value(random_state_name("val"))
       deque_def = Prosody.deque(random_state_name("deq"))
       seeded = "seed-#{SecureRandom.hex(4)}"
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, value_def, deque_def, seeded)
           @sink = sink
           @value_def = value_def
@@ -496,7 +496,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "rejects a non-message item written to a message collection as transient" do
       definition = Prosody.message_value(random_state_name("mval"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -531,7 +531,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       # cross-key concurrency. Partition assignment is deterministic per key, so
       # the same two keys share a partition on the fresh phase-2 topic too.
       probe_sink = new_sink
-      probe_handler = Class.new(Prosody::EventHandler) do
+      probe_handler = Class.new(CompleteHandler) do
         def initialize(sink)
           @sink = sink
         end
@@ -559,7 +559,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       # keyA blocks on a gate after a real (yielding) state op; keyB's handler
       # must still complete its own state op while keyA is parked.
       gate = Queue.new
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition, gate, key_a)
           @sink = sink
           @def = definition

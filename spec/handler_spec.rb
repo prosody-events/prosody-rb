@@ -207,7 +207,7 @@ RSpec.describe Prosody::EventHandler do
 
   context "with a concrete implementation" do
     let(:test_handler_class) do
-      Class.new(Prosody::EventHandler) do
+      Class.new(CompleteHandler) do
         attr_reader :message_received, :timer_received
 
         # Demonstrate both error classification decorators for both message and timer handlers

@@ -132,7 +132,7 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
     latch = Thread::Queue.new
     tracer = OpenTelemetry.tracer_provider.tracer(TRACER_SCOPE)
 
-    handler_class = Class.new(Prosody::EventHandler) do
+    handler_class = Class.new(CompleteHandler) do
       def initialize(latch, tracer, value_def, map_def)
         @latch = latch
         @tracer = tracer

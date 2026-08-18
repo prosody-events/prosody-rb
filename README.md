@@ -30,10 +30,10 @@ Or install directly:
 gem install prosody
 ```
 
-The gem ships RBS signatures for the public API. `Prosody::EventHandler[Payload]`
-carries an application payload type into `Prosody::Message[Payload]`, and keyed-
-state definitions carry their item types through `context.state`. A bare handler,
-message, definition, or state handle defaults to `Prosody::json_value`. See the
+The gem ships RBS signatures for the public API. `Prosody::EventHandler[Payload, Response]`
+carries the payload type into `Prosody::Message[Payload]`. It also checks each handler response.
+State definitions carry their item types through `context.state`. A bare handler,
+message, definition, or state handle uses `Prosody::json_value`. See the
 [typed examples](examples/) for Ruby and companion RBS files checked by Steep.
 
 ## Quick Start
@@ -59,6 +59,10 @@ client = Prosody::Client.new(
 
 # Define a custom message handler
 class MyHandler < Prosody::EventHandler
+  def on_excise(_context, message)
+    puts "Excise key: #{message.key}"
+  end
+
   def on_message(context, message)
     # Process the received message
     puts "Received message: #{message.payload.inspect}"
@@ -81,14 +85,25 @@ client.subscribe(MyHandler.new)
 
 # Send a message to a topic
 client.send_message("my-topic", "message-key", {"content" => "Hello, Kafka!"})
+client.excise("my-topic", "obsolete-key")
 
 # Ensure proper shutdown when done
 client.shutdown
 ```
 
+## Excise records
+
+Call `excise(topic, key)` to send a Kafka record with a key and no payload. Use this record to delete the key from compacted views.
+
+Each handler must implement `on_message`, `on_excise`, and `on_timer`. Subscription fails before consumption if a method is missing.
+
+Return a JSON value from `on_excise`. Prosody sends this value when the excise record is a subsystem request.
+
 ## Requests
 
 Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
+
+Use `request_excise` to send an excise record and collect the same outcome type.
 
 Do not rely on hash iteration order.
 
@@ -104,6 +119,13 @@ Return a JSON response from each message handler:
 class InventoryHandler < Prosody::EventHandler
   def on_message(_context, message)
     {"accepted" => message.key}
+  end
+
+  def on_excise(_context, message)
+    {"excised" => message.key}
+  end
+
+  def on_timer(_context, _timer)
   end
 end
 ```
@@ -542,6 +564,9 @@ class CountHandler < Prosody::EventHandler
     count = context.state(COUNTER)
     count.set((count.get || 0) + 1)
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 
 client = Prosody::Client.new(
@@ -585,6 +610,8 @@ class ActivityHandler < Prosody::EventHandler
     pending.clear
     context.state(WINDOW).clear
   end
+
+  def on_excise(_context, _message); end
 end
 ```
 
@@ -650,6 +677,8 @@ class MyHandler < Prosody::EventHandler
     puts "Key: #{timer.key}"
     puts "Scheduled time: #{timer.time}"
   end
+
+  def on_excise(_context, _message); end
 end
 ```
 
@@ -774,6 +803,9 @@ class MyHandler < Prosody::EventHandler
       })
     end
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 ```
 
@@ -876,6 +908,8 @@ client.shutdown
 Prosody classifies errors as transient (temporary, can be retried) or permanent (won't be resolved by retrying). By
 default, all errors are considered transient.
 
+The error classes and classification methods apply to `on_message`, `on_excise`, and `on_timer`.
+
 Use the `Prosody::EventHandler` error classification methods:
 
 ```ruby
@@ -892,6 +926,9 @@ class MyHandler < Prosody::EventHandler
     # JSON::ParserError will be treated as transient
     # All other exceptions will be treated as transient (default behavior)
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 ```
 
@@ -929,6 +966,9 @@ class MyHandler < Prosody::EventHandler
       release_resource(resource)
     end
   end
+
+  def on_excise(_context, _message); end
+  def on_timer(_context, _timer); end
 end
 ```
 
@@ -992,11 +1032,12 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 - `new(**config)`: Initialize a new Prosody client with the given configuration.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
-- `request(topic:, key:, payload:, subsystems:, timeout:, headers: {})`: Return one outcome for each subsystem.
+- `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.
+- `request_excise(topic:, key:, subsystems:, timeout:)`: Send an excise request.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
-- `subscribe: [Payload] (Prosody::EventHandler[Payload]) -> void`: Subscribe while preserving the handler's payload specialization.
+- `subscribe: [Payload, Response] (Prosody::EventHandler[Payload, Response]) -> void`: Preserve both handler types.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
@@ -1026,6 +1067,10 @@ class MyHandler < Prosody::EventHandler
   def on_timer(context, timer)
     # Implement your timer handling logic here
   end
+
+  def on_excise(_context, _message)
+    # Implement your excise handling logic here
+  end
 end
 ```
 
@@ -1041,9 +1086,11 @@ your application's RBS:
 
 ```rbs
 type order_event = { "order_id" => String, "total" => Integer }
+type response = { "accepted" => bool }
 
-class OrderHandler < Prosody::EventHandler[order_event]
-  def on_message: (Prosody::Context, Prosody::Message[order_event]) -> void
+class OrderHandler < Prosody::EventHandler[order_event, response]
+  def on_message: (Prosody::Context, Prosody::Message[order_event]) -> response
+  def on_excise: (Prosody::Context, Prosody::ExciseMessage) -> response
 end
 ```
 

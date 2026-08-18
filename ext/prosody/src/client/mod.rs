@@ -38,7 +38,6 @@ use prosody::subsystem::SubsystemName;
 use serde::Deserialize;
 use serde_magnus::deserialize;
 use serde_magnus::serialize;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{Span, debug, info_span};
@@ -46,6 +45,11 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
 mod config;
+mod request;
+mod support;
+
+pub use support::init;
+use support::{read_cache, response_error, shutdown, validate_handler};
 
 type Shutdown = Shared<BoxFuture<'static, Result<(), Arc<str>>>>;
 
@@ -70,17 +74,6 @@ pub struct Client {
     propagator: Arc<TextMapCompositePropagator>,
     /// PID at construction time, used to detect post-fork usage
     pid: u32,
-}
-
-#[derive(Deserialize)]
-struct NativeRequest {
-    topic: String,
-    key: String,
-    payload: serde_json::Value,
-    subsystems: Vec<String>,
-    timeout: f64,
-    #[serde(default)]
-    headers: HashMap<String, String>,
 }
 
 impl Client {
@@ -256,87 +249,33 @@ impl Client {
             .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
-    fn request(ruby: &Ruby, this: &Self, request: Value) -> Result<Value, Error> {
+    /// Sends an excise record for a key.
+    fn excise(ruby: &Ruby, this: &Self, topic: String, key: String) -> Result<(), Error> {
         Self::check_fork(ruby, this)?;
         let _guard = ensure_runtime_context(ruby);
-        let request: NativeRequest = deserialize(ruby, request)?;
-        let subsystems = request
-            .subsystems
-            .into_iter()
-            .map(SubsystemName::try_new)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| Error::new(ruby.exception_arg_error(), error.to_string()))?;
-        let timeout = Duration::try_from_secs_f64(request.timeout).map_err(|_| {
-            Error::new(
-                ruby.exception_arg_error(),
-                "timeout must be a finite, non-negative duration",
-            )
-        })?;
-        let topic = prosody::Topic::from(request.topic.as_str());
+        let client = this.inner.clone();
         let context = extract_opentelemetry_context(ruby, &this.propagator)?;
-        let span = info_span!("ruby-request", topic = %request.topic, key = %request.key);
-        if let Err(error) = span.set_parent(context) {
-            debug!("failed to set parent span: {error:#}");
+        let span = info_span!("ruby-excise", %topic, %key);
+        if let Err(err) = span.set_parent(context) {
+            debug!("failed to set parent span: {err:#}");
         }
-        let inner = this.inner.clone();
-        let results = this
-            .bridge
+        this.bridge
             .wait_for(
                 ruby,
-                async move {
-                    inner
-                        .request(
-                            request.headers.into_iter().collect(),
-                            topic,
-                            request.key,
-                            request.payload,
-                            subsystems,
-                            timeout,
-                        )
-                        .await
-                },
+                async move { client.excise(topic.as_str().into(), key).await },
                 span,
             )?
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
-
-        let module = ruby.get_inner(&ROOT_MOD);
-        let outcomes = ruby.hash_new();
-        let success: RClass = module.const_get(id!(ruby, "Success"))?;
-        let failure: RClass = module.const_get(id!(ruby, "Failure"))?;
-        for (subsystem, result) in results {
-            let outcome = match result {
-                Ok(value) => {
-                    let value: Value = serialize(ruby, &value)?;
-                    success.new_instance((kwargs!(ruby, "value" => value),))?
-                }
-                Err(error) => failure.new_instance((kwargs!(
-                    ruby,
-                    "error" => response_error(ruby, module, error)?
-                ),))?,
-            };
-            outcomes.aset(subsystem.as_str(), outcome)?;
-        }
-        Ok(outcomes.as_value())
+            .map_err(|error| Error::new(ruby.exception_runtime_error(), format!("{error:#}")))
     }
 
-    /// Subscribes to events using the provided Ruby handler.
-    ///
-    /// The handler must implement an `on_message(context, message)` method
-    /// that will be called for each received message.
-    ///
-    /// # Arguments
-    ///
-    /// * `ruby` - The Ruby VM context
-    /// * `this` - The client instance
-    /// * `handler` - A Ruby object that will handle incoming messages
+    /// Subscribes with a complete Ruby event handler.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - The handler cannot be wrapped
-    /// - The client cannot subscribe with the handler
+    /// Returns an error if the handler is incomplete or subscription fails.
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
         Self::check_fork(ruby, this)?;
+        validate_handler(ruby, handler)?;
         let _guard = ensure_runtime_context(ruby);
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
         let inner = this.inner.clone();
@@ -532,101 +471,5 @@ impl Client {
             bridge: this.bridge.clone(),
             propagator: Arc::clone(&this.propagator),
         })
-    }
-}
-
-fn shutdown(client: &SharedHighLevelClient<RubyHandler>) -> Shutdown {
-    let client = client.clone();
-    async move {
-        client
-            .shutdown()
-            .await
-            .map_err(|error| Arc::from(error.to_string()))
-    }
-    .boxed()
-    .shared()
-}
-
-fn read_cache(ruby: &Ruby, seconds: Option<f64>, disabled: bool) -> Result<ErasedReadCache, Error> {
-    match (seconds, disabled) {
-        (None, false) => Ok(ErasedReadCache::Inherit),
-        (None, true) => Ok(ErasedReadCache::Disabled),
-        (Some(seconds), false) => Duration::try_from_secs_f64(seconds)
-            .map(ErasedReadCache::Ttl)
-            .map_err(|_| {
-                Error::new(
-                    ruby.exception_arg_error(),
-                    "read_cache must be finite and non-negative",
-                )
-            }),
-        (Some(_), true) => Err(Error::new(
-            ruby.exception_arg_error(),
-            "read_cache cannot specify a TTL and be disabled",
-        )),
-    }
-}
-
-/// Initializes the client module in Ruby.
-///
-/// Defines the `Prosody::Client` class and its methods, making the client
-/// functionality available to Ruby code.
-///
-/// # Arguments
-///
-/// * `ruby` - The Ruby VM context
-///
-/// # Errors
-///
-/// Returns an error if Ruby class or method definition fails.
-pub fn init(ruby: &Ruby) -> Result<(), Error> {
-    let module = ruby.get_inner(&ROOT_MOD);
-    let class = module.define_class(id!(ruby, "Client"), ruby.class_object())?;
-
-    class.define_singleton_method("new", function!(Client::new, 1))?;
-    class.define_method(
-        id!(ruby, "consumer_state"),
-        method!(Client::consumer_state, 0),
-    )?;
-    class.define_method(id!(ruby, "send_message"), method!(Client::send, 3))?;
-    class.define_method(id!(ruby, "native_request"), method!(Client::request, 1))?;
-    class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
-    class.define_method(
-        id!(ruby, "assigned_partitions"),
-        method!(Client::assigned_partitions, 0),
-    )?;
-    class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
-    class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
-    class.define_method(id!(ruby, "shutdown"), method!(Client::shutdown, 0))?;
-    class.define_method(
-        id!(ruby, "source_system"),
-        method!(Client::source_system, 0),
-    )?;
-    class.define_method(
-        id!(ruby, "published_value"),
-        method!(Client::published_value, 4),
-    )?;
-    class.define_method(
-        id!(ruby, "published_map"),
-        method!(Client::published_map, 4),
-    )?;
-    class.define_method(
-        id!(ruby, "published_deque"),
-        method!(Client::published_deque, 4),
-    )?;
-
-    Ok(())
-}
-
-fn response_error(ruby: &Ruby, module: RModule, error: ResponseError) -> Result<Value, Error> {
-    let (name, message) = match error {
-        ResponseError::Handler { message } => ("HandlerError", Some(message)),
-        ResponseError::Timeout => ("Timeout", None),
-        ResponseError::FormatMismatch => ("FormatMismatch", None),
-        ResponseError::Malformed => ("MalformedResponse", None),
-    };
-    let class: RClass = module.const_get(name)?;
-    match message {
-        Some(message) => class.new_instance((kwargs!(ruby, "message" => message),)),
-        None => class.new_instance(()),
     }
 }

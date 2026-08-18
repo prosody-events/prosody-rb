@@ -113,6 +113,15 @@ module Prosody
     def payload: () -> Payload
   end
 
+  # Represents an excise record with no payload.
+  class ExciseMessage
+    def topic: () -> String
+    def partition: () -> Integer
+    def offset: () -> Integer
+    def key: () -> String
+    def timestamp: () -> Time
+  end
+
   # Represents a timer that was scheduled to fire at a specific time.
   # Timer instances are passed to EventHandler's on_timer method when timers fire.
   class Timer
@@ -169,13 +178,16 @@ module Prosody
     # @raise [RuntimeError] If the message cannot be sent
     def send_message: (String topic, String key, json_value payload) -> void
 
+    # Sends an excise record for a key.
+    def excise: (String topic, String key) -> void
+
     # Subscribes to Kafka topics using the provided handler.
     # The handler must implement an `on_message(context, message)` method.
     #
     # @param handler [EventHandler] A handler object that processes messages
     # @return [void]
     # @raise [RuntimeError] If subscription fails
-    def subscribe: [Payload] (EventHandler[Payload]) -> void
+    def subscribe: [Payload, Response] (EventHandler[Payload, Response]) -> void
 
     # Unsubscribes from all topics, stopping message processing.
     #

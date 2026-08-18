@@ -56,10 +56,15 @@ module Prosody
     def wrap_errors: (Symbol method_name, Array[Class] exception_classes, singleton(EventHandlerError) error_class) -> void
   end
 
-  # Abstract base class for handling incoming messages from Prosody.
-  # Subclasses must implement `#on_message` to process received messages.
-  class EventHandler[Payload = json_value]
+  # Abstract base class for handling events from Prosody.
+  # Subclasses must implement all three handler methods.
+  class EventHandler[Payload = json_value, Response = json_value]
     extend ErrorClassification
+
+    def self.validate_handler!: [Payload, Response] (EventHandler[Payload, Response] handler) -> void
+
+    private def self.validate_method!: [Payload, Response] (EventHandler[Payload, Response] handler, Array[Module] owners, Symbol name) -> void
+    private def self.accepts_two_parameters?: (Method method) -> bool
 
     # Process a single message received from Prosody.
     # This method must be implemented by subclasses to define
@@ -68,7 +73,10 @@ module Prosody
     # @param context the message context containing metadata and control capabilities
     # @param message the message content with payload and metadata
     # @raise [NotImplementedError] if not overridden by subclass
-    def on_message: (Context context, Message[Payload] message) -> json_value
+    def on_message: (Context context, Message[Payload] message) -> Response
+
+    # Process an excise record.
+    def on_excise: (Context context, ExciseMessage message) -> Response
 
     # Process a timer that has fired.
     # This method is called when a previously scheduled timer fires.
@@ -78,6 +86,6 @@ module Prosody
     # @param context the timer context containing metadata and control capabilities
     # @param timer the timer object with key and time information
     # @raise [NotImplementedError] if not overridden by subclass
-    def on_timer: (Context context, Timer timer) -> json_value
+    def on_timer: (Context context, Timer timer) -> void
   end
 end

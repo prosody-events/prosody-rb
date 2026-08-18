@@ -15,17 +15,22 @@ TOTALS = Prosody.map("totals")                          # keys are always String
 BACKLOG = Prosody.message_deque("backlog", capacity: 100) # bounded window of messages
 
 class KeyedStateHandler < Prosody::EventHandler
+  def on_excise(_context, message)
+    puts "Excise #{message.key}"
+  end
+
   def initialize(logger:)
     @logger = logger
   end
 
   def on_message(context, message)
+    payload = message.payload
     cart = context.state(CART)             # bound for this attempt only
     current = cart.get || {"items" => []}  # Hash, or nil when absent
-    cart.set(current.merge("items" => current["items"] + [message.payload["order_id"]]))
+    cart.set(current.merge("items" => current["items"] + [payload["order_id"]]))
 
     totals = context.state(TOTALS)
-    totals.set(message.key, message.payload["total"])
+    totals.set(message.key, payload["total"])
     # Steep infers key as String and total as Integer from TOTALS's RBS type.
     totals.each_pair { |key, total| @logger.info(format_total(key, total)) }
 
@@ -33,6 +38,9 @@ class KeyedStateHandler < Prosody::EventHandler
     backlog.push(message)                  # stores the full Prosody::Message
     oldest = backlog.get(0)                # Message[order_event]?, preserving payload shape
     @logger.info("oldest order: #{format_order_id(oldest.payload["order_id"])}") if oldest
+  end
+
+  def on_timer(_context, _timer)
   end
 
   private

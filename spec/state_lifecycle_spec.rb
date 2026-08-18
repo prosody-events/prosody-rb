@@ -10,7 +10,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
   describe "item 8: unregistered name" do
     it "raises a PermanentStateError when vending a name that is not registered" do
       registered = Prosody.value(random_state_name("val"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink)
           @sink = sink
         end
@@ -35,7 +35,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
 
   describe "item 8: rethrow classification through the existing bridge" do
     it "retries when a handler rethrows a transient state error" do
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink)
           @sink = sink
           @attempts = 0
@@ -58,7 +58,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
 
     it "does not retry when a handler rethrows a permanent state error" do
       counter = [0]
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, counter)
           @sink = sink
           @counter = counter
@@ -101,7 +101,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
   describe "item 6: attempt-fenced leaks" do
     it "raises the terminated (transient) error for a handle leaked across a failed attempt" do
       definition = Prosody.value(random_state_name("val"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -138,7 +138,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
 
     it "raises the terminated (transient) error for a context leaked across a failed attempt" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -173,7 +173,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
 
     it "raises the terminated (transient) error for a handle leaked past a successful handler" do
       definition = Prosody.value(random_state_name("val"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition
@@ -213,7 +213,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
   describe "item 7: iterator lifecycle" do
     it "closes the scan on early break, leaving the collection usable" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(Prosody::EventHandler) do
+      handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definition)
           @sink = sink
           @def = definition

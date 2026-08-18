@@ -24,6 +24,15 @@ pub struct Message {
     inner: ConsumerMessage<serde_json::Value>,
 }
 
+/// Ruby wrapper for an excise record.
+#[derive(Educe, Clone)]
+#[educe(Debug)]
+#[magnus::wrap(class = "Prosody::ExciseMessage", frozen_shareable)]
+pub struct ExciseMessage {
+    #[educe(Debug(ignore))]
+    inner: ConsumerMessage<()>,
+}
+
 impl Message {
     /// Returns the topic name this message was published to.
     ///
@@ -122,6 +131,34 @@ impl Message {
     }
 }
 
+impl ExciseMessage {
+    fn topic(&self) -> &'static str {
+        self.inner.topic().as_ref()
+    }
+
+    fn partition(&self) -> i32 {
+        self.inner.partition()
+    }
+
+    fn offset(&self) -> i64 {
+        self.inner.offset()
+    }
+
+    fn key(&self) -> &str {
+        self.inner.key()
+    }
+
+    fn timestamp(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+        let epoch_micros = this.inner.timestamp().timestamp_micros();
+        ruby.module_kernel()
+            .const_get::<_, RClass>(id!(ruby, "Time"))?
+            .funcall(
+                id!(ruby, "at"),
+                (epoch_micros, ruby.to_symbol("microsecond")),
+            )
+    }
+}
+
 impl From<ConsumerMessage<serde_json::Value>> for Message {
     /// Creates a new Message wrapper from a Prosody `ConsumerMessage`.
     ///
@@ -130,6 +167,12 @@ impl From<ConsumerMessage<serde_json::Value>> for Message {
     /// * `value` - The Prosody `ConsumerMessage` to wrap
     fn from(value: ConsumerMessage<serde_json::Value>) -> Self {
         Self { inner: value }
+    }
+}
+
+impl From<ConsumerMessage<()>> for ExciseMessage {
+    fn from(inner: ConsumerMessage<()>) -> Self {
+        Self { inner }
     }
 }
 
@@ -156,6 +199,13 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_method(id!(ruby, "key"), method!(Message::key, 0))?;
     class.define_method(id!(ruby, "timestamp"), method!(Message::timestamp, 0))?;
     class.define_method(id!(ruby, "payload"), method!(Message::payload, 0))?;
+
+    let class = module.define_class(id!(ruby, "ExciseMessage"), ruby.class_object())?;
+    class.define_method(id!(ruby, "topic"), method!(ExciseMessage::topic, 0))?;
+    class.define_method(id!(ruby, "partition"), method!(ExciseMessage::partition, 0))?;
+    class.define_method(id!(ruby, "offset"), method!(ExciseMessage::offset, 0))?;
+    class.define_method(id!(ruby, "key"), method!(ExciseMessage::key, 0))?;
+    class.define_method(id!(ruby, "timestamp"), method!(ExciseMessage::timestamp, 0))?;
 
     Ok(())
 }
