@@ -56,8 +56,8 @@ module Prosody
     def wrap_errors: (Symbol method_name, Array[Class] exception_classes, singleton(EventHandlerError) error_class) -> void
   end
 
-  # Abstract base class for handling incoming messages from Prosody.
-  # Subclasses must implement `#on_message` to process received messages.
+  # Abstract base class for handling events from Prosody.
+  # Subclasses must implement all three handler methods.
   class EventHandler[Payload = json_value, Response = json_value]
     extend ErrorClassification
 

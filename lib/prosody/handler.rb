@@ -128,10 +128,9 @@ module Prosody
   # --------------------------------------------------------------------------
 
   # Abstract base class for handling incoming messages and timers from Prosody.
-  # The RBS type parameter describes the JSON payload delivered in each
-  # {Message}; it defaults to +Prosody::json_value+. Declare a narrower payload
-  # shape in your application's RBS (for example,
-  # +EventHandler[order_event]+) to type-check payload access.
+  # The RBS type parameters describe the message payload and handler response.
+  # Both parameters default to +Prosody::json_value+. Declare narrower types in
+  # your application's RBS to check payload access and handler responses.
   # Subclasses must implement `#on_message`, `#on_excise`, and `#on_timer`.
   # They may also use `permanent` or `transient` decorators to control retry logic.
   #
