@@ -908,6 +908,8 @@ client.shutdown
 Prosody classifies errors as transient (temporary, can be retried) or permanent (won't be resolved by retrying). By
 default, all errors are considered transient.
 
+The error classes and classification methods apply to `on_message`, `on_excise`, and `on_timer`.
+
 Use the `Prosody::EventHandler` error classification methods:
 
 ```ruby
