@@ -93,76 +93,13 @@ client.shutdown
 
 ## Excise records
 
-Call `excise(topic, key)` to send a Kafka record with a key and no payload. Use this record to delete the key from compacted views.
+A compacted Kafka topic keeps the latest value for each key. To remove a key, Kafka needs a record with that key and no payload.
+
+Call `excise(topic, key)` to send this record. Prosody sends received excise records to `on_excise`, not to `on_message`.
 
 Each handler must implement `on_message`, `on_excise`, and `on_timer`. Subscription fails before consumption if a method is missing.
 
-Return a JSON value from `on_excise`. Prosody sends this value when the excise record is a subsystem request.
-
-## Requests
-
-Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
-
-Use `request_excise` to send an excise record and collect the same outcome type.
-
-Do not rely on hash iteration order.
-
-Prosody raises an error if the request cannot produce the complete result hash.
-
-Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
-
-Message handler return values become successful request outcomes. Each return value must have a JSON representation.
-
-Return a JSON response from each message handler:
-
-```ruby
-class InventoryHandler < Prosody::EventHandler
-  def on_message(_context, message)
-    {"accepted" => message.key}
-  end
-
-  def on_excise(_context, message)
-    {"excised" => message.key}
-  end
-
-  def on_timer(_context, _timer)
-  end
-end
-```
-
-Send a request without a subscription on the requester:
-
-Set `timeout` in seconds.
-
-```ruby
-subsystems = ["inventory", "billing"]
-results = client.request(
-  topic: "orders",
-  key: "order-1",
-  payload: {"type" => "order.created"},
-  subsystems: subsystems,
-  timeout: 2.0
-)
-
-results.each do |subsystem, outcome|
-  if outcome.is_a?(Prosody::Failure)
-    warn "#{subsystem}: #{outcome.error.message}"
-  else
-    puts "#{subsystem}: #{outcome.value}"
-  end
-end
-```
-
-The example can print these results:
-
-```text
-inventory: {"accepted"=>"order-1"}
-billing: no response arrived before the deadline
-```
-
-Each value is a `Success` or `Failure`. Each failure contains one typed response error.
-
-Each response error has one message.
+If an excise record is a request, return a response from `on_excise`. Prosody uses this response as the subsystem result.
 
 ## Architecture
 
@@ -346,6 +283,77 @@ if client.is_stalled?
 end
 ```
 
+## Requests
+
+A normal Kafka send does not return consumer results. A request lets a producer wait for results from selected consumer roles.
+
+A subsystem is a stable name for one consumer role, such as `inventory` or `billing`. Configure the same subsystem name on all client instances for that role. A subsystem name also identifies the owner of published keyed state.
+
+Requests return one outcome for each selected subsystem. The result hash uses canonical subsystem names as keys.
+
+Use `request_excise` to send an excise record and collect the same outcome type.
+
+Do not rely on hash iteration order.
+
+Prosody raises an error if the request cannot produce the complete result hash.
+
+Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
+
+Message and excise handler return values become successful request outcomes. Each return value must have a JSON representation.
+
+Return a JSON response from each message and excise handler:
+
+Set `subsystem` to `inventory` on the client that subscribes this handler.
+
+```ruby
+class InventoryHandler < Prosody::EventHandler
+  def on_message(_context, message)
+    {"accepted" => message.key}
+  end
+
+  def on_excise(_context, message)
+    {"excised" => message.key}
+  end
+
+  def on_timer(_context, _timer)
+  end
+end
+```
+
+Send a request without a subscription on the requester:
+
+Set `timeout` in seconds.
+
+```ruby
+subsystems = ["inventory", "billing"]
+results = client.request(
+  topic: "orders",
+  key: "order-1",
+  payload: {"type" => "order.created"},
+  subsystems: subsystems,
+  timeout: 2.0
+)
+
+results.each do |subsystem, outcome|
+  if outcome.is_a?(Prosody::Failure)
+    warn "#{subsystem}: #{outcome.error.message}"
+  else
+    puts "#{subsystem}: #{outcome.value}"
+  end
+end
+```
+
+The example can print these results:
+
+```text
+inventory: {"accepted"=>"order-1"}
+billing: no response arrived before the deadline
+```
+
+Each value is a `Success` or `Failure`. Each failure contains one typed response error.
+
+Each response error has one message.
+
 ## Advanced Usage
 
 ### Pipeline Mode
@@ -517,11 +525,11 @@ Note that the in-memory cache is best-effort. Duplicates can still occur across 
 
 ## Keyed State
 
-Stream handlers usually receive one event at a time. Many decisions need data from earlier events. Counters, activity windows, and workflows all need this data.
+A handler can process events for different keys concurrently. Prosody processes only one event at a time for each key. Many decisions need data from earlier events for the same key.
 
-A Kafka key identifies the entity for an event, such as a customer or order. Keyed state stores separate data for each key. Prosody selects the current message or timer key automatically. Prosody also runs only one handler for that key at a time.
+A Kafka key identifies the entity for an event, such as a customer or order. Keyed state stores separate data for each key. Prosody selects the current message or timer key automatically.
 
-State survives a process restart. State also survives when Kafka assigns a partition to a different process. By default, Prosody makes changes visible after the handler completes without an error. A failed attempt cannot make its pending changes visible.
+Keyed state survives a process restart. It also survives when Kafka assigns a partition to a different process. By default, Prosody commits keyed-state changes after the handler completes without an error. Prosody discards pending keyed-state changes from a failed attempt.
 
 Use keyed state for counters, duplicate detection, rolling totals, pending work, and per-key workflows. Use a database for business records, joins, and unplanned queries. Repeated database reads can make stream processing slow and expensive.
 
@@ -623,16 +631,16 @@ Map and deque scans return enumerators when called without a block. Map keys are
 
 `nil` means absence. Use `clear` or `delete` instead of storing it.
 
-### When changes become visible
+### When keyed-state changes become visible
 
-Reads inside a handler see earlier writes from that handler. By default, Prosody buffers changes until the event succeeds.
+Reads inside a handler see earlier keyed-state writes from that handler. By default, Prosody buffers keyed-state changes until the event succeeds.
 
-Prosody then publishes the changes together. If the handler raises, none of its pending changes become visible.
+Prosody then commits the keyed-state changes together. If the handler raises, Prosody discards its pending keyed-state changes. This transaction does not include other handler side effects.
 
 Each collection also offers explicit controls for workflows that need different behavior:
 
 - `read_uncommitted: true` writes changes before Prosody records the event as complete. A crash can make these changes visible before a retry. Use this option only when repeated processing produces the same result.
-- `commit` immediately publishes the collection's pending changes. A later handler failure does not remove them.
+- `commit` commits the collection's pending changes before the handler ends. A later handler failure does not remove them.
 - `rollback` discards pending changes since the last `commit`. It cannot undo committed changes.
 
 ### Published state
@@ -882,19 +890,15 @@ Strategies for achieving idempotence:
    - Each message advances the state machine, allowing for idempotent processing and easy failure recovery.
    - Particularly useful for complex, distributed transactions across multiple services.
 
-### Proper Shutdown
+### Application shutdown
 
-Shut down the client before your application exits:
+Call `shutdown` when the application terminates. Shutdown stops the active subscription and all other client services. The client rejects new operations after shutdown.
+
+Call `unsubscribe` only when the application will use the client again. You do not need to call `unsubscribe` before `shutdown`.
 
 ```ruby
 client.shutdown
 ```
-
-This ensures:
-
-1. Completion and commitment of all in-flight work
-2. Quick rebalancing, allowing other consumers to take over partitions
-3. Proper release of resources
 
 Implement shutdown handling in your application using signal handlers:
 
@@ -907,21 +911,21 @@ client = Prosody::Client.new(
   subscribed_topics: "my-topic"
 )
 
-# Set up a shutdown queue
+# Create the shutdown queue.
 shutdown = Queue.new
 
-# Configure signal handlers to trigger shutdown
+# Register the signal handlers.
 Signal.trap("INT") { shutdown.push(nil) }
 Signal.trap("TERM") { shutdown.push(nil) }
 
-# Subscribe to messages
+# Subscribe with the application handler.
 client.subscribe(MyHandler.new)
 
-# Block until a signal is received
-shutdown.pop # This blocks until something is pushed to the queue by a signal handler
+# Wait for a shutdown signal.
+shutdown.pop
 
-# Clean shutdown
-puts "Shutting down gracefully..."
+# Shut down the client.
+puts "Client shutdown starts."
 client.shutdown
 ```
 
