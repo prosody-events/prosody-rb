@@ -1067,7 +1067,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `excise(String topic, String key)`: Send an excise record for a key.
 - `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.
-- `request_excise(topic:, key:, subsystems:, timeout:)`: Send an excise request.
+- `request_excise(topic:, key:, subsystems:, timeout:)`: Return one excise outcome for each subsystem.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
@@ -1151,11 +1151,11 @@ An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, and `key` at
 
 ### Prosody::Context
 
-Represents the context of message processing:
+Represents the current event context:
 
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
-- `on_cancel`: Blocks until cancellation is signaled.
-- `state(definition)`: Binds a registered collection for the current event attempt, returning a typed handle (`ValueState`, `MapState`, or `DequeState`). Raises `PermanentStateError` when the name was never registered, or when the definition's `kind`/`payload` disagrees with the collection's durably-registered schema. See the [Keyed State](#keyed-state-2) API reference below.
+- `on_cancel`: Wait until cancellation occurs.
+- `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state-2).
 
 Timer scheduling methods:
 
@@ -1193,7 +1193,15 @@ Definition constructors (each returns a frozen definition object used both in `C
 
 Each constructor returns a `StateDefinition`. It exposes `name`, `kind`, `payload`, all supplied options, and `to_state_config`.
 
-Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`. `Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `each_pair`, `each_key`, `each_value`, and their reverse variants. `Prosody::PublishedDeque` provides `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. Traversal methods return an `Enumerator` when no block is given.
+Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`.
+
+`Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, and `member?`.
+
+It provides `each` or `each_pair`, `each_key`, and `each_value`. The reverse methods are `reverse_each_pair`, `reverse_each_key`, and `reverse_each_value`.
+
+`Prosody::PublishedDeque` provides `get`, `length` or `size`, `empty?`, `first`, `last`, `each`, and `reverse_each`.
+
+Traversal methods return an `Enumerator` without a block.
 
 `Prosody::ValueState`:
 
@@ -1227,7 +1235,7 @@ Handler error types:
 
 ### Configuration
 
-`Prosody::Configuration.new` accepts a hash or block. Its public readers and writers match the settings in [Configuration](CONFIGURATION.md). `to_hash` returns the native configuration hash.
+`Prosody::Configuration.new` accepts a hash or block. Its public properties match the settings in [Configuration](CONFIGURATION.md). `to_hash` returns a configuration hash.
 
 ### Logging and telemetry
 
