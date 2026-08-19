@@ -653,7 +653,7 @@ Prosody then commits the pending keyed-state changes. If the handler raises, Pro
 
 Each collection also offers explicit controls for workflows that need different behavior:
 
-- `read_uncommitted: true` commits keyed-state changes before Prosody records the event as complete. If the process stops between these steps, Prosody can process the same event again. The retry sees the committed changes. Use this option only when each retry writes the same state.
+- `read_uncommitted: true` commits keyed-state changes before Prosody records the event as complete. If the process stops between these steps, Prosody can process the same event again. The retry sees the committed changes. You must make these keyed-state changes idempotent. Each retry must produce the same state.
 - `commit` commits the collection's pending changes before the handler ends. A later handler failure does not remove them.
 - `rollback` discards pending changes since the last `commit`. It cannot undo committed changes.
 
