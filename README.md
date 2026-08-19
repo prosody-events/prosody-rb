@@ -93,11 +93,9 @@ client.shutdown
 
 ## Excise records
 
-An excise record commands its recipient to delete all data it owns for one key. Excision usually satisfies a regulatory or contractual deletion requirement.
+Applications can copy event data into keyed state and external stores. A regulatory or contractual deletion must remove every copy for one key.
 
-Kafka encodes excision as a key with no payload. This record also removes the key's current value from a compacted topic.
-
-Call `excise(topic, key)` to send it. Prosody routes it to `on_excise`, where the handler must delete its data for the key.
+An excise record carries this deletion command. Kafka encodes the command as a key with no payload. This record removes the current value from compacted topics. Call `excise(topic, key)` to send the record. Prosody routes the record to `on_excise`. The handler must delete all consumer-owned data for the key.
 
 Each handler must implement `on_message`, `on_excise`, and `on_timer`. Subscription fails before consumption if a method is missing.
 
@@ -287,11 +285,9 @@ end
 
 ## Subsystems
 
-A consumer group controls which process handles each record and owns its keyed state. If its ID changes, its processing and state identity also change.
+A consumer group ID determines which process handles each record and identifies its keyed state. If a public interface exposes this ID, callers depend on this internal layout.
 
-A subsystem gives requests and published state a stable public name. One or more consumer groups can use it, so public interfaces do not expose their IDs.
-
-For a request, Prosody uses the first subsystem response. For a published-state read, Prosody uses one consumer group that publishes the state.
+A subsystem gives requests and published state a stable public name. One or more consumer groups can use this name. Their IDs can change without changing public interfaces. Prosody uses the first response to a subsystem request. It reads published state from one consumer group that publishes the state.
 
 ## Requests
 
@@ -523,11 +519,11 @@ Note that the in-memory cache is best-effort. Duplicates can still occur across 
 
 ## Keyed State
 
-A Kafka key identifies an entity, such as a customer or order. Keyed state stores data from earlier events separately for each key.
+Handlers often need data from earlier events for the same entity. Process memory loses this data after a restart or partition reassignment.
 
-Prosody selects the current message or timer key. It processes one event at a time for that key but can process other keys concurrently.
+A Kafka key identifies an entity, such as a customer or order. Keyed state stores this data by key. With Cassandra, the state survives restarts and partition reassignment.
 
-With Cassandra, keyed state survives restarts and partition reassignment. Prosody commits changes after a successful event and discards changes from a failed attempt.
+Prosody selects the current message or timer key. It processes one event at a time for that key but can process other keys concurrently. It commits state changes after a successful event and discards changes from a failed attempt.
 
 Use keyed state for counters, duplicate detection, rolling totals, pending work, and per-key workflows. Use a database for business records, joins, and unplanned queries.
 
@@ -629,11 +625,9 @@ Map and deque scans return enumerators when called without a block. Map keys are
 
 ### When keyed-state changes become visible
 
-Reads in a handler see its earlier keyed-state writes. Prosody commits pending changes when the event succeeds and discards them when the handler raises.
+Retries must not expose partial state from a failed attempt. Reads in a handler see its earlier keyed-state writes. Prosody commits pending changes when the event succeeds and discards them when the handler raises.
 
-This transaction applies only to keyed state. It does not include other handler side effects.
-
-Each collection also offers explicit controls for workflows that need different behavior:
+This transaction applies only to keyed state. Some workflows need state changes before the handler ends, so each collection also provides explicit controls:
 
 - `read_uncommitted: true` persists keyed-state changes before Prosody records the event as complete. If the process stops between these steps, Prosody can process the same event again. The retry sees state changes from the earlier attempt. You must make these keyed-state changes idempotent. Each retry must produce the same state.
 - `commit` commits the collection's pending changes before the handler ends. A later handler failure does not remove them.
@@ -641,7 +635,7 @@ Each collection also offers explicit controls for workflows that need different 
 
 ### Published state
 
-Published state gives other services read-only access to keyed state. These services do not need to consume the owner's Kafka topics.
+Other services sometimes need derived state. Without published state, they must consume the same topics and rebuild the state. Published state gives them read-only access to committed keyed state.
 
 Configure the subsystem name on each publisher. Enable publication on the collection definition. Register the definition on the Prosody client:
 
@@ -890,7 +884,9 @@ Strategies for achieving idempotence:
 
 ### Application shutdown
 
-`unsubscribe` stops only the active subscription. Call `shutdown` when the application terminates. It stops the subscription and all client services. The client rejects new operations after shutdown. Call `unsubscribe` only when the application will use the client again. You do not need to call `unsubscribe` before `shutdown`.
+A Prosody client runs a subscription, timers, and other services in the background. Before an application terminates, it must stop all client services. `unsubscribe` stops only the active subscription.
+
+Call `shutdown` when the application terminates. It stops all client services and rejects new operations. Call `unsubscribe` only when the application will use the client again. You do not need to call `unsubscribe` before `shutdown`.
 
 ```ruby
 client.shutdown
