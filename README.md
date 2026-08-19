@@ -517,40 +517,15 @@ Note that the in-memory cache is best-effort. Duplicates can still occur across 
 
 ## Keyed State
 
-Keyed state gives every Kafka key its own durable working memory. Prosody automatically uses the current message or timer key, so a handler can relate the current event to earlier events for that key. State survives restarts and rebalances. By default, changes become visible only when the event succeeds.
+Stream handlers usually receive one event at a time. Many decisions need facts from earlier events. Counters, activity windows, and workflows all need this memory.
 
-Use keyed state for time-aware stream processing: counters, deduplication, rolling aggregates, pending work, and per-key workflows. Keep your relational database as the source of truth for business data and for work that needs joins or ad hoc queries. Reconstructing stream state with repeated database queries can be slow and expensive; keyed state is built for that job.
+A Kafka key identifies the entity for an event, such as a customer or order. Keyed state gives each key separate, durable memory. Prosody selects the current message or timer key automatically. Prosody also runs only one handler for that key at a time.
 
-Most collections should have a TTL. Set it comfortably beyond the longest timer or workflow that uses the state; Prosody validates the minimum supported TTL. Omit it only when keeping inactive keys forever is intentional.
+State survives process restarts and Kafka partition moves. By default, Prosody makes changes visible only after the event succeeds. A failed attempt cannot publish its pending changes.
 
-### Published state
+Use keyed state for counters, deduplication, rolling totals, pending work, and per-key workflows. Use a database for business records, joins, and ad hoc queries. Repeated database reads can make stream processing slow and expensive.
 
-Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, names its `subsystem`, and registers the definition as usual:
-
-```ruby
-CURRENT_ORDER = Prosody.value("current-order", published: true)
-
-owner = Prosody::Client.new(
-  group_id: "order-writer",
-  subsystem: "checkout",
-  state_collections: [CURRENT_ORDER]
-)
-
-# Inside the owner's handler, the event supplies the user key.
-current_order = context.state(CURRENT_ORDER)
-current_order.set({"sku" => "book"})
-```
-
-Another client opens a reader by naming the subsystem and passing that same definition. The reader is independent of subscriptions and only returns committed state:
-
-```ruby
-order_reader = client.state("checkout", CURRENT_ORDER)
-current_order = order_reader.get("customer-123")
-```
-
-Published readers provide the owned collection's read operations without its mutations. An owned handle gets the user key from the current event; a published reader is outside a handler, so every operation takes that key explicitly. Map and deque traversal returns an `Enumerator` when no block is given and reads in chunks rather than loading the entire collection. Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
-
-The default cache window is five seconds unless the client configuration changes it. Set `read_cache:` on a definition to choose a different freshness window, or `read_cache: false` to read durable storage on every operation. To stop publishing a collection, deploy its definition with `published: false` while keeping it registered and retaining `subsystem` for that deployment.
+Give most collections a TTL. Set the TTL beyond the longest timer or workflow that uses the collection. Omit it only when inactive keys must remain forever.
 
 ### A counter for each key
 
@@ -576,11 +551,13 @@ client = Prosody::Client.new(
 )
 ```
 
-Here, counters expire after 30 days without an update.
+Each Kafka key now has an independent counter. A counter expires when that key has no update for 30 days.
 
 ### Window activity into one notification
 
-This example turns a burst of activity into two useful notifications. It sends the first event immediately, collects later events for five minutes, then sends one summary. Because the user ID is the Kafka key, every user gets an independent window.
+This example groups a burst of activity for one user. It sends the first event immediately. It collects later events for five minutes.
+
+The timer sends one summary when the window ends. The user ID is the Kafka key, so each user has an independent window.
 
 ```ruby
 WINDOW = Prosody.value("window", ttl: 24 * 60 * 60)
@@ -621,16 +598,20 @@ Why this works:
 
 - Register both definitions in `state_collections` before subscribing. Keyed state uses Cassandra unless `mock: true`.
 - Use `clear_and_schedule`, not `schedule`, so a retried event does not add another timer for the same key.
-- `capacity: 100` and the one-day TTL prevent an inactive or unusually busy key from retaining an unlimited backlog. Since this example only appends, overflow drops the oldest saved message.
-- A `message_deque` requires the original Kafka messages to remain available for the whole window. Use a plain `deque` of payloads if topic retention or compaction cannot guarantee that.
+- `capacity: 100` and the one-day TTL bound the saved backlog. Overflow drops the oldest message because this example only appends.
+- A `message_deque` requires the original Kafka messages during the window. Use `deque` when topic retention or compaction cannot provide them.
 - Prosody runs one handler at a time for each key, so a user's message and timer handlers cannot overlap.
-- Sending a notification is outside Prosody's state transaction and may happen again after a retry. Give notifications a stable idempotency key, or send them through an outbox, when duplicates matter.
+- A notification is outside the state transaction. A retry can send it again. Use a stable idempotency key when duplicates matter.
 
 ### Collections and handles
 
-A definition gives a collection a stable name, kind, and options. Register it once on the client, then pass the same definition to `context.state` to access the current key. Do not reuse a persisted name for a different collection kind or payload type.
+A definition sets a collection's durable name, kind, and options. Register each definition once on the client.
 
-Create handles inside the handler and do not retain them or their iterators afterward. State operations look synchronous but yield the current fiber while Prosody performs the work.
+Pass the same definition to `context.state` inside a handler. Prosody uses the current event key for that handle.
+
+Do not reuse a durable name for a different collection kind or payload type. Create handles inside the handler. Do not retain handles or iterators.
+
+State operations look synchronous. They yield the current fiber while Prosody performs the work.
 
 | Collection | JSON payload | Kafka message | Main operations |
 | --- | --- | --- | --- |
@@ -638,17 +619,58 @@ Create handles inside the handler and do not retain them or their iterators afte
 | Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
 | Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
 
-Map and deque scans return enumerators when called without a block. Map keys are strings. `nil` means absence and cannot be stored—use `clear` or `delete` instead.
+Map and deque scans return enumerators when called without a block. Map keys are strings.
+
+`nil` means absence. Use `clear` or `delete` instead of storing it.
 
 ### When changes become visible
 
-Reads inside a handler see its earlier writes. The default behavior is the safest choice for most handlers: Prosody buffers those changes and publishes them together when the event succeeds. If the handler raises, none of its pending changes become visible.
+Reads inside a handler see earlier writes from that handler. By default, Prosody buffers changes until the event succeeds.
+
+Prosody then publishes the changes together. If the handler raises, none of its pending changes become visible.
 
 Each collection also offers explicit controls for workflows that need different behavior:
 
-- `read_uncommitted: true` writes that collection's changes after the handler succeeds but before the event is recorded as complete. A crash in between can leave the changes visible even though the event is retried. Use it only for idempotent changes, where processing the same event again produces the same stored result.
-- `commit` immediately publishes this collection's pending changes. They remain visible even if the handler later raises and the event is retried.
-- `rollback` discards this collection's pending changes since its last `commit`. It cannot undo changes that were already committed.
+- `read_uncommitted: true` writes changes before Prosody records the event as complete. A crash can make these changes visible before a retry. Use this option only when repeated processing produces the same result.
+- `commit` immediately publishes the collection's pending changes. A later handler failure does not remove them.
+- `rollback` discards pending changes since the last `commit`. It cannot undo committed changes.
+
+### Published state
+
+Handlers normally read state only for their current event key. Sometimes another service needs that state without consuming the owner's Kafka topics.
+
+Published state provides this read-only access. The owner enables publication, names its subsystem, and registers the collection definition:
+
+```ruby
+CURRENT_ORDER = Prosody.value("current-order", published: true)
+
+owner = Prosody::Client.new(
+  group_id: "order-writer",
+  subsystem: "checkout",
+  state_collections: [CURRENT_ORDER]
+)
+
+# The handler uses the key from its current event.
+current_order = context.state(CURRENT_ORDER)
+current_order.set({"sku" => "book"})
+```
+
+Another client uses the subsystem and the same definition to open a reader. The reader does not require a subscription:
+
+```ruby
+order_reader = client.state("checkout", CURRENT_ORDER)
+current_order = order_reader.get("customer-123")
+```
+
+The reader returns only committed state. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
+
+Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block.
+
+Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
+
+The default cache window is five seconds. Set `read_cache:` to select a different window. Set `read_cache: false` to bypass the cache.
+
+To stop publication, deploy the definition with `published: false`. Keep the definition registered and keep its `subsystem` during that deployment.
 
 ## Timer Functionality
 
