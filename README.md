@@ -1063,14 +1063,15 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 ### Prosody::Client
 
-- `new(**config)`: Initialize a new Prosody client with the given configuration.
+- `new(config)` or `new(**options)`: Create a client from a `Configuration`, hash, or keyword options.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
+- `excise(String topic, String key)`: Send an excise record for a key.
 - `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.
 - `request_excise(topic:, key:, subsystems:, timeout:)`: Send an excise request.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
-- `subscribe: [Payload, Response] (Prosody::EventHandler[Payload, Response]) -> void`: Preserve both handler types.
+- `subscribe(handler)`: Start event processing with the specified handler.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
@@ -1107,6 +1108,8 @@ class MyHandler < Prosody::EventHandler
 end
 ```
 
+`on_message`, `on_excise`, and `on_timer` are the handler callbacks. The `permanent` and `transient` methods classify selected exceptions.
+
 ### Prosody::Message
 
 `Prosody::Message[Payload]` represents a Kafka message. `Payload` defaults to
@@ -1142,6 +1145,10 @@ Messages have the following attributes:
 - `key` (String): The message key.
 - `payload` (`Payload`): The JSON-deserialized message payload.
 
+### Prosody::ExciseMessage
+
+An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, and `key` attributes. It has no `payload` attribute.
+
 ### Prosody::Context
 
 Represents the context of message processing:
@@ -1165,6 +1172,14 @@ Represents a timer that has fired, provided to the `on_timer` method:
 - `key` (String): The entity key identifying what this timer belongs to
 - `time` (Time): The time when this timer was scheduled to fire
 
+### Requests
+
+- `Prosody::Success[Value]`: Contains the response in `value`.
+- `Prosody::Failure`: Contains a response error in `error`.
+- `Prosody::HandlerError`, `Timeout`, `FormatMismatch`, and `MalformedResponse`: The possible response errors.
+- `Prosody::response_error`: The union of all response error types.
+- `Prosody::outcome[Value]`: A `Success[Value]` or `Failure`.
+
 ### Keyed State
 
 Definition constructors (each returns a frozen definition object used both in `Configuration#state_collections` and with `context.state`):
@@ -1176,26 +1191,52 @@ Definition constructors (each returns a frozen definition object used both in `C
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
 - `Prosody.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)`
 
+Each constructor returns a `StateDefinition`. It exposes `name`, `kind`, `payload`, all supplied options, and `to_state_config`.
+
 Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`. `Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `each_pair`, `each_key`, `each_value`, and their reverse variants. `Prosody::PublishedDeque` provides `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. Traversal methods return an `Enumerator` when no block is given.
 
 `Prosody::ValueState`:
 
-- `get`, `set(value)`, `clear`, `commit`, `rollback`
+- `get` / `value`, `set(value)` / `value=`, `clear`, `commit`, and `rollback`
 
 `Prosody::MapState` (keys are `String`):
 
-- `get(key)`, `get_many(keys)`, `set(key, value)`, `delete(key)` (returns `nil`), `clear`
-- `key?`, `each_pair`, `each_key`, and `each_value` (each with reverse traversal), `commit`, `rollback`
+- `get` / `[]`, `get_many`, `set` / `[]=`, `store`, `delete`, and `clear`
+- `key?`, `has_key?`, `include?`, `member?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
+- `each` / `each_pair`, `each_key`, and `each_value`, including each reverse form
+- `commit` and `rollback`
 
 `Prosody::DequeState`:
 
-- `push(value)`, `unshift(value)`, `pop`, `shift`, `length` (aliased `size`), `empty?`, `get(index)`, `clear`
-- `each` / `reverse_each` (block or `Enumerator`), `commit`, `rollback`
+- `push`, `append`, `<<`, `unshift`, `prepend`, `pop`, and `shift`
+- `length` / `size`, `empty?`, `get`, `fetch`, `first`, `last`, and `clear`
+- `each` / `reverse_each`, `commit`, and `rollback`
 
 Errors:
 
-- `Prosody::TransientStateError < Prosody::TransientError`: the default — a temporary store read/write failure, or any caller mistake (a `nil`/unrepresentable write, item-shape mismatch, out-of-range index, invalid scan direction), rejected transient so it retries rather than discarding the message.
-- `Prosody::PermanentStateError < Prosody::PermanentError`: reserved for failures a retry cannot resolve in-process (unregistered/identity-mismatched collection, duplicate registration, bad TTL), or one a handler raises explicitly.
+- `Prosody::TransientStateError < Prosody::TransientError`: Reports a keyed-state error that Prosody can retry.
+- `Prosody::PermanentStateError < Prosody::PermanentError`: Reports a keyed-state error that another attempt cannot resolve.
 - `Prosody::NullValueError < Prosody::TransientStateError`: raised when a `nil` is written; use `clear`/`delete` instead.
 
-State errors are never Terminal (core folds Terminal into Transient).
+Handler error types:
+
+- `Prosody::Error`: Base Prosody error.
+- `Prosody::EventHandlerError`: Base class for classified handler errors.
+- `Prosody::TransientError`: Marks an error as retriable.
+- `Prosody::PermanentError`: Marks an error as final.
+
+### Configuration
+
+`Prosody::Configuration.new` accepts a hash or block. Its public readers and writers match the settings in [Configuration](CONFIGURATION.md). `to_hash` returns the native configuration hash.
+
+### Logging and telemetry
+
+- `Prosody.logger`: Get the current logger or create the default logger.
+- `Prosody.logger=`: Replace the current logger. Assign `nil` to restore the default.
+- `Prosody.flush_telemetry`: Export pending telemetry.
+- `Prosody.shutdown_telemetry`: Export pending telemetry and stop its providers.
+
+### Sentry
+
+- `Prosody::SentryIntegration.enabled?`: Test whether Sentry integration is active.
+- `Prosody::SentryIntegration.capture_exception(exception, context = {})`: Report an exception with optional context.
