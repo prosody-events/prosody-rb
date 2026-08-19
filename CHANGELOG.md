@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.4.0...prosody/v0.5.0) (2026-08-19)
+
+
+### Features
+
+* add subsystem requests ([#44](https://github.com/prosody-events/prosody-rb/issues/44)) ([672c1de](https://github.com/prosody-events/prosody-rb/commit/672c1de8cbdf883c7cb41e1c82b25851057cf733))
+* add typed excise records and requests ([#45](https://github.com/prosody-events/prosody-rb/issues/45)) ([1581b37](https://github.com/prosody-events/prosody-rb/commit/1581b3768a8ce1ae72677135aabfae04496ce943))
+* expose published keyed state ([#36](https://github.com/prosody-events/prosody-rb/issues/36)) ([bffefa2](https://github.com/prosody-events/prosody-rb/commit/bffefa2908b0d96cc43221babfed1d5ac6554ca2))
+
+
+### Bug Fixes
+
+* **logging:** flush OTel telemetry on exit ([#35](https://github.com/prosody-events/prosody-rb/issues/35)) ([531d22a](https://github.com/prosody-events/prosody-rb/commit/531d22af7b0a8af0e3335b7a706884af6b1e1833))
+* **release:** exclude source-only specs from gem validation ([#33](https://github.com/prosody-events/prosody-rb/issues/33)) ([6d8d745](https://github.com/prosody-events/prosody-rb/commit/6d8d745c0ca9950643566cb11fb21090a6fdb738))
+
 ## [0.4.0](https://github.com/prosody-events/prosody-rb/compare/prosody/v0.3.0...prosody/v0.4.0) (2026-07-21)
 
 
