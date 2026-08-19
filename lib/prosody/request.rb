@@ -21,7 +21,7 @@ module Prosody
     # Returns one outcome for each subsystem.
     # @param timeout [Numeric] The response deadline in seconds.
     # @raise [ArgumentError] if a subsystem name or timeout is invalid
-    # @raise [RuntimeError] if the request cannot produce all outcomes
+    # @raise [RuntimeError] if the request cannot start or the Kafka send fails
     def request(topic:, key:, payload:, subsystems:, timeout:)
       native_request(
         topic: topic,

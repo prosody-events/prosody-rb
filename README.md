@@ -59,8 +59,10 @@ client = Prosody::Client.new(
 
 # Define a custom message handler
 class MyHandler < Prosody::EventHandler
-  def on_excise(_context, message)
+  def on_excise(context, message)
     puts "Excise key: #{message.key}"
+    context.clear_scheduled
+    nil
   end
 
   def on_message(context, message)
@@ -285,7 +287,7 @@ end
 
 ## Subsystems
 
-A consumer group ID determines which process handles each record and identifies its keyed state. If a public interface exposes this ID, callers depend on this internal layout.
+A consumer group ID groups the client processes that share records. Prosody also uses this ID to identify the group's keyed state. Callers must not depend on this stream design.
 
 A subsystem gives requests and published state a stable public name. One or more consumer groups can use this name. Their IDs can change without changing public interfaces. Prosody uses the first response to a subsystem request. It reads published state from one consumer group that publishes the state.
 
@@ -525,7 +527,7 @@ Many stream transformations must reason across multiple events or timer firings.
 
 A Kafka key identifies an entity, such as a customer or order. Keyed state gives each key independent working state for these transformations. With Cassandra, the state survives restarts and partition reassignment.
 
-Prosody selects the current message or timer key. It processes one event at a time for that key but can process other keys concurrently. It commits state changes after a successful event and discards changes from a failed attempt.
+Prosody selects the current message or timer key. It processes one event at a time for that key but can process other keys concurrently. By default, it commits state changes after a successful event and discards changes from a failed attempt.
 
 Use a database for business records, joins, and unplanned queries.
 
@@ -544,7 +546,10 @@ class CountHandler < Prosody::EventHandler
     count.set((count.get || 0) + 1)
   end
 
-  def on_excise(_context, _message); end
+  def on_excise(context, _message)
+    context.state(COUNTER).clear
+    nil
+  end
   def on_timer(_context, _timer); end
 end
 
@@ -592,7 +597,12 @@ class ActivityHandler < Prosody::EventHandler
     context.state(WINDOW).clear
   end
 
-  def on_excise(_context, _message); end
+  def on_excise(context, _message)
+    context.state(PENDING).clear
+    context.state(WINDOW).clear
+    context.clear_scheduled
+    nil
+  end
 end
 ```
 
@@ -627,7 +637,7 @@ Map and deque scans return enumerators when called without a block. Map keys are
 
 ### When keyed-state changes become visible
 
-Retries must not expose partial state from a failed attempt. Reads in a handler see its earlier keyed-state writes. Prosody commits pending changes when the event succeeds and discards them when the handler raises.
+By default, retries do not see pending state from a failed attempt. Reads in a handler see its earlier keyed-state writes. Prosody commits pending changes when the event succeeds and discards them when the handler raises.
 
 This transaction applies only to keyed state. Some workflows need state changes before the handler ends, so each collection also provides explicit controls:
 
@@ -639,7 +649,7 @@ This transaction applies only to keyed state. Some workflows need state changes 
 
 Some callers need only the current value for a key. They can accept a stale value or a race with a concurrent update.
 
-Use topics and event sourcing when a consumer must process each state change in order. Use published state for direct, read-only lookup of committed keyed state. The caller does not need to consume the owner's topics or maintain a separate lookup store.
+Use topics and event sourcing when a consumer must process each state change in order. Use published state for direct, read-only lookup of persisted keyed state. The caller does not need to consume the owner's topics or maintain a separate lookup store.
 
 Configure the subsystem name on each publisher. Enable publication on the collection definition. Register the definition on the Prosody client:
 
@@ -666,7 +676,7 @@ order_reader = client.state("checkout", CURRENT_ORDER)
 current_order = order_reader.get("customer-123")
 ```
 
-The reader returns only committed state. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
+The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
 
 Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block.
 
@@ -704,7 +714,10 @@ class MyHandler < Prosody::EventHandler
     puts "Scheduled time: #{timer.time}"
   end
 
-  def on_excise(_context, _message); end
+  def on_excise(context, _message)
+    context.clear_scheduled
+    nil
+  end
 end
 ```
 

@@ -42,7 +42,7 @@ module Prosody
 
   class Client
     # The timeout value uses seconds.
-    # The method raises if it cannot produce all outcomes.
+    # The method raises if the request cannot start or the Kafka send fails.
     def request: (
       topic: String,
       key: String,
