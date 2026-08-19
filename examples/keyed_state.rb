@@ -15,8 +15,12 @@ TOTALS = Prosody.map("totals")                          # keys are always String
 BACKLOG = Prosody.message_deque("backlog", capacity: 100) # bounded window of messages
 
 class KeyedStateHandler < Prosody::EventHandler
-  def on_excise(_context, message)
+  def on_excise(context, message)
     puts "Excise #{message.key}"
+    context.state(CART).clear
+    context.state(TOTALS).clear
+    context.state(BACKLOG).clear
+    nil
   end
 
   def initialize(logger:)

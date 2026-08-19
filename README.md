@@ -59,8 +59,10 @@ client = Prosody::Client.new(
 
 # Define a custom message handler
 class MyHandler < Prosody::EventHandler
-  def on_excise(_context, message)
+  def on_excise(context, message)
     puts "Excise key: #{message.key}"
+    context.clear_scheduled
+    nil
   end
 
   def on_message(context, message)
@@ -93,76 +95,13 @@ client.shutdown
 
 ## Excise records
 
-Call `excise(topic, key)` to send a Kafka record with a key and no payload. Use this record to delete the key from compacted views.
+Applications can copy event data into keyed state and external stores. A regulatory or contractual deletion must remove every copy for one key.
+
+An excise record carries this deletion command. Kafka encodes the command as a key with no payload. During topic compaction, Kafka deletes earlier values for the key. Call `excise(topic, key)` to send the record. Prosody routes the record to `on_excise`. The handler must delete all consumer-owned data for the key.
 
 Each handler must implement `on_message`, `on_excise`, and `on_timer`. Subscription fails before consumption if a method is missing.
 
-Return a JSON value from `on_excise`. Prosody sends this value when the excise record is a subsystem request.
-
-## Requests
-
-Requests return one outcome for each named subsystem. The result hash uses canonical subsystem names as keys.
-
-Use `request_excise` to send an excise record and collect the same outcome type.
-
-Do not rely on hash iteration order.
-
-Prosody raises an error if the request cannot produce the complete result hash.
-
-Do not wait for a request from a handler for the same key and subsystem. The request cannot finish before that handler returns.
-
-Message handler return values become successful request outcomes. Each return value must have a JSON representation.
-
-Return a JSON response from each message handler:
-
-```ruby
-class InventoryHandler < Prosody::EventHandler
-  def on_message(_context, message)
-    {"accepted" => message.key}
-  end
-
-  def on_excise(_context, message)
-    {"excised" => message.key}
-  end
-
-  def on_timer(_context, _timer)
-  end
-end
-```
-
-Send a request without a subscription on the requester:
-
-Set `timeout` in seconds.
-
-```ruby
-subsystems = ["inventory", "billing"]
-results = client.request(
-  topic: "orders",
-  key: "order-1",
-  payload: {"type" => "order.created"},
-  subsystems: subsystems,
-  timeout: 2.0
-)
-
-results.each do |subsystem, outcome|
-  if outcome.is_a?(Prosody::Failure)
-    warn "#{subsystem}: #{outcome.error.message}"
-  else
-    puts "#{subsystem}: #{outcome.value}"
-  end
-end
-```
-
-The example can print these results:
-
-```text
-inventory: {"accepted"=>"order-1"}
-billing: no response arrived before the deadline
-```
-
-Each value is a `Success` or `Failure`. Each failure contains one typed response error.
-
-Each response error has one message.
+If an excise record is a request, return a response from `on_excise`. Prosody uses this response as the subsystem result.
 
 ## Architecture
 
@@ -346,6 +285,73 @@ if client.is_stalled?
 end
 ```
 
+## Subsystems
+
+A consumer group ID identifies a set of processes that share records and the keyed state that the group owns. A subsystem can include one or more services and consumer groups. If callers use these IDs, a refactor can require changes to each caller.
+
+A subsystem gives requests and published state one stable public name. Callers use this name instead of consumer group IDs. You can change its services and consumer groups without changing callers. Prosody uses the first response to a subsystem request. For each published-state read, it uses one consumer group that publishes the collection.
+
+## Requests
+
+Kafka decouples producers from consumers, so a send does not return consumer results. This asynchronous model lets each service process records independently. Some operations must wait for consumer results before they continue. A request recovers synchrony for the caller while consumers continue asynchronous processing.
+
+Send a request from a handler or other application code. The Prosody client does not need an active subscription. The result hash uses canonical subsystem names as keys. Each value is a `Success` or `Failure` outcome. Use `request_excise` to send an excise record and collect the same outcome type.
+
+Do not rely on hash order. The hash contains one entry for each selected subsystem. A missing response becomes a timeout `Failure`; Prosody does not omit the subsystem. The request raises an error for request-level failures, such as invalid input, a Kafka send failure, or shutdown. Do not wait for a request if the current consumer group must process it for the same key. That group cannot process it until the handler returns.
+
+Message and excise handler return values become successful outcomes. Each return value must have a JSON representation.
+
+Set `subsystem` to `inventory` on the client that subscribes this handler.
+
+```ruby
+class InventoryHandler < Prosody::EventHandler
+  def on_message(_context, message)
+    {"accepted" => message.key}
+  end
+
+  def on_excise(_context, message)
+    {"excised" => message.key}
+  end
+
+  def on_timer(_context, _timer)
+  end
+end
+```
+
+Send the request:
+
+Set `timeout` in seconds.
+
+```ruby
+subsystems = ["inventory", "billing"]
+results = client.request(
+  topic: "orders",
+  key: "order-1",
+  payload: {"type" => "order.created"},
+  subsystems: subsystems,
+  timeout: 2.0
+)
+
+results.each do |subsystem, outcome|
+  if outcome.is_a?(Prosody::Failure)
+    warn "#{subsystem}: #{outcome.error.message}"
+  else
+    puts "#{subsystem}: #{outcome.value}"
+  end
+end
+```
+
+The example can print these results:
+
+```text
+inventory: {"accepted"=>"order-1"}
+billing: no response arrived before the deadline
+```
+
+Each failure contains one typed response error.
+
+Each response error has one message.
+
 ## Advanced Usage
 
 ### Pipeline Mode
@@ -517,44 +523,17 @@ Note that the in-memory cache is best-effort. Duplicates can still occur across 
 
 ## Keyed State
 
-Keyed state gives every Kafka key its own durable working memory. Prosody automatically uses the current message or timer key, so a handler can relate the current event to earlier events for that key. State survives restarts and rebalances. By default, changes become visible only when the event succeeds.
+Many stream transformations must reason across multiple events or timer firings. Windows, state machines, aggregates, and complex event processing all require state.
 
-Use keyed state for time-aware stream processing: counters, deduplication, rolling aggregates, pending work, and per-key workflows. Keep your relational database as the source of truth for business data and for work that needs joins or ad hoc queries. Reconstructing stream state with repeated database queries can be slow and expensive; keyed state is built for that job.
+A Kafka key identifies an entity, such as a customer or order. Keyed state gives each key independent working state for these transformations. With Cassandra, the state survives restarts and partition reassignment.
 
-Most collections should have a TTL. Set it comfortably beyond the longest timer or workflow that uses the state; Prosody validates the minimum supported TTL. Omit it only when keeping inactive keys forever is intentional.
+Prosody selects the current message or timer key. It processes one event at a time for that key but can process other keys concurrently. By default, Prosody commits pending keyed-state changes only when the handler succeeds. If the handler returns an error, Prosody discards those changes.
 
-### Published state
-
-Published state lets another client read a JSON value, map, or deque without subscribing to the owner's topics. Use the same definition for the owned collection and its read-only view. The owner sets `published: true`, names its `subsystem`, and registers the definition as usual:
-
-```ruby
-CURRENT_ORDER = Prosody.value("current-order", published: true)
-
-owner = Prosody::Client.new(
-  group_id: "order-writer",
-  subsystem: "checkout",
-  state_collections: [CURRENT_ORDER]
-)
-
-# Inside the owner's handler, the event supplies the user key.
-current_order = context.state(CURRENT_ORDER)
-current_order.set({"sku" => "book"})
-```
-
-Another client opens a reader by naming the subsystem and passing that same definition. The reader is independent of subscriptions and only returns committed state:
-
-```ruby
-order_reader = client.state("checkout", CURRENT_ORDER)
-current_order = order_reader.get("customer-123")
-```
-
-Published readers provide the owned collection's read operations without its mutations. An owned handle gets the user key from the current event; a published reader is outside a handler, so every operation takes that key explicitly. Map and deque traversal returns an `Enumerator` when no block is given and reads in chunks rather than loading the entire collection. Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
-
-The default cache window is five seconds unless the client configuration changes it. Set `read_cache:` on a definition to choose a different freshness window, or `read_cache: false` to read durable storage on every operation. To stop publishing a collection, deploy its definition with `published: false` while keeping it registered and retaining `subsystem` for that deployment.
+Give most collections a time to live (TTL). Set the TTL beyond the longest timer or workflow that uses the collection. Omit it when state must remain for inactive keys.
 
 ### A counter for each key
 
-Declare each collection once, register it on the client, and ask the event context for the current key's state:
+Declare each collection once. Register it on the client. In a handler, get the current key's state from the event context:
 
 ```ruby
 COUNTER = Prosody.value("counter", ttl: 30 * 24 * 60 * 60)
@@ -565,7 +544,10 @@ class CountHandler < Prosody::EventHandler
     count.set((count.get || 0) + 1)
   end
 
-  def on_excise(_context, _message); end
+  def on_excise(context, _message)
+    context.state(COUNTER).clear
+    nil
+  end
   def on_timer(_context, _timer); end
 end
 
@@ -576,11 +558,13 @@ client = Prosody::Client.new(
 )
 ```
 
-Here, counters expire after 30 days without an update.
+Each Kafka key now has an independent counter. A counter expires when that key has no update for 30 days.
 
 ### Window activity into one notification
 
-This example turns a burst of activity into two useful notifications. It sends the first event immediately, collects later events for five minutes, then sends one summary. Because the user ID is the Kafka key, every user gets an independent window.
+This example sends the first event for a user immediately. It collects later events for five minutes and then sends one summary.
+
+The user ID is the Kafka key. Each user has an independent window.
 
 ```ruby
 WINDOW = Prosody.value("window", ttl: 24 * 60 * 60)
@@ -611,7 +595,12 @@ class ActivityHandler < Prosody::EventHandler
     context.state(WINDOW).clear
   end
 
-  def on_excise(_context, _message); end
+  def on_excise(context, _message)
+    context.state(PENDING).clear
+    context.state(WINDOW).clear
+    context.clear_scheduled
+    nil
+  end
 end
 ```
 
@@ -619,18 +608,20 @@ See the complete, Steep-checked example for signatures, client setup, and `notif
 
 Why this works:
 
-- Register both definitions in `state_collections` before subscribing. Keyed state uses Cassandra unless `mock: true`.
+- Register both definitions in `state_collections` before you subscribe. Keyed state uses Cassandra unless `mock: true`.
 - Use `clear_and_schedule`, not `schedule`, so a retried event does not add another timer for the same key.
-- `capacity: 100` and the one-day TTL prevent an inactive or unusually busy key from retaining an unlimited backlog. Since this example only appends, overflow drops the oldest saved message.
-- A `message_deque` requires the original Kafka messages to remain available for the whole window. Use a plain `deque` of payloads if topic retention or compaction cannot guarantee that.
+- `capacity: 100` and the one-day TTL bound the saved backlog. Overflow drops the oldest message because this example only appends.
+- A `message_deque` requires the original Kafka messages during the window. Use `deque` when topic retention or compaction cannot provide them.
 - Prosody runs one handler at a time for each key, so a user's message and timer handlers cannot overlap.
-- Sending a notification is outside Prosody's state transaction and may happen again after a retry. Give notifications a stable idempotency key, or send them through an outbox, when duplicates matter.
+- A notification is outside the state transaction. A retry can send it again. Use a stable operation ID to reject duplicate notifications.
 
 ### Collections and handles
 
-A definition gives a collection a stable name, kind, and options. Register it once on the client, then pass the same definition to `context.state` to access the current key. Do not reuse a persisted name for a different collection kind or payload type.
+A definition sets a collection's durable name, kind, and options. Register it once. Pass it to `context.state` in a handler.
 
-Create handles inside the handler and do not retain them or their iterators afterward. State operations look synchronous but yield the current fiber while Prosody performs the work.
+Do not reuse a durable name for a different collection kind or payload type. Create handles inside the handler. Do not retain handles or iterators.
+
+State operations look synchronous. They yield the current fiber while Prosody performs the work.
 
 | Collection | JSON payload | Kafka message | Main operations |
 | --- | --- | --- | --- |
@@ -638,17 +629,60 @@ Create handles inside the handler and do not retain them or their iterators afte
 | Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
 | Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
 
-Map and deque scans return enumerators when called without a block. Map keys are strings. `nil` means absence and cannot be stored—use `clear` or `delete` instead.
+Map and deque scans return enumerators when called without a block. Map keys are strings.
 
-### When changes become visible
+`nil` means absence. Do not store this value. Use `clear` or `delete`.
 
-Reads inside a handler see its earlier writes. The default behavior is the safest choice for most handlers: Prosody buffers those changes and publishes them together when the event succeeds. If the handler raises, none of its pending changes become visible.
+### When keyed-state changes become visible
 
-Each collection also offers explicit controls for workflows that need different behavior:
+By default, retries do not see pending state from a failed attempt. Reads in a handler see its earlier keyed-state writes. Prosody commits pending changes when the event succeeds and discards them when the handler raises.
 
-- `read_uncommitted: true` writes that collection's changes after the handler succeeds but before the event is recorded as complete. A crash in between can leave the changes visible even though the event is retried. Use it only for idempotent changes, where processing the same event again produces the same stored result.
-- `commit` immediately publishes this collection's pending changes. They remain visible even if the handler later raises and the event is retried.
-- `rollback` discards this collection's pending changes since its last `commit`. It cannot undo changes that were already committed.
+This transaction applies only to keyed state. Some workflows need state changes before the handler ends, so each collection also provides explicit controls:
+
+- `read_uncommitted: true` persists keyed-state changes before Prosody records the event as complete. If the process stops between these steps, Prosody can process the same event again. The retry sees state changes from the earlier attempt. You must make these keyed-state changes idempotent. Each retry must produce the same state.
+- `commit` commits the collection's pending changes before the handler ends. A later handler failure does not remove them.
+- `rollback` discards pending changes since the last `commit`. It cannot undo committed changes.
+
+### Published state
+
+Some callers need only the current value for a key. They can accept a stale value or a race with a concurrent update.
+
+Use topics and event sourcing when a consumer must process each state change in order. Use published state for direct, read-only lookup of persisted keyed state. The caller does not need to consume the owner's topics or maintain a separate lookup store.
+
+Configure the subsystem name on each publisher. Enable publication on the collection definition. Register the definition on the Prosody client:
+
+```ruby
+CURRENT_ORDER = Prosody.value("current-order", published: true)
+
+owner = Prosody::Client.new(
+  group_id: "order-writer",
+  subsystem: "checkout",
+  state_collections: [CURRENT_ORDER]
+)
+
+# The handler uses the key from its current event.
+current_order = context.state(CURRENT_ORDER)
+current_order.set({"sku" => "book"})
+```
+
+Read published state from a handler or other application code. The Prosody client does not need an active subscription.
+
+Use the subsystem and the same definition to open a reader:
+
+```ruby
+order_reader = client.state("checkout", CURRENT_ORDER)
+current_order = order_reader.get("customer-123")
+```
+
+The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
+
+Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block.
+
+Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
+
+The default cache window is five seconds. Set `read_cache:` to select a different window. Set `read_cache: false` to bypass the cache.
+
+To stop publication, deploy the definition with `published: false`. Keep the definition registered during that deployment. Keep the subsystem configured during that deployment.
 
 ## Timer Functionality
 
@@ -678,7 +712,10 @@ class MyHandler < Prosody::EventHandler
     puts "Scheduled time: #{timer.time}"
   end
 
-  def on_excise(_context, _message); end
+  def on_excise(context, _message)
+    context.clear_scheduled
+    nil
+  end
 end
 ```
 
@@ -860,21 +897,17 @@ Strategies for achieving idempotence:
    - Each message advances the state machine, allowing for idempotent processing and easy failure recovery.
    - Particularly useful for complex, distributed transactions across multiple services.
 
-### Proper Shutdown
+### Application shutdown
 
-Shut down the client before your application exits:
+A Prosody client runs a subscription, timers, and other services in the background. Before an application terminates, it must stop all client services. `unsubscribe` stops only the active subscription.
+
+Call `shutdown` when the application terminates. It stops all client services and rejects new operations. Call `unsubscribe` only when the application will use the client again. You do not need to call `unsubscribe` before `shutdown`.
 
 ```ruby
 client.shutdown
 ```
 
-This ensures:
-
-1. Completion and commitment of all in-flight work
-2. Quick rebalancing, allowing other consumers to take over partitions
-3. Proper release of resources
-
-Implement shutdown handling in your application using signal handlers:
+Handle application shutdown with signal handlers:
 
 ```ruby
 require "prosody"
@@ -885,21 +918,21 @@ client = Prosody::Client.new(
   subscribed_topics: "my-topic"
 )
 
-# Set up a shutdown queue
+# Create the shutdown queue.
 shutdown = Queue.new
 
-# Configure signal handlers to trigger shutdown
+# Register the signal handlers.
 Signal.trap("INT") { shutdown.push(nil) }
 Signal.trap("TERM") { shutdown.push(nil) }
 
-# Subscribe to messages
+# Subscribe with the application handler.
 client.subscribe(MyHandler.new)
 
-# Block until a signal is received
-shutdown.pop # This blocks until something is pushed to the queue by a signal handler
+# Wait for a shutdown signal.
+shutdown.pop
 
-# Clean shutdown
-puts "Shutting down gracefully..."
+# Shut down the client.
+puts "Client shutdown starts."
 client.shutdown
 ```
 
@@ -1030,14 +1063,15 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 
 ### Prosody::Client
 
-- `new(**config)`: Initialize a new Prosody client with the given configuration.
+- `new(config)` or `new(**options)`: Create a client from a `Configuration`, hash, or keyword options.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
+- `excise(String topic, String key)`: Send an excise record for a key.
 - `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.
-- `request_excise(topic:, key:, subsystems:, timeout:)`: Send an excise request.
+- `request_excise(topic:, key:, subsystems:, timeout:)`: Return one excise outcome for each subsystem.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
 - `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
-- `subscribe: [Payload, Response] (Prosody::EventHandler[Payload, Response]) -> void`: Preserve both handler types.
+- `subscribe(handler)`: Start event processing with the specified handler.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
 - `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
@@ -1074,6 +1108,8 @@ class MyHandler < Prosody::EventHandler
 end
 ```
 
+`on_message`, `on_excise`, and `on_timer` are the handler callbacks. The `permanent` and `transient` methods classify selected exceptions.
+
 ### Prosody::Message
 
 `Prosody::Message[Payload]` represents a Kafka message. `Payload` defaults to
@@ -1109,13 +1145,17 @@ Messages have the following attributes:
 - `key` (String): The message key.
 - `payload` (`Payload`): The JSON-deserialized message payload.
 
+### Prosody::ExciseMessage
+
+An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, and `key` attributes. It has no `payload` attribute.
+
 ### Prosody::Context
 
-Represents the context of message processing:
+Represents the current event context:
 
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
-- `on_cancel`: Blocks until cancellation is signaled.
-- `state(definition)`: Binds a registered collection for the current event attempt, returning a typed handle (`ValueState`, `MapState`, or `DequeState`). Raises `PermanentStateError` when the name was never registered, or when the definition's `kind`/`payload` disagrees with the collection's durably-registered schema. See the [Keyed State](#keyed-state-2) API reference below.
+- `on_cancel`: Wait until cancellation occurs.
+- `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state-2).
 
 Timer scheduling methods:
 
@@ -1132,6 +1172,14 @@ Represents a timer that has fired, provided to the `on_timer` method:
 - `key` (String): The entity key identifying what this timer belongs to
 - `time` (Time): The time when this timer was scheduled to fire
 
+### Requests
+
+- `Prosody::Success[Value]`: Contains the response in `value`.
+- `Prosody::Failure`: Contains a response error in `error`.
+- `Prosody::HandlerError`, `Timeout`, `FormatMismatch`, and `MalformedResponse`: The possible response errors.
+- `Prosody::response_error`: The union of all response error types.
+- `Prosody::outcome[Value]`: A `Success[Value]` or `Failure`.
+
 ### Keyed State
 
 Definition constructors (each returns a frozen definition object used both in `Configuration#state_collections` and with `context.state`):
@@ -1143,26 +1191,60 @@ Definition constructors (each returns a frozen definition object used both in `C
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
 - `Prosody.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)`
 
-Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`. `Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `each_pair`, `each_key`, `each_value`, and their reverse variants. `Prosody::PublishedDeque` provides `get`, `length`/`size`, `empty?`, `first`, `last`, `each`, and `reverse_each`. Traversal methods return an `Enumerator` when no block is given.
+Each constructor returns a `StateDefinition`. It exposes `name`, `kind`, `payload`, all supplied options, and `to_state_config`.
+
+Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`.
+
+`Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, and `member?`.
+
+It provides `each` or `each_pair`, `each_key`, and `each_value`. The reverse methods are `reverse_each_pair`, `reverse_each_key`, and `reverse_each_value`.
+
+`Prosody::PublishedDeque` provides `get`, `length` or `size`, `empty?`, `first`, `last`, `each`, and `reverse_each`.
+
+Traversal methods return an `Enumerator` without a block.
 
 `Prosody::ValueState`:
 
-- `get`, `set(value)`, `clear`, `commit`, `rollback`
+- `get` / `value`, `set(value)` / `value=`, `clear`, `commit`, and `rollback`
 
 `Prosody::MapState` (keys are `String`):
 
-- `get(key)`, `get_many(keys)`, `set(key, value)`, `delete(key)` (returns `nil`), `clear`
-- `key?`, `each_pair`, `each_key`, and `each_value` (each with reverse traversal), `commit`, `rollback`
+- `get` / `[]`, `get_many`, `set` / `[]=`, `store`, `delete`, and `clear`
+- `key?`, `has_key?`, `include?`, `member?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
+- `each` / `each_pair`, `each_key`, and `each_value`, including each reverse form
+- `commit` and `rollback`
 
 `Prosody::DequeState`:
 
-- `push(value)`, `unshift(value)`, `pop`, `shift`, `length` (aliased `size`), `empty?`, `get(index)`, `clear`
-- `each` / `reverse_each` (block or `Enumerator`), `commit`, `rollback`
+- `push`, `append`, `<<`, `unshift`, `prepend`, `pop`, and `shift`
+- `length` / `size`, `empty?`, `get`, `fetch`, `first`, `last`, and `clear`
+- `each` / `reverse_each`, `commit`, and `rollback`
 
 Errors:
 
-- `Prosody::TransientStateError < Prosody::TransientError`: the default — a temporary store read/write failure, or any caller mistake (a `nil`/unrepresentable write, item-shape mismatch, out-of-range index, invalid scan direction), rejected transient so it retries rather than discarding the message.
-- `Prosody::PermanentStateError < Prosody::PermanentError`: reserved for failures a retry cannot resolve in-process (unregistered/identity-mismatched collection, duplicate registration, bad TTL), or one a handler raises explicitly.
+- `Prosody::TransientStateError < Prosody::TransientError`: Reports a keyed-state error that Prosody can retry.
+- `Prosody::PermanentStateError < Prosody::PermanentError`: Reports a keyed-state error that another attempt cannot resolve.
 - `Prosody::NullValueError < Prosody::TransientStateError`: raised when a `nil` is written; use `clear`/`delete` instead.
 
-State errors are never Terminal (core folds Terminal into Transient).
+Handler error types:
+
+- `Prosody::Error`: Base Prosody error.
+- `Prosody::EventHandlerError`: Base class for classified handler errors.
+- `Prosody::TransientError`: Marks an error as retriable.
+- `Prosody::PermanentError`: Marks an error as final.
+
+### Configuration
+
+`Prosody::Configuration.new` accepts a hash or block. Its public properties match the settings in [Configuration](CONFIGURATION.md). `to_hash` returns a configuration hash.
+
+### Logging and telemetry
+
+- `Prosody.logger`: Get the current logger or create the default logger.
+- `Prosody.logger=`: Replace the current logger. Assign `nil` to restore the default.
+- `Prosody.flush_telemetry`: Export pending telemetry.
+- `Prosody.shutdown_telemetry`: Export pending telemetry and stop its providers.
+
+### Sentry
+
+- `Prosody::SentryIntegration.enabled?`: Test whether Sentry integration is active.
+- `Prosody::SentryIntegration.capture_exception(exception, context = {})`: Report an exception with optional context.

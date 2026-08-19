@@ -7,8 +7,12 @@ ACTIVITY_WINDOW = Prosody.value("activity-window")
 PENDING_ACTIVITIES = Prosody.message_deque("pending-activities", capacity: 100)
 
 class ActivityWindowHandler < Prosody::EventHandler
-  def on_excise(_context, message)
+  def on_excise(context, message)
     puts "Excise #{message.key}"
+    context.state(PENDING_ACTIVITIES).clear
+    context.state(ACTIVITY_WINDOW).clear
+    context.clear_scheduled
+    nil
   end
 
   def on_message(context, message)
