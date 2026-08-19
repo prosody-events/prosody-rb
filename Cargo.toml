@@ -15,8 +15,7 @@ futures = "0.3"
 magnus = { version = "0.8", default-features = false }
 mimalloc = "0.1"
 opentelemetry = "0.32"
-# TODO: Use the released version after Prosody publishes requests.
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "514fdd0d99e29cfd080a89aaf1bab5c19c885832", features = [
+prosody = { version = "0.6.0", features = [
     "libz-static",
 ] }
 rb-sys = "0.9"
