@@ -295,19 +295,11 @@ For a request, Prosody uses the first subsystem response. For a published-state 
 
 ## Requests
 
-A Kafka send does not return consumer results. A request waits for one outcome from each selected subsystem.
+Kafka decouples producers from consumers, so a send does not return consumer results. This asynchronous model lets each service process records independently. Some operations must wait for consumer results before they continue. A request recovers synchrony for the caller while consumers continue asynchronous processing.
 
-Send a request from a handler or other application code. The Prosody client does not need an active subscription.
+Send a request from a handler or other application code. The Prosody client does not need an active subscription. The result hash uses canonical subsystem names as keys. Each value is a `Success` or `Failure` outcome. Use `request_excise` to send an excise record and collect the same outcome type.
 
-The result hash uses canonical subsystem names as keys. Each value is a `Success` or `Failure` outcome.
-
-Use `request_excise` to send an excise record and collect the same outcome type.
-
-Do not rely on hash order. Prosody raises an error if it cannot produce the complete result hash.
-
-Do not wait for a request if the current consumer group must process it for the same key. That group cannot process it until the handler returns.
-
-Message and excise handler return values become successful outcomes. Each return value must have a JSON representation.
+Do not rely on hash order. Prosody raises an error if it cannot produce the complete result hash. Do not wait for a request if the current consumer group must process it for the same key. That group cannot process it until the handler returns. Message and excise handler return values become successful outcomes. Each return value must have a JSON representation.
 
 Set `subsystem` to `inventory` on the client that subscribes this handler.
 
@@ -898,13 +890,7 @@ Strategies for achieving idempotence:
 
 ### Application shutdown
 
-`unsubscribe` stops only the active subscription.
-
-Call `shutdown` when the application terminates. It stops the subscription and all client services.
-
-The client rejects new operations after shutdown.
-
-Call `unsubscribe` only when the application will use the client again. You do not need to call `unsubscribe` before `shutdown`.
+`unsubscribe` stops only the active subscription. Call `shutdown` when the application terminates. It stops the subscription and all client services. The client rejects new operations after shutdown. Call `unsubscribe` only when the application will use the client again. You do not need to call `unsubscribe` before `shutdown`.
 
 ```ruby
 client.shutdown
