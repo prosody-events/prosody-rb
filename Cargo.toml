@@ -13,7 +13,8 @@ crossbeam-channel = "0.5"
 educe = "0.7"
 futures = "0.3"
 magnus = { version = "0.8", default-features = false }
-mimalloc = "0.1"
+# TODO: Use a crates.io release after it includes the fix for https://github.com/microsoft/mimalloc/issues/1287.
+mimalloc = { git = "https://github.com/xonatius/mimalloc_rust.git", rev = "6d4c41bb10c6d9da1d1b6f07b38c4cc051667f11" }
 opentelemetry = "0.32"
 prosody = { version = "0.6.0", features = ["libz-static"] }
 rb-sys = "0.9"
