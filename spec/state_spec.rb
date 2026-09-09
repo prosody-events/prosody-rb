@@ -123,26 +123,6 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_collections\[0\]\.payload.*expected/)
     end
 
-    it "rejects a fractional recovery delay" do
-      error = client_error(state_recovery_delay: 0.5)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a negative recovery delay" do
-      error = client_error(state_recovery_delay: -1)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a NaN recovery delay" do
-      error = client_error(state_recovery_delay: Float::NAN)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects an infinite recovery delay" do
-      error = client_error(state_recovery_delay: Float::INFINITY)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
     it "rejects a zero in-memory block-cache size" do
       error = client_error(state_owned_cache_size: "0")
       expect(error.message).to match(/state_owned_cache_size/)

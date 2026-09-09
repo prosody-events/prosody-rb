@@ -252,12 +252,6 @@ pub struct NativeConfiguration {
 
     /// Default cache policy for published-state reads.
     state_read_cache: Option<ReadCacheConfig>,
-
-    /// Delay in whole seconds before the keyed-state recovery sweep.
-    ///
-    /// Crosses as an `f64` so fractional/negative/non-finite values reach the
-    /// whole-number guard rather than being silently truncated.
-    state_recovery_delay: Option<f64>,
 }
 
 /// Declares one keyed-state collection to register before subscribe.
@@ -1160,11 +1154,6 @@ fn build_keyed_state_config(
 
     if let Some(dir) = &config.state_cache_dir {
         builder.cache_dir(PathBuf::from(dir));
-    }
-
-    if let Some(seconds) = config.state_recovery_delay {
-        let seconds = whole_number_field(seconds, "state_recovery_delay", 0, u32::MAX)?;
-        builder.recovery_delay(CompactDuration::new(seconds));
     }
 
     if let Some(size) = &config.state_owned_cache_size {

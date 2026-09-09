@@ -336,11 +336,6 @@ module Prosody
     config_param :state_read_cache,
       converter: ->(v) { (v == true || v == false) ? v : Float(v) }
 
-    # Delay in whole seconds between staging a provisional cell and the
-    # keyed-state recovery sweep. Every registered TTL must strictly exceed this.
-    # Must be a whole number of seconds >= 1 (validated natively).
-    config_param :state_recovery_delay, converter: ->(v) { duration_converter(v) }
-
     # Operation mode of the client.
     #
     # Valid values:
