@@ -3,8 +3,8 @@
 //! Map and set queries select string keys. Deque queries select positions that
 //! count from the front. Every option narrows the selection, and `nil` leaves
 //! an option unset. `from`, `after`, `to`, and `before` apply in iteration
-//! order, so a reverse query starts at the high end. `range` is ascending in
-//! either direction.
+//! order, so a reverse query starts at the high end. `range` bounds keys or
+//! positions in ascending terms and applies in either direction.
 //!
 //! A bad option raises `ArgumentError` or `TypeError`, as Ruby does for a bad
 //! keyword argument.
@@ -32,7 +32,7 @@ struct Keywords {
 
 /// Translated edges and limit. `T` is a key or a position.
 ///
-/// `start` and `end` are in iteration order. `range` is ascending.
+/// `start` and `end` are in iteration order. `range` is in ascending terms.
 struct Bounds<T> {
     start: Bound<T>,
     end: Bound<T>,
@@ -65,7 +65,6 @@ impl Keywords {
     /// Translates the edges, range, and limit with `convert`.
     fn bounds<T, F>(self, ruby: &Ruby, convert: F) -> Result<Bounds<T>, Error>
     where
-        T: PartialOrd,
         F: Fn(&'static str, Value) -> Result<T, Error>,
     {
         let start = edge(ruby, ("from", self.from), ("after", self.after), &convert)?;
@@ -91,8 +90,8 @@ impl Keywords {
 ///
 /// # Errors
 ///
-/// Raises `ArgumentError` for an unknown keyword, both edges of one side, a
-/// descending range, or a limit that is not a positive `Integer`. Raises
+/// Raises `ArgumentError` for an unknown keyword, both edges of one side, or a
+/// limit that is not a positive `Integer`. Raises
 /// `TypeError` for a key that is not a `String` or a range that is not a
 /// `Range`. An invalid direction token raises a transient state error.
 pub(crate) fn key_query(
@@ -139,8 +138,8 @@ pub(crate) fn key_query(
 /// # Errors
 ///
 /// Raises `ArgumentError` for an unknown keyword, both edges of one side, a
-/// position that is not a non-negative `Integer`, a descending range, or a
-/// limit that is not a positive `Integer`. Raises `TypeError` for a range that
+/// position that is not a non-negative `Integer`, or a limit that is not a
+/// positive `Integer`. Raises `TypeError` for a range that
 /// is not a `Range`.
 pub(crate) fn position_query(
     ruby: &Ruby,
@@ -236,10 +235,10 @@ where
 }
 
 /// Translates a Ruby `Range`. A `nil` end is unbounded. An exclusive range
-/// excludes its end.
+/// excludes its end. A descending range is a valid empty range, so it selects
+/// nothing.
 fn range<T, F>(ruby: &Ruby, value: Value, convert: &F) -> Result<(Bound<T>, Bound<T>), Error>
 where
-    T: PartialOrd,
     F: Fn(&'static str, Value) -> Result<T, Error>,
 {
     let Some(range) = Range::from_value(value) else {
@@ -262,15 +261,6 @@ where
         (false, false) => Bound::Included(convert("range", high)?),
     };
 
-    if let (Bound::Included(low), Bound::Included(high) | Bound::Excluded(high)) = (&low, &high)
-        && low > high
-    {
-        return Err(argument_error(
-            ruby,
-            "range: expected an ascending Range; use a reverse traversal for descending order"
-                .to_owned(),
-        ));
-    }
     Ok((low, high))
 }
 

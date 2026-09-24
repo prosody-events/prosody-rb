@@ -37,7 +37,9 @@ RSpec.describe "Prosody keyed state queries", integration: true do
     [:pairs, :each_pair, {prefix: "b"}, [["b1", 2], ["b2", 3]]],
     [:reverse_pairs, :reverse_each_pair, {limit: 1}, [["c1", 4]]],
     [:values, :each_value, {prefix: "b"}, [2, 3]],
-    [:reverse_values, :reverse_each_value, {prefix: "a"}, [1, 0]]
+    [:reverse_values, :reverse_each_value, {prefix: "a"}, [1, 0]],
+    [:descending_range, :each_key, {range: "b".."a"}, []],
+    [:reverse_descending_range, :reverse_each_key, {range: "b".."a"}, []]
   ].freeze
 
   DEQUE_QUERIES = [
@@ -55,7 +57,9 @@ RSpec.describe "Prosody keyed state queries", integration: true do
     [:reverse_range, :reverse_each, {range: 1..3}, [13, 12, 11]],
     [:limit, :each, {limit: 2}, [10, 11]],
     [:reverse_limit, :reverse_each, {limit: 2}, [14, 13]],
-    [:page, :each, {after: 1, limit: 2}, [12, 13]]
+    [:page, :each, {after: 1, limit: 2}, [12, 13]],
+    [:descending_range, :each, {range: 3..1}, []],
+    [:reverse_descending_range, :reverse_each, {range: 3..1}, []]
   ].freeze
 
   # Each entry is [label, handle, query method, keywords, error class, message].
@@ -66,14 +70,12 @@ RSpec.describe "Prosody keyed state queries", integration: true do
     [:string_limit, :map, :each_key, {limit: "2"}, ArgumentError, /limit/],
     [:both_starts, :map, :each_key, {from: "a", after: "b"}, ArgumentError, /from.*after/],
     [:both_ends, :map, :each_pair, {to: "a", before: "b"}, ArgumentError, /to.*before/],
-    [:descending_keys, :map, :each_key, {range: "b".."a"}, ArgumentError, /ascending/],
     [:unknown_keyword, :map, :each_key, {bogus: 1}, ArgumentError, /unknown keyword: :bogus/],
     [:integer_key, :map, :each_key, {from: 1}, TypeError, /String/],
     [:range_type, :map, :each_key, {range: "a"}, TypeError, /Range/],
     [:negative_position, :deque, :each, {from: -1}, ArgumentError, /from.*non-negative/],
     [:fractional_position, :deque, :each, {before: 1.5}, ArgumentError, /before.*non-negative/],
     [:negative_range, :deque, :each, {range: -2..-1}, ArgumentError, /range.*non-negative/],
-    [:descending_positions, :deque, :reverse_each, {range: 3..1}, ArgumentError, /ascending/],
     [:deque_prefix, :deque, :each, {prefix: "x"}, ArgumentError, /unknown keyword: :prefix/]
   ].freeze
 

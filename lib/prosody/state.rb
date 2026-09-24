@@ -230,9 +230,10 @@ module Prosody
     # `prefix:`, and `limit:` over String keys. Deque traversals take the same
     # keywords without `prefix:`, over non-negative positions from the front.
     # `from:`/`after:` start and `to:`/`before:` stop in iteration order, so a
-    # reverse traversal starts at the high end. `range:` takes an ascending
-    # Ruby `Range` (inclusive, exclusive, beginless, or endless) in either
-    # direction. Every keyword narrows the selection. `limit:` counts yielded
+    # reverse traversal starts at the high end. `range:` takes a Ruby `Range`
+    # (inclusive, exclusive, beginless, or endless) in ascending order and
+    # applies in either direction. A descending `Range` is empty. Every
+    # keyword narrows the selection. `limit:` counts yielded
     # items. The native layer translates the keywords and raises
     # `ArgumentError` or `TypeError` for a bad one.
     module Scanning

@@ -656,7 +656,7 @@ Every traversal method accepts optional query keywords. Prosody applies them in 
 | --- | --- |
 | `from:` / `after:` | Starts at the key or position, or just after it, in iteration order |
 | `to:` / `before:` | Stops at the key or position, or just before it, in iteration order |
-| `range:` | Keeps keys or positions in an ascending Ruby `Range`: `"a".."m"`, `"a"..."m"`, `.."m"`, or `"a"..` |
+| `range:` | Keeps keys or positions in a Ruby `Range`: `"a".."m"`, `"a"..."m"`, `.."m"`, or `"a"..`. Write the range in ascending order; it applies in both directions. A descending range is empty |
 | `prefix:` | Keeps map keys or set members that start with the string |
 | `limit:` | Stops after this many items; a positive `Integer` |
 
