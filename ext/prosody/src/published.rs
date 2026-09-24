@@ -9,7 +9,9 @@ use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use prosody::high_level::erased::{SharedDequeReader, SharedMapReader, SharedValueReader};
+use prosody::high_level::erased::{
+    SharedDequeReader, SharedMapReader, SharedSetReader, SharedValueReader,
+};
 use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
 use std::sync::Arc;
@@ -142,6 +144,66 @@ impl NativePublishedMap {
     }
 }
 
+#[magnus::wrap(class = "Prosody::NativePublishedSet")]
+pub(crate) struct NativePublishedSet {
+    pub(crate) inner: SharedSetReader,
+    pub(crate) bridge: Bridge,
+    pub(crate) propagator: Arc<TextMapCompositePropagator>,
+}
+
+impl NativePublishedSet {
+    fn contains(ruby: &Ruby, this: &Self, key: String, member: String) -> Result<bool, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { inner.contains(key, member).await },
+                Span::current(),
+            )?
+            .map_err(|error| read_error(ruby, &error))
+    }
+
+    fn contains_many(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        members: Vec<String>,
+    ) -> Result<Vec<bool>, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { inner.contains_many(key, members).await },
+                Span::current(),
+            )?
+            .map_err(|error| read_error(ruby, &error))
+    }
+
+    fn is_empty(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { inner.is_empty(key).await },
+                Span::current(),
+            )?
+            .map_err(|error| read_error(ruby, &error))
+    }
+
+    /// Opens a member cursor. Members are bare `String` keys, so the map key
+    /// cursor carries them.
+    fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
+        let (key, direction, options) = published_scan_arguments(args)?;
+        let query = key_query(ruby, direction, options)?;
+        published_map_key_scan(
+            ruby,
+            this.inner.keys(key).with_query(query).stream(),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        )
+    }
+}
+
 #[magnus::wrap(class = "Prosody::NativePublishedDeque")]
 pub(crate) struct NativePublishedDeque {
     pub(crate) inner: SharedDequeReader<JsonValue>,
@@ -244,6 +306,15 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     map.define_method("is_empty", method!(NativePublishedMap::is_empty, 1))?;
     map.define_method("scan", method!(NativePublishedMap::scan, -1))?;
     map.define_method("keys", method!(NativePublishedMap::keys, -1))?;
+
+    let set = module.define_class(id!(ruby, "NativePublishedSet"), ruby.class_object())?;
+    set.define_method("contains", method!(NativePublishedSet::contains, 2))?;
+    set.define_method(
+        "contains_many",
+        method!(NativePublishedSet::contains_many, 2),
+    )?;
+    set.define_method("is_empty", method!(NativePublishedSet::is_empty, 1))?;
+    set.define_method("keys", method!(NativePublishedSet::keys, -1))?;
 
     let deque = module.define_class(id!(ruby, "NativePublishedDeque"), ruby.class_object())?;
     deque.define_method("get", method!(NativePublishedDeque::get, 2))?;

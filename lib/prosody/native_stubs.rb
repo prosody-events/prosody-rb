@@ -206,6 +206,19 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Vends the native set state handle for the named collection.
+    #
+    # Internal routing target for {Prosody::State::Vending#state}; prefer
+    # +context.state(definition)+.
+    #
+    # @param name [String] the registered collection name
+    # @return [NativeSetState] the native handle
+    # @raise [PermanentStateError] if the name is unregistered or mismatched
+    # @private
+    def set_state(name)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Vends the native deque JSON state handle for the named collection.
     #
     # Internal routing target for {Prosody::State::Vending#state}; prefer
@@ -533,6 +546,11 @@ module Prosody
     end
 
     # @private
+    def published_set(subsystem, name, read_cache, read_cache_disabled)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # @private
     def published_deque(subsystem, name, read_cache, read_cache_disabled)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -720,6 +738,90 @@ module Prosody
 
   class NativeMessageMapState
     include NativeMapOperations
+  end
+
+  # Native presence-only set handle, vended by the context and wrapped by
+  # {Prosody::SetState}. Every operation is fiber-yield async, except +#keys+,
+  # which opens the cursor synchronously; each native cursor pull yields the
+  # fiber.
+  #
+  # @see ext/prosody/src/handler/state/set.rs for implementation
+  class NativeSetState
+    # @private
+    def initialize
+      raise NotImplementedError, "This class is implemented natively in Rust"
+    end
+
+    # Whether a member belongs to the set.
+    #
+    # @param member [String]
+    # @return [Boolean]
+    def contains(member)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Tests several members in a single batch.
+    #
+    # @param members [Array<String>] the members to test, in order
+    # @return [Array<Boolean>] one result per input member
+    def contains_many(members)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Whether the set has no live members.
+    #
+    # @return [Boolean]
+    def is_empty
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Buffers an insert of a member.
+    #
+    # @param member [String]
+    # @return [void]
+    def insert(member)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Buffers a removal of a member. Removing an absent member does nothing.
+    #
+    # @param member [String]
+    # @return [void]
+    def remove(member)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Removes every member.
+    #
+    # @return [void]
+    def clear
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Opens a native ordered scan over the live members.
+    #
+    # @param direction [Symbol] +:forward+ or +:backward+
+    # @param query [Hash] optional query keywords (see {Prosody::State::Scanning})
+    # @return [NativeMapKeyScan] the native member cursor
+    # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def keys(direction, query = {})
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Durably commits the buffered operations mid-handler.
+    #
+    # @return [Symbol] +:applied+ or +:no_op+
+    def commit
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Discards the buffered uncommitted operations.
+    #
+    # @return [Symbol] +:applied+ or +:no_op+
+    def rollback
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
   end
 
   # Native deque keyed-state handle, vended by the context and wrapped by
@@ -924,6 +1026,25 @@ module Prosody
     end
 
     def scan(key, direction, query = {})
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def keys(key, direction, query = {})
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+  end
+
+  # @private
+  class NativePublishedSet
+    def contains(key, member)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def contains_many(key, members)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def is_empty(key)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 

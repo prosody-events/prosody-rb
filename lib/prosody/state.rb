@@ -36,7 +36,8 @@ module Prosody
   # An immutable keyed-state collection definition.
   #
   # Definitions are frozen value objects produced by the {Prosody.value},
-  # {Prosody.map}, {Prosody.deque}, and their `message_*` siblings. A definition
+  # {Prosody.map}, {Prosody.set}, {Prosody.deque}, and their `message_*`
+  # siblings. A definition
   # both serializes into `Configuration#state_collections` (via
   # {#to_state_config}) so the collection is registered before subscribe, and
   # drives {Prosody::Context#state} to vend the matching typed handle.
@@ -46,6 +47,8 @@ module Prosody
     published_vend_method: :published_value, published_wrapper: :PublishedValue)
   MAP_ACCESS = StateAccess.new(vend_method: :map_state, wrapper: :MapState,
     published_vend_method: :published_map, published_wrapper: :PublishedMap)
+  SET_ACCESS = StateAccess.new(vend_method: :set_state, wrapper: :SetState,
+    published_vend_method: :published_set, published_wrapper: :PublishedSet)
   DEQUE_ACCESS = StateAccess.new(vend_method: :deque_state, wrapper: :DequeState,
     published_vend_method: :published_deque, published_wrapper: :PublishedDeque)
   MESSAGE_VALUE_ACCESS = StateAccess.new(vend_method: :message_value_state, wrapper: :ValueState,
@@ -54,7 +57,7 @@ module Prosody
     published_vend_method: nil, published_wrapper: nil)
   MESSAGE_DEQUE_ACCESS = StateAccess.new(vend_method: :message_deque_state, wrapper: :DequeState,
     published_vend_method: nil, published_wrapper: nil)
-  private_constant :VALUE_ACCESS, :MAP_ACCESS, :DEQUE_ACCESS,
+  private_constant :VALUE_ACCESS, :MAP_ACCESS, :SET_ACCESS, :DEQUE_ACCESS,
     :MESSAGE_VALUE_ACCESS, :MESSAGE_MAP_ACCESS, :MESSAGE_DEQUE_ACCESS
 
   StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted,
@@ -99,6 +102,23 @@ module Prosody
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
       read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
       access: MAP_ACCESS)
+  end
+
+  # Defines a presence-only ordered set of String members. A set stores
+  # membership only, so it has no payload type.
+  #
+  # @param name [#to_s] the collection name (unique within the client)
+  # @param ttl [Integer, nil] optional per-write TTL in whole seconds
+  # @param keyset_limit [Integer, nil] optional keyset bound (`0..=4096`)
+  # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
+  # @param published [Boolean, nil] allow read-only access from other consumer groups
+  # @param read_cache [Numeric, false, nil] published-read cache override
+  # @return [StateDefinition] a frozen definition
+  def self.set(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
+    StateDefinition.new(name: name.to_s, kind: "set", payload: "presence",
+      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
+      read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
+      access: SET_ACCESS)
   end
 
   # Defines a deque JSON collection.
@@ -186,7 +206,7 @@ module Prosody
       # vends within one handler invocation return the same wrapper.
       #
       # @param definition [StateDefinition] a frozen collection definition
-      # @return [ValueState, MapState, DequeState] the typed handle
+      # @return [ValueState, MapState, SetState, DequeState] the typed handle
       # @raise [TransientStateError] if the definition's kind/payload is unknown
       # @raise [PermanentStateError] if the collection name is unregistered or
       #   its registered identity mismatches
@@ -205,9 +225,9 @@ module Prosody
     # only the per-item yield shape through the block. Kept private (mixed into
     # the handle classes) since it is not part of the public surface.
     #
-    # Every traversal method accepts optional query keywords. Map traversals
-    # take `from:`, `after:`, `to:`, `before:`, `range:`, `prefix:`, and
-    # `limit:` over String keys. Deque traversals take the same
+    # Every traversal method accepts optional query keywords. Map and set
+    # traversals take `from:`, `after:`, `to:`, `before:`, `range:`,
+    # `prefix:`, and `limit:` over String keys. Deque traversals take the same
     # keywords without `prefix:`, over non-negative positions from the front.
     # `from:`/`after:` start and `to:`/`before:` stop in iteration order, so a
     # reverse traversal starts at the high end. `range:` takes an ascending
@@ -877,3 +897,5 @@ module Prosody
     include State::Vending
   end
 end
+
+require_relative "state/set"

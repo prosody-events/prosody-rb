@@ -7,13 +7,13 @@
 use crate::bridge::Bridge;
 use crate::handler::state::{
     NativeJsonDequeState, NativeJsonMapState, NativeJsonValueState, NativeMessageDequeState,
-    NativeMessageMapState, NativeMessageValueState, state_error,
+    NativeMessageMapState, NativeMessageValueState, NativeSetState, state_error,
 };
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::value::ReprValue;
-use magnus::{Error, Module, RClass, Ruby, Value, method};
+use magnus::{Error, Module, RClass, RString, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::TimerType;
@@ -364,6 +364,23 @@ impl Context {
         ))
     }
 
+    /// Vends the handle for the named set collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    fn set_state(ruby: &Ruby, this: &Self, name: RString) -> Result<NativeSetState, Error> {
+        let handle = this
+            .inner
+            .set_state(&name.to_string()?)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeSetState::new(
+            Arc::from(handle),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
     /// Vends the handle for the named JSON deque collection.
     ///
     /// # Errors
@@ -488,6 +505,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     // Keyed-state vend methods
     class.define_method(id!(ruby, "value_state"), method!(Context::value_state, 1))?;
     class.define_method(id!(ruby, "map_state"), method!(Context::map_state, 1))?;
+    class.define_method(id!(ruby, "set_state"), method!(Context::set_state, 1))?;
     class.define_method(id!(ruby, "deque_state"), method!(Context::deque_state, 1))?;
     class.define_method(
         id!(ruby, "message_value_state"),

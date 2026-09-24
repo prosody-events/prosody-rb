@@ -484,12 +484,14 @@ deque_state!(
 );
 mod query;
 mod scan;
+mod set;
 
 pub(crate) use query::{key_query, position_query, published_scan_arguments, scan_arguments};
 pub(crate) use scan::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, NativeMessageDequeScan,
     NativeMessageMapScan, published_deque_scan, published_map_key_scan, published_map_scan,
 };
+pub(crate) use set::NativeSetState;
 mod registration;
 
 pub(crate) use registration::register;

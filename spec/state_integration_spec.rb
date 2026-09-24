@@ -152,6 +152,58 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
+  describe "set" do
+    it "wires every set method for owned and published sets", :aggregate_failures do
+      subsystem = "set-#{SecureRandom.hex(4)}"
+      definition = Prosody.set(random_state_name("set"), published: true, read_cache: false)
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definition)
+          @sink = sink
+          @def = definition
+        end
+
+        def on_message(context, _message)
+          set = context.state(@def)
+          observation = {empty_before: set.empty?}
+          set.add("b1") << "a1" << "a2" << "c1"
+          set.delete("c1").delete("absent")
+          observation[:empty_after] = set.empty?
+          observation[:include] = [set.include?("a1"), set.member?("c1")]
+          observation[:many] = set.contains_many(%w[a2 c1 b1])
+          observation[:members] = set.each.to_a
+          observation[:prefix] = set.each(prefix: "a").to_a
+          observation[:reverse] = set.reverse_each(after: "b1", limit: 1).to_a
+          observation[:commit] = set.commit
+          @sink.push(observation)
+        end
+      end
+
+      client = build_client(definition, subsystem: subsystem)
+      client.subscribe(handler_class.new(sink, definition))
+
+      client.send_message(topic, "k1", {go: true})
+      observation = sink.wait(1).first
+      expect(observation).to eq({
+        empty_before: true,
+        empty_after: false,
+        include: [true, false],
+        many: [true, false, true],
+        members: %w[a1 a2 b1],
+        prefix: %w[a1 a2],
+        reverse: %w[a2],
+        commit: :applied
+      })
+
+      reader = client.state(subsystem, definition)
+      expect(reader).to be_a(Prosody::PublishedSet)
+      expect([reader.include?("k1", "a1"), reader.member?("k1", "c1")]).to eq([true, false])
+      expect(reader.contains_many("k1", %w[b1 z])).to eq([true, false])
+      expect([reader.empty?("k1"), reader.empty?("k2")]).to eq([false, true])
+      expect(reader.each("k1", range: "a2"..).to_a).to eq(%w[a2 b1])
+      expect(reader.reverse_each("k1", prefix: "a").to_a).to eq(%w[a2 a1])
+    end
+  end
+
   describe "item 3: deque" do
     it "pushes, unshifts, scans, and pops from both ends" do
       definition = Prosody.deque(random_state_name("deq"))

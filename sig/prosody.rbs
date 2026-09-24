@@ -212,6 +212,7 @@ module Prosody
 
     def state: [T] (_ToS subsystem, _ValueDefinition[T] definition) -> PublishedValue[T]
              | [V] (_ToS subsystem, _MapDefinition[V] definition) -> PublishedMap[V]
+             | (_ToS subsystem, _SetDefinition definition) -> PublishedSet
              | [T] (_ToS subsystem, _DequeDefinition[T] definition) -> PublishedDeque[T]
   end
 end

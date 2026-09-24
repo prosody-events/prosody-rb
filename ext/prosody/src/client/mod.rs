@@ -13,7 +13,6 @@
 use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
-use crate::published::{NativePublishedDeque, NativePublishedMap, NativePublishedValue};
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ensure_runtime_context;
 use crate::{BRIDGE, ROOT_MOD, id};
@@ -45,6 +44,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Configuration types and conversion between Ruby and Rust representations
 mod config;
+mod readers;
 mod request;
 mod support;
 
@@ -400,82 +400,5 @@ impl Client {
     /// The source system identifier.
     fn source_system(this: &Self) -> &str {
         this.inner.source_system()
-    }
-
-    fn published_value(
-        ruby: &Ruby,
-        this: &Self,
-        subsystem: String,
-        name: String,
-        cache_seconds: Option<f64>,
-        cache_disabled: bool,
-    ) -> Result<NativePublishedValue, Error> {
-        Self::check_fork(ruby, this)?;
-        let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
-        let inner = this.inner.clone();
-        let reader = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.value_state(subsystem, name, cache).await },
-                Span::current(),
-            )?
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
-        Ok(NativePublishedValue {
-            inner: reader,
-            bridge: this.bridge.clone(),
-        })
-    }
-
-    fn published_map(
-        ruby: &Ruby,
-        this: &Self,
-        subsystem: String,
-        name: String,
-        cache_seconds: Option<f64>,
-        cache_disabled: bool,
-    ) -> Result<NativePublishedMap, Error> {
-        Self::check_fork(ruby, this)?;
-        let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
-        let inner = this.inner.clone();
-        let reader = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.map_state(subsystem, name, cache).await },
-                Span::current(),
-            )?
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
-        Ok(NativePublishedMap {
-            inner: reader,
-            bridge: this.bridge.clone(),
-            propagator: Arc::clone(&this.propagator),
-        })
-    }
-
-    fn published_deque(
-        ruby: &Ruby,
-        this: &Self,
-        subsystem: String,
-        name: String,
-        cache_seconds: Option<f64>,
-        cache_disabled: bool,
-    ) -> Result<NativePublishedDeque, Error> {
-        Self::check_fork(ruby, this)?;
-        let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
-        let inner = this.inner.clone();
-        let reader = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.deque_state(subsystem, name, cache).await },
-                Span::current(),
-            )?
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
-        Ok(NativePublishedDeque {
-            inner: reader,
-            bridge: this.bridge.clone(),
-            propagator: Arc::clone(&this.propagator),
-        })
     }
 }

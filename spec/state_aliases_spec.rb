@@ -269,6 +269,87 @@ RSpec.describe "keyed-state idiomatic aliases" do
     end
   end
 
+  describe Prosody::SetState do
+    # A fake native set backed by a Ruby Set. `keys` records its direction and
+    # query, and applies only `prefix:` and `limit:` so the forwarding is visible.
+    let(:set_native) do
+      cursor_class = cursor
+      Class.new do
+        attr_reader :scans
+
+        define_method(:initialize) do
+          @members = Set.new
+          @scans = []
+        end
+        def contains(member) = @members.include?(member)
+        def contains_many(members) = members.map { |member| @members.include?(member) }
+        def is_empty = @members.empty?
+
+        def insert(member)
+          @members.add(member)
+          nil
+        end
+
+        def remove(member)
+          @members.delete(member)
+          nil
+        end
+
+        def clear
+          @members.clear
+          nil
+        end
+
+        def commit = :applied
+        def rollback = :no_op
+
+        define_method(:keys) do |direction, query = {}|
+          @scans << [direction, query]
+          members = @members.sort
+          members = members.reverse if direction == :backward
+          members = members.select { |member| member.start_with?(query[:prefix]) } if query[:prefix]
+          members = members.first(query[:limit]) if query[:limit]
+          cursor_class.new(members)
+        end
+      end
+    end
+    let(:native) { set_native.new }
+    subject(:set) { Prosody::SetState.new(native) }
+
+    it "mirrors Set's writers, which return self for chaining" do
+      expect(set.add("b")).to equal(set)
+      expect(set << "a" << "c").to equal(set)
+      expect(set.delete("c")).to equal(set)
+      expect(set.delete("absent")).to equal(set)
+      expect(set.each.to_a).to eq(%w[a b])
+      expect(set.clear).to equal(set)
+      expect(set).to be_empty
+    end
+
+    it "mirrors Set's membership readers" do
+      set << "a" << "b"
+      expect(set.include?("a")).to be(true)
+      expect(set.member?("z")).to be(false)
+      expect(set.contains_many(%w[b z a])).to eq([true, false, true])
+      expect(set).not_to be_empty
+    end
+
+    it "forwards direction and query keywords to the native member scan" do
+      set << "a1" << "a2" << "b1"
+      expect(set.each(prefix: "a").to_a).to eq(%w[a1 a2])
+      expect(set.reverse_each(limit: 1).to_a).to eq(%w[b1])
+      collected = []
+      set.each { |member| collected << member }
+      expect(collected).to eq(%w[a1 a2 b1])
+      expect(native.scans).to eq([[:forward, {prefix: "a"}], [:backward, {limit: 1}], [:forward, {}]])
+    end
+
+    it "returns the native store outcomes from commit and rollback" do
+      expect(set.commit).to eq(:applied)
+      expect(set.rollback).to eq(:no_op)
+    end
+  end
+
   describe Prosody::DequeState do
     subject(:deque) { Prosody::DequeState.new(deque_native.new([10, 20, 30])) }
 

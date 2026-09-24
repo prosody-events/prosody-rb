@@ -627,9 +627,24 @@ State operations look synchronous. They yield the current fiber while Prosody pe
 | --- | --- | --- | --- |
 | Value | `Prosody.value` | `Prosody.message_value` | `get`, `set`, `clear` |
 | Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `contains_many`, `empty?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
+| Ordered string set | `Prosody.set` | - | `add` / `<<`, `delete`, `include?`, `contains_many`, `empty?`, `each`, `clear` |
 | Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
 
-Map and deque scans return enumerators when called without a block. Map keys are strings.
+Map, set, and deque scans return enumerators when called without a block. Map keys and set members are strings. A set stores membership only, so it has no payload type.
+
+A set handle mirrors Ruby's `Set`:
+
+```ruby
+SEEN_ORDERS = Prosody.set("seen-orders", ttl: 7 * 24 * 60 * 60)
+
+def on_message(context, message)
+  seen = context.state(SEEN_ORDERS)
+  return if seen.include?(message.payload["order_id"])
+
+  seen << message.payload["order_id"]
+  fulfill(message)
+end
+```
 
 `nil` means absence. Do not store this value. Use `clear` or `delete`.
 
@@ -642,10 +657,10 @@ Every traversal method accepts optional query keywords. Prosody applies them in 
 | `from:` / `after:` | Starts at the key or position, or just after it, in iteration order |
 | `to:` / `before:` | Stops at the key or position, or just before it, in iteration order |
 | `range:` | Keeps keys or positions in an ascending Ruby `Range`: `"a".."m"`, `"a"..."m"`, `.."m"`, or `"a"..` |
-| `prefix:` | Keeps map keys that start with the string |
+| `prefix:` | Keeps map keys or set members that start with the string |
 | `limit:` | Stops after this many items; a positive `Integer` |
 
-A reverse traversal starts at the high end. Keywords narrow the selection and never widen it. Pass at most one of `from:` and `after:`, and at most one of `to:` and `before:`. Deque positions count from the front and must be non-negative. Deques have no `prefix:`. A bad keyword raises `ArgumentError` or `TypeError`.
+A reverse traversal starts at the high end. Keywords narrow the selection and never widen it. Pass at most one of `from:` and `after:`, and at most one of `to:` and `before:`. Set traversals select members. Deque positions count from the front and must be non-negative. Deques have no `prefix:`. A bad keyword raises `ArgumentError` or `TypeError`.
 
 To read a map in pages, pass the last key of the previous page as `after:`:
 
@@ -704,7 +719,7 @@ current_order = order_reader.get("customer-123")
 
 The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
 
-Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block. Reader traversals accept the same [query keywords](#query-keywords) after the key.
+Map, set, and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block. Reader traversals accept the same [query keywords](#query-keywords) after the key.
 
 Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
 
@@ -1214,6 +1229,7 @@ Definition constructors (each returns a frozen definition object used both in `C
 
 - `Prosody.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
+- `Prosody.set(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
@@ -1227,9 +1243,11 @@ Published readers take the user key as their first argument. `Prosody::Published
 
 It provides `each` or `each_pair`, `each_key`, and `each_value`. The reverse methods are `reverse_each_pair`, `reverse_each_key`, and `reverse_each_value`.
 
+`Prosody::PublishedSet` provides `include?` or `member?`, `contains_many`, `empty?`, `each`, and `reverse_each`.
+
 `Prosody::PublishedDeque` provides `get`, `length` or `size`, `empty?`, `first`, `last`, `each`, and `reverse_each`.
 
-Traversal methods return an `Enumerator` without a block. Every traversal accepts the optional [query keywords](#query-keywords) `from:`, `after:`, `to:`, `before:`, `range:`, and `limit:`. Map traversals also accept `prefix:`.
+Traversal methods return an `Enumerator` without a block. Every traversal accepts the optional [query keywords](#query-keywords) `from:`, `after:`, `to:`, `before:`, `range:`, and `limit:`. Map and set traversals also accept `prefix:`.
 
 `Prosody::ValueState`:
 
@@ -1241,6 +1259,12 @@ Traversal methods return an `Enumerator` without a block. Every traversal accept
 - `key?`, `has_key?`, `include?`, `member?`, `contains_many`, `empty?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
 - `each` / `each_pair`, `each_key`, and `each_value`, including each reverse form
 - `commit` and `rollback`
+
+`Prosody::SetState` (members are `String`):
+
+- `add` / `<<`, `delete`, and `clear`, which return the set
+- `include?` / `member?`, `contains_many`, and `empty?`
+- `each` / `reverse_each`, `commit`, and `rollback`
 
 `Prosody::DequeState`:
 
