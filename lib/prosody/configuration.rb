@@ -336,25 +336,6 @@ module Prosody
     config_param :state_read_cache,
       converter: ->(v) { (v == true || v == false) ? v : Float(v) }
 
-    # Deprecated. Has no effect and always reads +nil+. Keyed-state recovery
-    # reads the commit evidence in each collection, so it needs no delay.
-    #
-    # @return [nil]
-    def state_recovery_delay = nil
-
-    # Deprecated. Ignores the value and emits a deprecation warning. Ruby
-    # shows the warning when deprecation warnings are on, for example with
-    # +-W:deprecated+.
-    #
-    # @param value [Numeric, nil] ignored
-    # @return [void]
-    def state_recovery_delay=(value)
-      return if value.nil?
-
-      warn "Prosody::Configuration#state_recovery_delay is deprecated and has no effect; remove it",
-        category: :deprecated
-    end
-
     # Operation mode of the client.
     #
     # Valid values:
