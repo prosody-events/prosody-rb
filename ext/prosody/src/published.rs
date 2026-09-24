@@ -2,12 +2,12 @@
 
 use crate::bridge::Bridge;
 use crate::handler::{
-    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, parse_direction,
-    published_deque_scan, published_map_key_scan, published_map_scan,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
+    published_deque_scan, published_map_key_scan, published_map_scan, published_scan_arguments,
 };
 use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
-use magnus::{Error, Module, Ruby, StaticSymbol, Value, method};
+use magnus::{Error, Module, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::high_level::erased::{SharedDequeReader, SharedMapReader, SharedValueReader};
 use serde_json::Value as JsonValue;
@@ -92,31 +92,23 @@ impl NativePublishedMap {
             .map_err(|error| read_error(ruby, &error))
     }
 
-    fn scan(
-        ruby: &Ruby,
-        this: &Self,
-        key: String,
-        direction: StaticSymbol,
-    ) -> Result<NativeJsonMapScan, Error> {
-        let direction = parse_direction(ruby, direction)?;
+    fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeJsonMapScan, Error> {
+        let (key, direction, options) = published_scan_arguments(args)?;
+        let query = key_query(ruby, direction, options)?;
         published_map_scan(
             ruby,
-            this.inner.entries(key).direction(direction).stream(),
+            this.inner.entries(key).with_query(query).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         )
     }
 
-    fn keys(
-        ruby: &Ruby,
-        this: &Self,
-        key: String,
-        direction: StaticSymbol,
-    ) -> Result<NativeMapKeyScan, Error> {
-        let direction = parse_direction(ruby, direction)?;
+    fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
+        let (key, direction, options) = published_scan_arguments(args)?;
+        let query = key_query(ruby, direction, options)?;
         published_map_key_scan(
             ruby,
-            this.inner.keys(key).direction(direction).stream(),
+            this.inner.keys(key).with_query(query).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         )
@@ -197,16 +189,12 @@ impl NativePublishedDeque {
         }
     }
 
-    fn scan(
-        ruby: &Ruby,
-        this: &Self,
-        key: String,
-        direction: StaticSymbol,
-    ) -> Result<NativeJsonDequeScan, Error> {
-        let direction = parse_direction(ruby, direction)?;
+    fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeJsonDequeScan, Error> {
+        let (key, direction, options) = published_scan_arguments(args)?;
+        let query = position_query(ruby, direction, options)?;
         published_deque_scan(
             ruby,
-            this.inner.values(key).direction(direction).stream(),
+            this.inner.values(key).with_query(query).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         )
@@ -222,8 +210,8 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     map.define_method("get", method!(NativePublishedMap::get, 2))?;
     map.define_method("get_many", method!(NativePublishedMap::get_many, 2))?;
     map.define_method("contains_key", method!(NativePublishedMap::contains_key, 2))?;
-    map.define_method("scan", method!(NativePublishedMap::scan, 2))?;
-    map.define_method("keys", method!(NativePublishedMap::keys, 2))?;
+    map.define_method("scan", method!(NativePublishedMap::scan, -1))?;
+    map.define_method("keys", method!(NativePublishedMap::keys, -1))?;
 
     let deque = module.define_class(id!(ruby, "NativePublishedDeque"), ruby.class_object())?;
     deque.define_method("get", method!(NativePublishedDeque::get, 2))?;
@@ -231,6 +219,6 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     deque.define_method("is_empty", method!(NativePublishedDeque::is_empty, 1))?;
     deque.define_method("peek_front", method!(NativePublishedDeque::peek_front, 1))?;
     deque.define_method("peek_back", method!(NativePublishedDeque::peek_back, 1))?;
-    deque.define_method("scan", method!(NativePublishedDeque::scan, 2))?;
+    deque.define_method("scan", method!(NativePublishedDeque::scan, -1))?;
     Ok(())
 }

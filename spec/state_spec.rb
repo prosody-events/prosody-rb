@@ -300,7 +300,7 @@ RSpec.describe "Prosody keyed state" do
       native.define_singleton_method(:get) { |_index| nil }
       native.define_singleton_method(:len) { 0 }
       native.define_singleton_method(:peek_back) { nil }
-      native.define_singleton_method(:scan) do |_direction|
+      native.define_singleton_method(:scan) do |_direction, _query = {}|
         scan = Object.new
         scan.define_singleton_method(:next) { nil }
         scan.define_singleton_method(:close) { nil }
@@ -336,7 +336,7 @@ RSpec.describe "Prosody keyed state" do
     # native handle.
     def fake_scanning_native(items)
       native = Object.new
-      native.define_singleton_method(:scan) do |_direction|
+      native.define_singleton_method(:scan) do |_direction, _query = {}|
         remaining = items.dup
         scan = Object.new
         scan.define_singleton_method(:next) { remaining.empty? ? nil : remaining.shift }
@@ -364,8 +364,8 @@ RSpec.describe "Prosody keyed state" do
       native = fake_scanning_native([])
       original_scan = native.method(:scan)
       native.define_singleton_method(:scan) do |*args|
-        directions << args.last
-        original_scan.call(args.last)
+        directions << args.grep(Symbol).last
+        original_scan.call(args.grep(Symbol).last)
       end
 
       Prosody::MapState.new(native).reverse_each_pair.to_a
@@ -377,11 +377,11 @@ RSpec.describe "Prosody keyed state" do
     it "gives published maps the owned read operations" do
       native = fake_scanning_native([["a", 1], ["b", 2]])
       scan = native.method(:scan)
-      native.define_singleton_method(:scan) { |_key, direction| scan.call(direction) }
+      native.define_singleton_method(:scan) { |_key, direction, _query| scan.call(direction) }
       native.define_singleton_method(:contains_key) { |key, map_key| [key, map_key] == ["user-1", "a"] }
       key_scan = []
       key_native = fake_scanning_native(["b", "a"])
-      native.define_singleton_method(:keys) do |key, direction|
+      native.define_singleton_method(:keys) do |key, direction, _query|
         key_scan << [key, direction]
         key_native.scan(direction)
       end

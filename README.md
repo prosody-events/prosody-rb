@@ -633,6 +633,32 @@ Map and deque scans return enumerators when called without a block. Map keys are
 
 `nil` means absence. Do not store this value. Use `clear` or `delete`.
 
+### Query keywords
+
+Every traversal method accepts optional query keywords. Prosody applies them in storage, so a query reads only the selected entries. The `each_*` methods iterate forward. The `reverse_each*` methods iterate backward.
+
+| Keyword | Selects |
+| --- | --- |
+| `from:` / `after:` | Starts at the key or position, or just after it, in iteration order |
+| `to:` / `before:` | Stops at the key or position, or just before it, in iteration order |
+| `range:` | Keeps keys or positions in an ascending Ruby `Range`: `"a".."m"`, `"a"..."m"`, `.."m"`, or `"a"..` |
+| `prefix:` | Keeps map keys that start with the string |
+| `limit:` | Stops after this many items; a positive `Integer` |
+
+A reverse traversal starts at the high end. Keywords narrow the selection and never widen it. Pass at most one of `from:` and `after:`, and at most one of `to:` and `before:`. Deque positions count from the front and must be non-negative. Deques have no `prefix:`. A bad keyword raises `ArgumentError` or `TypeError`.
+
+To read a map in pages, pass the last key of the previous page as `after:`:
+
+```ruby
+page = map.each_pair(prefix: "order:", limit: 100).to_a
+until page.empty?
+  page.each { |key, order| archive(key, order) }
+  page = map.each_pair(prefix: "order:", after: page.last.first, limit: 100).to_a
+end
+```
+
+The same pattern works backward with `reverse_each_pair`.
+
 ### When keyed-state changes become visible
 
 By default, retries do not see pending state from a failed attempt. Reads in a handler see its earlier keyed-state writes. Prosody commits pending changes when the event succeeds and discards them when the handler raises.
@@ -676,7 +702,7 @@ current_order = order_reader.get("customer-123")
 
 The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
 
-Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block.
+Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block. Reader traversals accept the same [query keywords](#query-keywords) after the key.
 
 Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
 
@@ -1201,7 +1227,7 @@ It provides `each` or `each_pair`, `each_key`, and `each_value`. The reverse met
 
 `Prosody::PublishedDeque` provides `get`, `length` or `size`, `empty?`, `first`, `last`, `each`, and `reverse_each`.
 
-Traversal methods return an `Enumerator` without a block.
+Traversal methods return an `Enumerator` without a block. Every traversal accepts the optional [query keywords](#query-keywords) `from:`, `after:`, `to:`, `before:`, `range:`, and `limit:`. Map traversals also accept `prefix:`.
 
 `Prosody::ValueState`:
 

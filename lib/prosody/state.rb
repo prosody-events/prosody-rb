@@ -204,17 +204,27 @@ module Prosody
     # identical native-scan open/close/exhaustion loop; each handle supplies
     # only the per-item yield shape through the block. Kept private (mixed into
     # the handle classes) since it is not part of the public surface.
+    #
+    # Every traversal method accepts optional query keywords. Map traversals
+    # take `from:`, `after:`, `to:`, `before:`, `range:`, `prefix:`, and
+    # `limit:` over String keys. Deque traversals take the same
+    # keywords without `prefix:`, over non-negative positions from the front.
+    # `from:`/`after:` start and `to:`/`before:` stop in iteration order, so a
+    # reverse traversal starts at the high end. `range:` takes an ascending
+    # Ruby `Range` (inclusive, exclusive, beginless, or endless) in either
+    # direction. Every keyword narrows the selection. `limit:` counts yielded
+    # items. The native layer translates the keywords and raises
+    # `ArgumentError` or `TypeError` for a bad one.
     module Scanning
       private
 
-      # Opens a native scan in `direction`, yields each item, and closes the
-      # scan via `ensure` on stop or exception. Direction validity is enforced
-      # by the native layer (an invalid token is rejected transient there); the
-      # public traversal methods only ever pass `:forward`/`:backward`. `opener`
+      # Opens a native scan in `direction` with the `query` keywords, yields
+      # each item, and closes the scan via `ensure` on stop or exception. The
+      # public traversal methods only pass `:forward`/`:backward`. `opener`
       # selects the native cursor seam — the default `:scan` yields values (or
-      # `[key, value]` pairs), `:keys` yields bare map keys.
-      def scan_each(direction, opener = :scan)
-        scan_items(@native.public_send(opener, direction)) { |item| yield item }
+      # `[key, value]` pairs), `:keys` yields bare keys.
+      def scan_each(direction, query, opener = :scan)
+        scan_items(@native.public_send(opener, direction, query)) { |item| yield item }
       end
 
       def scan_items(scan)
@@ -251,32 +261,33 @@ module Prosody
     alias_method :include?, :key?
     alias_method :member?, :key?
 
-    def each_pair(key, &block) = traverse(key, :forward, &block)
-    def reverse_each_pair(key, &block) = traverse(key, :backward, &block)
-    def each_key(key, &block) = traverse_keys(key, :forward, &block)
-    def reverse_each_key(key, &block) = traverse_keys(key, :backward, &block)
-    def each_value(key, &block) = traverse_values(key, :forward, &block)
-    def reverse_each_value(key, &block) = traverse_values(key, :backward, &block)
+    # Each traversal accepts the query keywords documented on {State::Scanning}.
+    def each_pair(key, **query, &block) = traverse(key, :forward, query, &block)
+    def reverse_each_pair(key, **query, &block) = traverse(key, :backward, query, &block)
+    def each_key(key, **query, &block) = traverse_keys(key, :forward, query, &block)
+    def reverse_each_key(key, **query, &block) = traverse_keys(key, :backward, query, &block)
+    def each_value(key, **query, &block) = traverse_values(key, :forward, query, &block)
+    def reverse_each_value(key, **query, &block) = traverse_values(key, :backward, query, &block)
     alias_method :each, :each_pair
 
     private
 
-    def traverse(key, direction)
-      return enum_for(__method__, key, direction) unless block_given?
+    def traverse(key, direction, query)
+      return enum_for(__method__, key, direction, query) unless block_given?
 
-      scan_items(@native.scan(key.to_s, direction)) { |entry| yield(*entry) }
+      scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield(*entry) }
     end
 
-    def traverse_keys(key, direction)
-      return enum_for(__method__, key, direction) unless block_given?
+    def traverse_keys(key, direction, query)
+      return enum_for(__method__, key, direction, query) unless block_given?
 
-      scan_items(@native.keys(key.to_s, direction)) { |map_key| yield map_key }
+      scan_items(@native.keys(key.to_s, direction, query)) { |map_key| yield map_key }
     end
 
-    def traverse_values(key, direction)
-      return enum_for(__method__, key, direction) unless block_given?
+    def traverse_values(key, direction, query)
+      return enum_for(__method__, key, direction, query) unless block_given?
 
-      scan_items(@native.scan(key.to_s, direction)) { |entry| yield entry[1] }
+      scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield entry[1] }
     end
   end
 
@@ -303,15 +314,17 @@ module Prosody
     def first(key) = @native.peek_front(key.to_s)
     def last(key) = @native.peek_back(key.to_s)
 
-    def each(key, &block) = traverse(key, :forward, &block)
-    def reverse_each(key, &block) = traverse(key, :backward, &block)
+    # Each traversal accepts the position keywords documented on
+    # {State::Scanning}.
+    def each(key, **query, &block) = traverse(key, :forward, query, &block)
+    def reverse_each(key, **query, &block) = traverse(key, :backward, query, &block)
 
     private
 
-    def traverse(key, direction)
-      return enum_for(__method__, key, direction) unless block_given?
+    def traverse(key, direction, query)
+      return enum_for(__method__, key, direction, query) unless block_given?
 
-      scan_items(@native.scan(key.to_s, direction)) { |item| yield item }
+      scan_items(@native.scan(key.to_s, direction, query)) { |item| yield item }
     end
   end
 
@@ -434,17 +447,25 @@ module Prosody
     # fiber-yields; the scan is closed via `ensure` on stop or exception. The
     # enumerator is valid only within the current handler invocation.
     #
+    # Every map traversal accepts the query keywords documented on
+    # {State::Scanning}. For keyset paging, pass the last key of the previous
+    # page as `after:` and the page size as `limit:`.
+    #
+    # @param query [Hash] optional `from:`, `after:`, `to:`, `before:`,
+    #   `range:`, `prefix:`, and `limit:` keywords
     # @yieldparam key [String]
     # @yieldparam value [Object]
     # @return [Enumerator, void]
-    def each_pair(&block) = traverse(:forward, &block)
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def each_pair(**query, &block) = traverse(:forward, query, &block)
 
     # Traverses the live entries in reverse key order, yielding `key, value`.
     #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
     # @yieldparam key [String]
     # @yieldparam value [Object]
     # @return [Enumerator, void]
-    def reverse_each_pair(&block) = traverse(:backward, &block)
+    def reverse_each_pair(**query, &block) = traverse(:backward, query, &block)
 
     # Traverses the live keys in key order, yielding each key (mirrors
     # +Hash#each_key+). The key scan skips value decode and the resolver — a
@@ -454,17 +475,31 @@ module Prosody
     # keyset). Mirrors {#each_pair}'s block-form return (+nil+), not stdlib's
     # +self+, for in-repo sibling consistency.
     #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
     # @yieldparam key [String]
     # @return [Enumerator, void]
-    def each_key(&block) = traverse_keys(:forward, &block)
+    def each_key(**query, &block) = traverse_keys(:forward, query, &block)
 
     # Traverses the live keys in reverse key order, yielding each key.
     #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
     # @yieldparam key [String]
     # @return [Enumerator, void]
-    def reverse_each_key(&block) = traverse_keys(:backward, &block)
-    def each_value(&block) = traverse_values(:forward, &block)
-    def reverse_each_value(&block) = traverse_values(:backward, &block)
+    def reverse_each_key(**query, &block) = traverse_keys(:backward, query, &block)
+
+    # Traverses the live values in key order (mirrors +Hash#each_value+).
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam value [Object]
+    # @return [Enumerator, void]
+    def each_value(**query, &block) = traverse_values(:forward, query, &block)
+
+    # Traverses the live values in reverse key order.
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam value [Object]
+    # @return [Enumerator, void]
+    def reverse_each_value(**query, &block) = traverse_values(:backward, query, &block)
 
     # --- idiomatic Hash-style aliases and conveniences ------------------
     # Each is composed from the canonical ops above and adds no capability
@@ -587,25 +622,25 @@ module Prosody
 
     private
 
-    def traverse(direction)
-      return enum_for(:traverse, direction) unless block_given?
+    def traverse(direction, query)
+      return enum_for(:traverse, direction, query) unless block_given?
 
       # Yield the [key, value] pair as a single Array, matching Hash#each_pair:
       # a two-parameter block auto-splats it (|k, v|), a one-parameter block
       # receives the pair (|pair|), and the no-block Enumerator yields pairs.
-      scan_each(direction) { |pair| yield pair }
+      scan_each(direction, query) { |pair| yield pair }
     end
 
-    def traverse_keys(direction)
-      return enum_for(:traverse_keys, direction) unless block_given?
+    def traverse_keys(direction, query)
+      return enum_for(:traverse_keys, direction, query) unless block_given?
 
-      scan_each(direction, :keys) { |key| yield key }
+      scan_each(direction, query, :keys) { |key| yield key }
     end
 
-    def traverse_values(direction)
-      return enum_for(:traverse_values, direction) unless block_given?
+    def traverse_values(direction, query)
+      return enum_for(:traverse_values, direction, query) unless block_given?
 
-      scan_each(direction) { |entry| yield entry[1] }
+      scan_each(direction, query) { |entry| yield entry[1] }
     end
   end
 
@@ -695,15 +730,23 @@ module Prosody
     # Without a block, returns an {Enumerator} over the native scan. Each step
     # fiber-yields; the scan is closed via `ensure` on stop or exception.
     #
+    # Accepts the position keywords documented on {State::Scanning}. Positions
+    # count from the front and must be non-negative. To read from the back,
+    # use {#reverse_each} with `limit:`.
+    #
+    # @param query [Hash] optional `from:`, `after:`, `to:`, `before:`,
+    #   `range:`, and `limit:` keywords
     # @yieldparam element [Object]
     # @return [Enumerator, void]
-    def each(&block) = traverse(:forward, &block)
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def each(**query, &block) = traverse(:forward, query, &block)
 
     # Traverses the live elements in reverse index order.
     #
+    # @param query [Hash] optional position keywords, as on {#each}
     # @yieldparam element [Object]
     # @return [Enumerator, void]
-    def reverse_each(&block) = traverse(:backward, &block)
+    def reverse_each(**query, &block) = traverse(:backward, query, &block)
 
     # --- idiomatic Array-style conveniences -----------------------------
     # Composed from the canonical ops above; bounded reads only (no +to_a+,
@@ -802,10 +845,10 @@ module Prosody
       resolved.negative? ? nil : @native.get(resolved)
     end
 
-    def traverse(direction)
-      return enum_for(:traverse, direction) unless block_given?
+    def traverse(direction, query)
+      return enum_for(:traverse, direction, query) unless block_given?
 
-      scan_each(direction) { |item| yield item }
+      scan_each(direction, query) { |item| yield item }
     end
   end
 

@@ -21,6 +21,7 @@ class TypedOrderHandler < Prosody::EventHandler
     backlog = context.state(ORDER_BACKLOG)
     backlog.push(message)
     oldest = backlog.first
+    backlog.reverse_each(range: 0..9, limit: 2) { |pending| pending.payload["order_id"].upcase }
 
     # This call is a regression constraint: state(ORDER_TOTALS) must infer as
     # MapState[Integer], not untyped or a generic JSON-valued state handle.
@@ -43,6 +44,9 @@ class TypedOrderHandler < Prosody::EventHandler
 
   def consume_totals(totals)
     totals.set("latest", 1)
+    # Query keywords keep the item types.
+    totals.each_key(prefix: "order:", after: "order:1", limit: 10) { |key| key.upcase }
+    totals.reverse_each_value(range: "a"..."m").each { |total| total + 1 }
     nil
   end
 end

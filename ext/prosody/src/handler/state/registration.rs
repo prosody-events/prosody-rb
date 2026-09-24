@@ -31,8 +31,8 @@ macro_rules! register_map {
         class.define_method(id!($ruby, "set"), method!(<$type>::set, 2))?;
         class.define_method(id!($ruby, "remove"), method!(<$type>::remove, 1))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
-        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, 1))?;
-        class.define_method(id!($ruby, "keys"), method!(<$type>::keys, 1))?;
+        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, -1))?;
+        class.define_method(id!($ruby, "keys"), method!(<$type>::keys, -1))?;
         class.define_method(id!($ruby, "commit"), method!(<$type>::commit, 0))?;
         class.define_method(id!($ruby, "rollback"), method!(<$type>::rollback, 0))?;
     }};
@@ -51,7 +51,7 @@ macro_rules! register_deque {
         class.define_method(id!($ruby, "pop_front"), method!(<$type>::pop_front, 0))?;
         class.define_method(id!($ruby, "pop_back"), method!(<$type>::pop_back, 0))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
-        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, 1))?;
+        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, -1))?;
         class.define_method(id!($ruby, "commit"), method!(<$type>::commit, 0))?;
         class.define_method(id!($ruby, "rollback"), method!(<$type>::rollback, 0))?;
     }};

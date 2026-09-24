@@ -663,9 +663,11 @@ module Prosody
     # Opens a native ordered scan over the live entries.
     #
     # @param direction [Symbol] +:forward+ or +:backward+
+    # @param query [Hash] optional query keywords (see {Prosody::State::Scanning})
     # @return [Object] the native cursor
     # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
-    def scan(direction)
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def scan(direction, query = {})
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -674,9 +676,11 @@ module Prosody
     # with zero Kafka fetches), though not no-I/O.
     #
     # @param direction [Symbol] +:forward+ or +:backward+
+    # @param query [Hash] optional query keywords (see {Prosody::State::Scanning})
     # @return [NativeMapKeyScan] the native key cursor
     # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
-    def keys(direction)
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def keys(direction, query = {})
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -798,9 +802,11 @@ module Prosody
     # Opens a native scan over the live elements.
     #
     # @param direction [Symbol] +:forward+ or +:backward+
+    # @param query [Hash] optional position keywords (see {Prosody::State::Scanning})
     # @return [Object] the native cursor
     # @raise [TransientStateError] if direction is not +:forward+ or +:backward+
-    def scan(direction)
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def scan(direction, query = {})
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -894,11 +900,11 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
-    def scan(key, direction)
+    def scan(key, direction, query = {})
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
-    def keys(key, direction)
+    def keys(key, direction, query = {})
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end
@@ -925,7 +931,7 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
-    def scan(key, direction)
+    def scan(key, direction, query = {})
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end

@@ -15,14 +15,13 @@ use crate::bridge::Bridge;
 use crate::handler::message::Message;
 use crate::tracing_util::extract_opentelemetry_context;
 use magnus::value::{Lazy, ReprValue};
-use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, StaticSymbol, TryConvert, Value};
+use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, TryConvert, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::{
     DynDequeState, DynMapState, DynValueState, ErasedCategory, ErasedStateError,
 };
 use prosody::consumer::message::ConsumerMessage;
-use prosody::state::Direction;
 use serde_json::Value as JsonValue;
 use serde_magnus::{deserialize, serialize};
 use std::sync::Arc;
@@ -138,20 +137,6 @@ fn message_write_item(
         transient_state_error(ruby, format!("expected a Prosody::Message{shape_advice}"))
     })?;
     Ok(message.consumer_message())
-}
-
-/// Parses a scan-direction token into the core [`Direction`].
-///
-/// An invalid token is a caller mistake and rejects transient.
-pub(crate) fn parse_direction(ruby: &Ruby, direction: StaticSymbol) -> Result<Direction, Error> {
-    match direction.name()? {
-        "forward" => Ok(Direction::Forward),
-        "backward" => Ok(Direction::Backward),
-        other => Err(transient_state_error(
-            ruby,
-            format!("direction: expected :forward or :backward, got :{other}"),
-        )),
-    }
 }
 
 /// Drives an erased async op that returns `Result<_, ErasedStateError>` through
@@ -310,25 +295,23 @@ macro_rules! map_state {
                 Ok(ruby.qnil().as_value())
             }
 
-            fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<$scan, Error> {
-                let direction = parse_direction(ruby, direction)?;
+            fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
+                let (direction, options) = scan_arguments(args)?;
+                let query = key_query(ruby, direction, options)?;
                 $scan::new(
                     ruby,
-                    this.state.entries().direction(direction).stream(),
+                    this.state.entries().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
             }
 
-            fn keys(
-                ruby: &Ruby,
-                this: &Self,
-                direction: StaticSymbol,
-            ) -> Result<NativeMapKeyScan, Error> {
-                let direction = parse_direction(ruby, direction)?;
+            fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
+                let (direction, options) = scan_arguments(args)?;
+                let query = key_query(ruby, direction, options)?;
                 NativeMapKeyScan::new(
                     ruby,
-                    this.state.keys().direction(direction).stream(),
+                    this.state.keys().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
@@ -435,11 +418,12 @@ macro_rules! deque_state {
                 Ok(ruby.qnil().as_value())
             }
 
-            fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<$scan, Error> {
-                let direction = parse_direction(ruby, direction)?;
+            fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
+                let (direction, options) = scan_arguments(args)?;
+                let query = position_query(ruby, direction, options)?;
                 $scan::new(
                     ruby,
-                    this.state.values().direction(direction).stream(),
+                    this.state.values().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
@@ -474,8 +458,10 @@ deque_state!(
     |ruby, value| message_write_item(ruby, value, " to push into a message deque"),
     message_or_nil
 );
+mod query;
 mod scan;
 
+pub(crate) use query::{key_query, position_query, published_scan_arguments, scan_arguments};
 pub(crate) use scan::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, NativeMessageDequeScan,
     NativeMessageMapScan, published_deque_scan, published_map_key_scan, published_map_scan,
