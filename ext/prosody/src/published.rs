@@ -81,6 +81,33 @@ impl NativePublishedMap {
         serialize(ruby, &values)
     }
 
+    fn contains_many(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        map_keys: Vec<String>,
+    ) -> Result<Vec<bool>, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { inner.contains_many(key, map_keys).await },
+                Span::current(),
+            )?
+            .map_err(|error| read_error(ruby, &error))
+    }
+
+    fn is_empty(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.bridge
+            .wait_for(
+                ruby,
+                async move { inner.is_empty(key).await },
+                Span::current(),
+            )?
+            .map_err(|error| read_error(ruby, &error))
+    }
+
     fn contains_key(ruby: &Ruby, this: &Self, key: String, map_key: String) -> Result<bool, Error> {
         let inner = Arc::clone(&this.inner);
         this.bridge
@@ -210,6 +237,11 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     map.define_method("get", method!(NativePublishedMap::get, 2))?;
     map.define_method("get_many", method!(NativePublishedMap::get_many, 2))?;
     map.define_method("contains_key", method!(NativePublishedMap::contains_key, 2))?;
+    map.define_method(
+        "contains_many",
+        method!(NativePublishedMap::contains_many, 2),
+    )?;
+    map.define_method("is_empty", method!(NativePublishedMap::is_empty, 1))?;
     map.define_method("scan", method!(NativePublishedMap::scan, -1))?;
     map.define_method("keys", method!(NativePublishedMap::keys, -1))?;
 

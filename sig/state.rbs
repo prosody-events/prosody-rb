@@ -132,6 +132,8 @@ module Prosody
 
     def get: (String key) -> V?
     def get_many: (Array[String] keys) -> Array[V?]
+    def contains_many: (Array[String] keys) -> Array[bool]
+    def empty?: () -> bool
     def set: (String key, V value) -> void
     def delete: (String key) -> nil
     def clear: () -> void
@@ -240,7 +242,9 @@ module Prosody
   interface _NativeMapHandle[V, S]
     def get: (String key) -> V?
     def contains_key: (String key) -> bool
+    def is_empty: () -> bool
     def get_many: (Array[String] keys) -> Array[V?]
+    def contains_many: (Array[String] keys) -> Array[bool]
     def set: (String key, V value) -> void
     def remove: (String key) -> void
     def clear: () -> void
@@ -315,6 +319,8 @@ module Prosody
     def get: (String key, String map_key) -> json_value?
     def get_many: (String key, Array[String] map_keys) -> Array[json_value?]
     def contains_key: (String key, String map_key) -> bool
+    def contains_many: (String key, Array[String] map_keys) -> Array[bool]
+    def is_empty: (String key) -> bool
     def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonMapScan
     def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
   end
@@ -339,6 +345,8 @@ module Prosody
     alias has_key? key?
     alias include? key?
     alias member? key?
+    def contains_many: (_ToS key, Array[_ToS] map_keys) -> Array[bool]
+    def empty?: (_ToS key) -> bool
     def each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
                  | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
     def reverse_each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void

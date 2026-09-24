@@ -284,11 +284,23 @@ macro_rules! map_state {
                 Ok(run_op!(ruby, this, &this.state, contains_key(key))?.into_value_with(ruby))
             }
 
+            fn is_empty(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+                run_op!(ruby, this, &this.state, is_empty())
+            }
+
             fn get_many(ruby: &Ruby, this: &Self, keys: Vec<String>) -> Result<Value, Error> {
                 let items = run_op!(ruby, this, &this.state, get_many(keys))?;
                 let array =
                     ruby.ary_try_from_iter(items.into_iter().map(|item| ($restore)(ruby, item)))?;
                 Ok(array.as_value())
+            }
+
+            fn contains_many(
+                ruby: &Ruby,
+                this: &Self,
+                keys: Vec<String>,
+            ) -> Result<Vec<bool>, Error> {
+                run_op!(ruby, this, &this.state, contains_many(keys))
             }
 
             fn set(ruby: &Ruby, this: &Self, key: String, value: Value) -> Result<Value, Error> {

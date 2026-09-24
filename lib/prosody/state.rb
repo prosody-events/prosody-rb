@@ -260,6 +260,8 @@ module Prosody
     alias_method :has_key?, :key?
     alias_method :include?, :key?
     alias_method :member?, :key?
+    def contains_many(key, map_keys) = @native.contains_many(key.to_s, map_keys.map(&:to_s))
+    def empty?(key) = @native.is_empty(key.to_s)
 
     # Each traversal accepts the query keywords documented on {State::Scanning}.
     def each_pair(key, **query, &block) = traverse(key, :forward, query, &block)
@@ -407,6 +409,18 @@ module Prosody
     # @param keys [Array<String>] the keys to read, in order
     # @return [Array<Object, nil>] one result per input key; `nil` for absent keys
     def get_many(keys) = @native.get_many(keys)
+
+    # Tests several keys for presence in a single batch. Like {#key?}, it
+    # decodes no values.
+    #
+    # @param keys [Array<String>] the keys to test, in order
+    # @return [Array<Boolean>] one result per input key
+    def contains_many(keys) = @native.contains_many(keys)
+
+    # Whether the map holds no live entries (mirrors +Hash#empty?+).
+    #
+    # @return [Boolean]
+    def empty? = @native.is_empty
 
     # Inserts or overwrites `key`.
     #

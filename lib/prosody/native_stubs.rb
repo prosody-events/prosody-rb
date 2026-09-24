@@ -626,11 +626,26 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Whether the map holds no live entries.
+    #
+    # @return [Boolean]
+    def is_empty
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Reads several keys in a single isolated batch.
     #
     # @param keys [Array<String>] the keys to read, in order
     # @return [Array<Object, nil>] one result per input key
     def get_many(keys)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Tests several keys for presence in a single batch, without value decode.
+    #
+    # @param keys [Array<String>] the keys to test, in order
+    # @return [Array<Boolean>] one result per input key
+    def contains_many(keys)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -897,6 +912,14 @@ module Prosody
     end
 
     def contains_key(key, map_key)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def contains_many(key, map_keys)
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    def is_empty(key)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 

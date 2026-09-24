@@ -116,6 +116,42 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
+  describe "map emptiness and batch presence" do
+    it "reports emptiness and batch presence for owned and published maps" do
+      subsystem = "presence-#{SecureRandom.hex(4)}"
+      definition = Prosody.map(random_state_name("map"), published: true, read_cache: false)
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definition)
+          @sink = sink
+          @def = definition
+        end
+
+        def on_message(context, _message)
+          map = context.state(@def)
+          empty_before = map.empty?
+          map.set("a", 1)
+          map.set("b", false)
+          empty_after = map.empty?
+          present = map.contains_many(%w[a x b a])
+          map.commit
+          @sink.push({empty_before: empty_before, empty_after: empty_after, present: present})
+        end
+      end
+
+      client = build_client(definition, subsystem: subsystem)
+      client.subscribe(handler_class.new(sink, definition))
+
+      client.send_message(topic, "k1", {go: true})
+      observation = sink.wait(1).first
+      expect(observation).to eq({empty_before: true, empty_after: false, present: [true, false, true, true]})
+
+      reader = client.state(subsystem, definition)
+      expect(reader.empty?("k1")).to be(false)
+      expect(reader.empty?("k2")).to be(true)
+      expect(reader.contains_many("k1", %w[x b a])).to eq([false, true, true])
+    end
+  end
+
   describe "item 3: deque" do
     it "pushes, unshifts, scans, and pops from both ends" do
       definition = Prosody.deque(random_state_name("deq"))

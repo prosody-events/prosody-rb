@@ -626,7 +626,7 @@ State operations look synchronous. They yield the current fiber while Prosody pe
 | Collection | JSON payload | Kafka message | Main operations |
 | --- | --- | --- | --- |
 | Value | `Prosody.value` | `Prosody.message_value` | `get`, `set`, `clear` |
-| Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
+| Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `contains_many`, `empty?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
 | Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
 
 Map and deque scans return enumerators when called without a block. Map keys are strings.
@@ -1223,7 +1223,7 @@ Each constructor returns a `StateDefinition`. It exposes `name`, `kind`, `payloa
 
 Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`.
 
-`Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, and `member?`.
+`Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, `member?`, `contains_many`, and `empty?`.
 
 It provides `each` or `each_pair`, `each_key`, and `each_value`. The reverse methods are `reverse_each_pair`, `reverse_each_key`, and `reverse_each_value`.
 
@@ -1238,7 +1238,7 @@ Traversal methods return an `Enumerator` without a block. Every traversal accept
 `Prosody::MapState` (keys are `String`):
 
 - `get` / `[]`, `get_many`, `set` / `[]=`, `store`, `delete`, and `clear`
-- `key?`, `has_key?`, `include?`, `member?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
+- `key?`, `has_key?`, `include?`, `member?`, `contains_many`, `empty?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
 - `each` / `each_pair`, `each_key`, and `each_value`, including each reverse form
 - `commit` and `rollback`
 

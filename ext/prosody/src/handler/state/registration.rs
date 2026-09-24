@@ -27,7 +27,12 @@ macro_rules! register_map {
             id!($ruby, "contains_key"),
             method!(<$type>::contains_key, 1),
         )?;
+        class.define_method(id!($ruby, "is_empty"), method!(<$type>::is_empty, 0))?;
         class.define_method(id!($ruby, "get_many"), method!(<$type>::get_many, 1))?;
+        class.define_method(
+            id!($ruby, "contains_many"),
+            method!(<$type>::contains_many, 1),
+        )?;
         class.define_method(id!($ruby, "set"), method!(<$type>::set, 2))?;
         class.define_method(id!($ruby, "remove"), method!(<$type>::remove, 1))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
