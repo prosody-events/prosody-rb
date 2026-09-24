@@ -5,6 +5,7 @@
 
 ORDER_BACKLOG = Prosody.message_deque("order-backlog")
 ORDER_TOTALS = Prosody.map("order-totals")
+ORDER_IDS = Prosody.set("order-ids")
 
 class TypedOrderHandler < Prosody::EventHandler
   def on_excise(_context, message)
@@ -28,6 +29,11 @@ class TypedOrderHandler < Prosody::EventHandler
     # This call is a regression constraint: state(ORDER_TOTALS) must infer as
     # MapState[Integer], not untyped or a generic JSON-valued state handle.
     consume_totals(context.state(ORDER_TOTALS))
+
+    # A set handle takes and yields String members.
+    order_ids = context.state(ORDER_IDS)
+    order_ids << order_id unless order_ids.include?(order_id)
+    order_ids.each(prefix: "order-", limit: 5) { |id| id.upcase }
 
     consume_order(order_id, total)
     oldest_payload = oldest&.payload
