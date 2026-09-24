@@ -312,7 +312,6 @@ macro_rules! map_state {
 
             fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<$scan, Error> {
                 let direction = parse_direction(ruby, direction)?;
-                let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
                 $scan::new(
                     ruby,
                     this.state.entries().direction(direction).stream(),
@@ -327,7 +326,6 @@ macro_rules! map_state {
                 direction: StaticSymbol,
             ) -> Result<NativeMapKeyScan, Error> {
                 let direction = parse_direction(ruby, direction)?;
-                let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
                 NativeMapKeyScan::new(
                     ruby,
                     this.state.keys().direction(direction).stream(),
@@ -439,7 +437,6 @@ macro_rules! deque_state {
 
             fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<$scan, Error> {
                 let direction = parse_direction(ruby, direction)?;
-                let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
                 $scan::new(
                     ruby,
                     this.state.values().direction(direction).stream(),
