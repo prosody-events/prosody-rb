@@ -146,6 +146,7 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | `state_owned_cache_size` / `PROSODY_STATE_OWNED_CACHE_SIZE` | Capacity of the owning keyed-state cache; accepts sizes such as `64 MiB` or `500 MB` | storage-engine default |
 | `state_read_cache_size` / `PROSODY_STATE_READ_CACHE_SIZE` | Capacity of the published-state read cache; accepts sizes such as `1 MiB` | `state_owned_cache_size` or `PROSODY_STATE_OWNED_CACHE_SIZE` when set; otherwise 1 MiB |
 | `state_read_cache` / `PROSODY_STATE_READ_CACHE_TTL` | Default published-read cache TTL. Use `false` or the environment value `none` to bypass the cache | 5s |
+| `state_recovery_delay` / `PROSODY_STATE_RECOVERY_DELAY` | Deprecated and ignored. Keyed-state recovery needs no delay. Setting the option emits a deprecation warning. Remove it | - |
 
 Prefer the definition constructors from the [API reference](README.md#api-reference). They serialize into `state_collections`, so you can reuse the same object with `context.state`. Each entry has these fields:
 

@@ -288,6 +288,11 @@ module Prosody
     def state_read_cache: () -> (Float | false)?
     def state_read_cache=: (Numeric | false) -> (Float | false)
 
+    # Deprecated. Has no effect and always reads nil. Setting a value emits a
+    # deprecation warning.
+    def state_recovery_delay: () -> nil
+    def state_recovery_delay=: (Numeric? value) -> void
+
     # Convert configuration to a hash with non-nil values only
     def to_hash: () -> Hash[Symbol, untyped]
   end

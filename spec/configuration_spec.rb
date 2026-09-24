@@ -388,6 +388,35 @@ RSpec.describe Prosody::Configuration do
     end
   end
 
+  describe "#state_recovery_delay" do
+    around do |example|
+      enabled = Warning[:deprecated]
+      Warning[:deprecated] = true
+      example.run
+    ensure
+      Warning[:deprecated] = enabled
+    end
+
+    it "warns that the option is deprecated and ignores the value" do
+      expect(Warning).to receive(:warn).with(/state_recovery_delay is deprecated and has no effect/, category: :deprecated)
+      config = described_class.new(state_recovery_delay: 30)
+      expect(config.state_recovery_delay).to be_nil
+      expect(config.to_hash).to eq({})
+    end
+
+    it "does not warn when the value is nil" do
+      expect(Warning).not_to receive(:warn)
+      config.state_recovery_delay = nil
+    end
+
+    it "lets a client start with the option set" do
+      allow(Warning).to receive(:warn)
+      client = Prosody::Client.new(mock: true, group_id: "deprecated-option",
+        bootstrap_servers: "localhost:9094", state_recovery_delay: 30)
+      client.shutdown
+    end
+  end
+
   describe "#to_hash" do
     # Tests the to_hash method which converts configuration to a native-compatible hash
     it "returns a hash with only non-nil values" do
