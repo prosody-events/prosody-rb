@@ -315,7 +315,7 @@ macro_rules! map_state {
                 let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
                 $scan::new(
                     ruby,
-                    this.state.scan(direction),
+                    this.state.entries().direction(direction).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
@@ -330,7 +330,7 @@ macro_rules! map_state {
                 let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
                 NativeMapKeyScan::new(
                     ruby,
-                    this.state.keys(direction),
+                    this.state.keys().direction(direction).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
@@ -442,7 +442,7 @@ macro_rules! deque_state {
                 let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
                 $scan::new(
                     ruby,
-                    this.state.scan(direction),
+                    this.state.values().direction(direction).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )

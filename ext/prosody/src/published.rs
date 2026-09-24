@@ -9,11 +9,8 @@ use crate::{ROOT_MOD, id};
 use magnus::value::ReprValue;
 use magnus::{Error, Module, Ruby, StaticSymbol, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use prosody::JsonCodec;
-use prosody::high_level::erased::{
-    ErasedDirection, SharedDequeReader, SharedMapReader, SharedValueReader,
-};
-use prosody::state::Direction;
+use prosody::high_level::erased::{SharedDequeReader, SharedMapReader, SharedValueReader};
+use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
 use std::sync::Arc;
 use tracing::Span;
@@ -22,16 +19,9 @@ fn read_error(ruby: &Ruby, error: &impl ToString) -> Error {
     Error::new(ruby.exception_runtime_error(), error.to_string())
 }
 
-fn erased_direction(direction: Direction) -> ErasedDirection {
-    match direction {
-        Direction::Forward => ErasedDirection::Forward,
-        Direction::Backward => ErasedDirection::Backward,
-    }
-}
-
 #[magnus::wrap(class = "Prosody::NativePublishedValue")]
 pub(crate) struct NativePublishedValue {
-    pub(crate) inner: SharedValueReader<JsonCodec>,
+    pub(crate) inner: SharedValueReader<JsonValue>,
     pub(crate) bridge: Bridge,
 }
 
@@ -51,7 +41,7 @@ impl NativePublishedValue {
 
 #[magnus::wrap(class = "Prosody::NativePublishedMap")]
 pub(crate) struct NativePublishedMap {
-    pub(crate) inner: SharedMapReader<JsonCodec>,
+    pub(crate) inner: SharedMapReader<JsonValue>,
     pub(crate) bridge: Bridge,
     pub(crate) propagator: Arc<TextMapCompositePropagator>,
 }
@@ -108,19 +98,10 @@ impl NativePublishedMap {
         key: String,
         direction: StaticSymbol,
     ) -> Result<NativeJsonMapScan, Error> {
-        let direction = erased_direction(parse_direction(ruby, direction)?);
-        let inner = Arc::clone(&this.inner);
-        let cursor = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.stream(key, direction).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
+        let direction = parse_direction(ruby, direction)?;
         published_map_scan(
             ruby,
-            cursor,
+            this.inner.entries(key).direction(direction).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         )
@@ -132,19 +113,10 @@ impl NativePublishedMap {
         key: String,
         direction: StaticSymbol,
     ) -> Result<NativeMapKeyScan, Error> {
-        let direction = erased_direction(parse_direction(ruby, direction)?);
-        let inner = Arc::clone(&this.inner);
-        let cursor = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.keys(key, direction).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
+        let direction = parse_direction(ruby, direction)?;
         published_map_key_scan(
             ruby,
-            cursor,
+            this.inner.keys(key).direction(direction).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         )
@@ -153,7 +125,7 @@ impl NativePublishedMap {
 
 #[magnus::wrap(class = "Prosody::NativePublishedDeque")]
 pub(crate) struct NativePublishedDeque {
-    pub(crate) inner: SharedDequeReader<JsonCodec>,
+    pub(crate) inner: SharedDequeReader<JsonValue>,
     pub(crate) bridge: Bridge,
     pub(crate) propagator: Arc<TextMapCompositePropagator>,
 }
@@ -231,19 +203,10 @@ impl NativePublishedDeque {
         key: String,
         direction: StaticSymbol,
     ) -> Result<NativeJsonDequeScan, Error> {
-        let direction = erased_direction(parse_direction(ruby, direction)?);
-        let inner = Arc::clone(&this.inner);
-        let cursor = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.stream(key, direction).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
+        let direction = parse_direction(ruby, direction)?;
         published_deque_scan(
             ruby,
-            cursor,
+            this.inner.values(key).direction(direction).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
         )

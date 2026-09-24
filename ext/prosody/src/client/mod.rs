@@ -132,7 +132,13 @@ impl Client {
             .wait_for(
                 ruby,
                 async move {
-                    new_erased(mode, &mut producer, &consumer_builders, &cassandra).await
+                    Box::pin(new_erased(
+                        mode,
+                        &mut producer,
+                        &consumer_builders,
+                        &cassandra,
+                    ))
+                    .await
                 },
                 Span::current(),
             )?

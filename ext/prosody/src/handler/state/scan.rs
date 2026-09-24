@@ -87,7 +87,7 @@ macro_rules! native_scan {
         impl $name {
             pub(super) fn new(
                 ruby: &Ruby,
-                cursor: Box<StateCursor<$item>>,
+                cursor: StateCursor<$item>,
                 bridge: Bridge,
                 propagator: Arc<TextMapCompositePropagator>,
             ) -> Result<Self, Error> {
@@ -95,7 +95,7 @@ macro_rules! native_scan {
                 let _: Value = queue.funcall(id!(ruby, "push"), (ruby.qnil(),))?;
                 Ok(Self {
                     inner: RefCell::new(ScanInner {
-                        cursor: Arc::from(cursor),
+                        cursor: Arc::new(cursor),
                         buffer: VecDeque::new(),
                         done: false,
                     }),
@@ -192,7 +192,7 @@ native_scan!(
 
 pub(crate) fn published_map_scan(
     ruby: &Ruby,
-    cursor: Box<StateCursor<(String, JsonValue)>>,
+    cursor: StateCursor<(String, JsonValue)>,
     bridge: Bridge,
     propagator: Arc<TextMapCompositePropagator>,
 ) -> Result<NativeJsonMapScan, Error> {
@@ -201,7 +201,7 @@ pub(crate) fn published_map_scan(
 
 pub(crate) fn published_map_key_scan(
     ruby: &Ruby,
-    cursor: Box<StateCursor<String>>,
+    cursor: StateCursor<String>,
     bridge: Bridge,
     propagator: Arc<TextMapCompositePropagator>,
 ) -> Result<NativeMapKeyScan, Error> {
@@ -210,7 +210,7 @@ pub(crate) fn published_map_key_scan(
 
 pub(crate) fn published_deque_scan(
     ruby: &Ruby,
-    cursor: Box<StateCursor<JsonValue>>,
+    cursor: StateCursor<JsonValue>,
     bridge: Bridge,
     propagator: Arc<TextMapCompositePropagator>,
 ) -> Result<NativeJsonDequeScan, Error> {
