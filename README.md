@@ -660,7 +660,7 @@ Every traversal method accepts optional query keywords. Prosody applies them in 
 | `prefix:` | Keeps map keys or set members that start with the string |
 | `limit:` | Stops after this many items; a positive `Integer` |
 
-A reverse traversal starts at the high end. Keywords narrow the selection and never widen it. Pass at most one of `from:` and `after:`, and at most one of `to:` and `before:`. Set traversals select members. Deque positions count from the front and must be non-negative. Deques have no `prefix:`. A bad keyword raises `ArgumentError` or `TypeError`.
+A reverse traversal starts at the high end. Keywords narrow the selection and never widen it. Pass at most one of `from:` and `after:`, and at most one of `to:` and `before:`. Set traversals select members. Deque positions count from the front and must be non-negative. To read the last N items, use `reverse_each(limit: N)`. Deques have no `prefix:`. A bad keyword raises `ArgumentError` or `TypeError`.
 
 To read a map in pages, pass the last key of the previous page as `after:`:
 
@@ -708,7 +708,7 @@ current_order = context.state(CURRENT_ORDER)
 current_order.set({"sku" => "book"})
 ```
 
-Read published state from a handler or other application code. The Prosody client does not need an active subscription.
+Read published state from a handler or other application code. The Prosody client does not need an active subscription. A client that only reads published state needs no `subscribed_topics`.
 
 Use the subsystem and the same definition to open a reader:
 

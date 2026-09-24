@@ -10,7 +10,7 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 |-----------------------------------------|---------------------------------------------------|--------------|
 | `bootstrap_servers` / `PROSODY_BOOTSTRAP_SERVERS` | Kafka servers to connect to             | -            |
 | `group_id` / `PROSODY_GROUP_ID`         | Consumer group name                               | -            |
-| `subscribed_topics` / `PROSODY_SUBSCRIBED_TOPICS` | Topics to read from                     | -            |
+| `subscribed_topics` / `PROSODY_SUBSCRIBED_TOPICS` | Topics to read from; a client that only reads published state needs none | -            |
 | `allowed_events` / `PROSODY_ALLOWED_EVENTS` | Only process events matching these prefixes   | (all)        |
 | `source_system` / `PROSODY_SOURCE_SYSTEM` | Tag for outgoing messages (prevents reprocessing)| `<group_id>` |
 | `mock` / `PROSODY_MOCK`                 | Use in-memory Kafka for testing                   | false        |
