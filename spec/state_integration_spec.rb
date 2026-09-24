@@ -613,12 +613,16 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       definitions = {
         value: Prosody.value(random_state_name("val")),
         map: Prosody.map(random_state_name("map")),
-        deque: Prosody.deque(random_state_name("deque"))
+        set: Prosody.set(random_state_name("set")),
+        deque: Prosody.deque(random_state_name("deque")),
+        message_map: Prosody.message_map(random_state_name("message-map"))
       }
       writes = {
-        value: ->(state) { state.set(1) },
-        map: ->(state) { state.set("k", 1) },
-        deque: ->(state) { state.push(1) }
+        value: ->(state, _message) { state.set(1) },
+        map: ->(state, _message) { state.set("k", 1) },
+        set: ->(state, _message) { state.add("m") },
+        deque: ->(state, _message) { state.push(1) },
+        message_map: ->(state, message) { state.set("k", message) }
       }
       handler_class = Class.new(CompleteHandler) do
         def initialize(sink, definitions, writes)
@@ -627,14 +631,14 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
           @writes = writes
         end
 
-        def on_message(context, _message)
+        def on_message(context, message)
           outcomes = @definitions.to_h do |kind, definition|
             state = context.state(definition)
             write = @writes.fetch(kind)
             idle = [state.commit, state.rollback]
-            write.call(state)
+            write.call(state, message)
             committed = state.commit
-            write.call(state)
+            write.call(state, message)
             rolled_back = state.rollback
             [kind, idle + [committed, rolled_back]]
           end
@@ -648,7 +652,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       client.send_message(topic, "k1", {go: true})
       observation = sink.wait(1).first
       expected = [:no_op, :no_op, :applied, :applied]
-      expect(observation).to eq({value: expected, map: expected, deque: expected})
+      expect(observation).to eq(definitions.keys.to_h { |kind| [kind, expected] })
     end
   end
 
