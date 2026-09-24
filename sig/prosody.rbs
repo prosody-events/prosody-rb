@@ -40,10 +40,30 @@ module Prosody
     def initialize: (untyped) -> void
   end
 
+  type demand_kind = :normal | :failure
+
+  # The demand a handler call serves. kind is :normal for a normal delivery
+  # and :failure for a retry. retry is the retry ordinal: 0 for a normal
+  # delivery and 1 on the first retry. The ordinal is an estimate.
+  class Demand < Data
+    attr_reader kind: demand_kind
+    attr_reader retry: Integer
+
+    def self.new: (demand_kind kind, Integer retry) -> instance
+                | (kind: demand_kind, retry: Integer) -> instance
+
+    def normal?: () -> bool
+    def failure?: () -> bool
+  end
+
   # Represents the context of a Kafka message.
   # Provides metadata and control capabilities for message processing.
   class Context
     # This class is instantiated internally by the client.
+
+    # Returns whether this call is a normal delivery or a retry.
+    # @return [Demand] the demand this call serves
+    def demand: () -> Demand
 
     # Checks if cancellation has been requested.
     # Cancellation includes both message-level cancellation (e.g., timeout)

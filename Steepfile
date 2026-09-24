@@ -1,8 +1,10 @@
 target :lib do
   check "lib"
   # Steep cannot model Configuration's define_method DSL or the
-  # StateDefinition Data.define body. Validate those public APIs separately.
+  # StateDefinition and Demand Data.define bodies. Validate those public APIs
+  # separately.
   ignore "lib/prosody/configuration.rb"
+  ignore "lib/prosody/demand.rb"
   ignore "lib/prosody/state.rb"
   ignore "lib/prosody/native_stubs.rb"
   signature "sig"

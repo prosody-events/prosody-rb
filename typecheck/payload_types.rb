@@ -15,6 +15,8 @@ class TypedOrderHandler < Prosody::EventHandler
   def on_message(context, message)
     payload = message.payload
     order_id = payload["order_id"]
+    demand = context.demand
+    consume_order(order_id, demand.retry) if demand.failure?
     total = payload["total"]
 
     # Message-backed state preserves the handler's payload type.

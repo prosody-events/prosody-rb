@@ -60,6 +60,22 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    # Returns the demand this handler call serves.
+    #
+    # A normal delivery has kind +:normal+ and retry ordinal 0. A retry after a
+    # failure has kind +:failure+ and an ordinal that is 1 on the first retry.
+    # The ordinal is an estimate; see {Prosody::Demand}.
+    #
+    # @return [Prosody::Demand]
+    #
+    # @example Reading the retry ordinal
+    #   def on_message(context, message)
+    #     logger.warn("retry #{context.demand.retry}") if context.demand.failure?
+    #   end
+    def demand
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
     # Blocks until cancellation is signaled.
     #
     # Cancellation includes message-level cancellation (e.g., handler timeout)
