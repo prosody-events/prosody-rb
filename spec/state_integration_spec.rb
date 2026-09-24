@@ -442,6 +442,50 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
+  describe "commit and rollback outcomes" do
+    it "maps each store outcome to a symbol for every collection kind" do
+      definitions = {
+        value: Prosody.value(random_state_name("val")),
+        map: Prosody.map(random_state_name("map")),
+        deque: Prosody.deque(random_state_name("deque"))
+      }
+      writes = {
+        value: ->(state) { state.set(1) },
+        map: ->(state) { state.set("k", 1) },
+        deque: ->(state) { state.push(1) }
+      }
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definitions, writes)
+          @sink = sink
+          @definitions = definitions
+          @writes = writes
+        end
+
+        def on_message(context, _message)
+          outcomes = @definitions.to_h do |kind, definition|
+            state = context.state(definition)
+            write = @writes.fetch(kind)
+            idle = [state.commit, state.rollback]
+            write.call(state)
+            committed = state.commit
+            write.call(state)
+            rolled_back = state.rollback
+            [kind, idle + [committed, rolled_back]]
+          end
+          @sink.push(outcomes)
+        end
+      end
+
+      client = build_client(*definitions.values)
+      client.subscribe(handler_class.new(sink, definitions, writes))
+
+      client.send_message(topic, "k1", {go: true})
+      observation = sink.wait(1).first
+      expected = [:no_op, :no_op, :applied, :applied]
+      expect(observation).to eq({value: expected, map: expected, deque: expected})
+    end
+  end
+
   describe "item 9: null-write rejection" do
     it "rejects a JSON-null write with a transient NullValueError and leaves the store untouched" do
       value_def = Prosody.value(random_state_name("val"))

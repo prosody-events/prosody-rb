@@ -669,6 +669,8 @@ This transaction applies only to keyed state. Some workflows need state changes 
 - `commit` commits the collection's pending changes before the handler ends. A later handler failure does not remove them.
 - `rollback` discards pending changes since the last `commit`. It cannot undo committed changes.
 
+`commit` and `rollback` return `:applied` when they wrote or discarded pending changes. They return `:no_op` when the collection had no pending changes.
+
 ### Published state
 
 Some callers need only the current value for a key. They can accept a stale value or a race with a concurrent update.

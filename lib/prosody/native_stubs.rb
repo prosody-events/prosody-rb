@@ -575,14 +575,14 @@ module Prosody
 
     # Durably commits the buffered operations mid-handler.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ or +:no_op+
     def commit
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
     # Discards the buffered uncommitted operations.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ or +:no_op+
     def rollback
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -686,14 +686,14 @@ module Prosody
 
     # Durably commits the buffered operations mid-handler.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ or +:no_op+
     def commit
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
     # Discards the buffered uncommitted operations.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ or +:no_op+
     def rollback
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
@@ -812,14 +812,14 @@ module Prosody
 
     # Durably commits the buffered operations mid-handler.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ or +:no_op+
     def commit
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
     # Discards the buffered uncommitted operations.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ or +:no_op+
     def rollback
       raise NotImplementedError, "This method is implemented natively in Rust"
     end

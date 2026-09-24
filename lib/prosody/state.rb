@@ -359,12 +359,14 @@ module Prosody
 
     # Durably commits the buffered operations mid-handler.
     #
-    # @return [nil] the erased FFI seam drops the applied/no-op outcome
+    # @return [Symbol] +:applied+ when buffered operations were written, or
+    #   +:no_op+ when nothing was buffered
     def commit = @native.commit
 
     # Discards the buffered uncommitted operations.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ when buffered operations were discarded, or
+    #   +:no_op+ when nothing was buffered
     def rollback = @native.rollback
 
     # Reads the current value. Idiomatic alias of {#get}.
@@ -433,12 +435,14 @@ module Prosody
 
     # Durably commits the buffered operations mid-handler.
     #
-    # @return [nil] the erased FFI seam drops the applied/no-op outcome
+    # @return [Symbol] +:applied+ when buffered operations were written, or
+    #   +:no_op+ when nothing was buffered
     def commit = @native.commit
 
     # Discards the buffered uncommitted operations.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ when buffered operations were discarded, or
+    #   +:no_op+ when nothing was buffered
     def rollback = @native.rollback
 
     # Traverses the live entries in key order, yielding `key, value`.
@@ -700,12 +704,14 @@ module Prosody
 
     # Durably commits the buffered operations mid-handler.
     #
-    # @return [nil] the erased FFI seam drops the applied/no-op outcome
+    # @return [Symbol] +:applied+ when buffered operations were written, or
+    #   +:no_op+ when nothing was buffered
     def commit = @native.commit
 
     # Discards the buffered uncommitted operations.
     #
-    # @return [nil]
+    # @return [Symbol] +:applied+ when buffered operations were discarded, or
+    #   +:no_op+ when nothing was buffered
     def rollback = @native.rollback
 
     # Reads the element at `index`, resolving negatives Array-style (mirrors

@@ -15,13 +15,14 @@ use crate::bridge::Bridge;
 use crate::handler::message::Message;
 use crate::tracing_util::extract_opentelemetry_context;
 use magnus::value::{Lazy, ReprValue};
-use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, TryConvert, Value};
+use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, StaticSymbol, TryConvert, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::{
     DynDequeState, DynMapState, DynValueState, ErasedCategory, ErasedStateError,
 };
 use prosody::consumer::message::ConsumerMessage;
+use prosody::state::StoreOutcome;
 use serde_json::Value as JsonValue;
 use serde_magnus::{deserialize, serialize};
 use std::sync::Arc;
@@ -139,6 +140,17 @@ fn message_write_item(
     Ok(message.consumer_message())
 }
 
+/// Maps a core [`StoreOutcome`] to `:applied` or `:no_op`.
+///
+/// `:applied` means the call drained buffered operations. `:no_op` means
+/// nothing was buffered.
+fn outcome_symbol(ruby: &Ruby, outcome: StoreOutcome) -> StaticSymbol {
+    match outcome {
+        StoreOutcome::Applied => ruby.sym_new("applied"),
+        StoreOutcome::NoOp => ruby.sym_new("no_op"),
+    }
+}
+
 /// Drives an erased async op that returns `Result<_, ErasedStateError>` through
 /// [`Bridge::wait_for`] with the extracted carrier active, yielding the op's
 /// `Ok` value (state error mapped to the matching Ruby class).
@@ -157,8 +169,8 @@ macro_rules! run_op {
     }};
 }
 
-/// Drives an infallible erased async op (returning `()`) through
-/// [`Bridge::wait_for`] with the extracted carrier active.
+/// Drives an infallible erased async op through [`Bridge::wait_for`] with the
+/// extracted carrier active, yielding the op's value.
 macro_rules! run_infallible {
     ($ruby:expr, $this:expr, $handle:expr, $call:ident ()) => {{
         let handle = Arc::clone($handle);
@@ -209,14 +221,14 @@ macro_rules! value_state {
                 Ok(ruby.qnil().as_value())
             }
 
-            fn commit(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, commit())?;
-                Ok(ruby.qnil().as_value())
+            fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_op!(ruby, this, &this.state, commit())?;
+                Ok(outcome_symbol(ruby, outcome))
             }
 
-            fn rollback(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_infallible!(ruby, this, &this.state, rollback());
-                Ok(ruby.qnil().as_value())
+            fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                Ok(outcome_symbol(ruby, outcome))
             }
         }
     };
@@ -317,14 +329,14 @@ macro_rules! map_state {
                 )
             }
 
-            fn commit(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, commit())?;
-                Ok(ruby.qnil().as_value())
+            fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_op!(ruby, this, &this.state, commit())?;
+                Ok(outcome_symbol(ruby, outcome))
             }
 
-            fn rollback(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_infallible!(ruby, this, &this.state, rollback());
-                Ok(ruby.qnil().as_value())
+            fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                Ok(outcome_symbol(ruby, outcome))
             }
         }
     };
@@ -429,14 +441,14 @@ macro_rules! deque_state {
                 )
             }
 
-            fn commit(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, commit())?;
-                Ok(ruby.qnil().as_value())
+            fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_op!(ruby, this, &this.state, commit())?;
+                Ok(outcome_symbol(ruby, outcome))
             }
 
-            fn rollback(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_infallible!(ruby, this, &this.state, rollback());
-                Ok(ruby.qnil().as_value())
+            fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                Ok(outcome_symbol(ruby, outcome))
             }
         }
     };

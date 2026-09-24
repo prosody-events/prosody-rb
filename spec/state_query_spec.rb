@@ -77,7 +77,7 @@ RSpec.describe "Prosody keyed state queries", integration: true do
     [:deque_prefix, :deque, :each, {prefix: "x"}, ArgumentError, /unknown keyword: :prefix/]
   ].freeze
 
-  it "translates every query keyword for owned and published collections" do
+  it "translates every query keyword for owned and published collections", :aggregate_failures do
     subsystem = "query-#{SecureRandom.hex(4)}"
     map_definition = Prosody.map(random_state_name("map"), published: true, read_cache: false)
     deque_definition = Prosody.deque(random_state_name("deque"), published: true, read_cache: false)

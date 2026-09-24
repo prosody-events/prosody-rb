@@ -1,6 +1,10 @@
 module Prosody
   type state_config_value = String | Integer | bool
 
+  # The effect of commit or rollback: :applied when buffered operations were
+  # drained, :no_op when nothing was buffered.
+  type store_outcome = :applied | :no_op
+
   # Query keywords as the traversal methods collect them.
   type query_options = Hash[Symbol, String | Integer | Range[String?] | Range[Integer?] | nil]
 
@@ -111,8 +115,8 @@ module Prosody
     def get: () -> T?
     def set: (T value) -> void
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
 
     # idiomatic conveniences
     def value: () -> T?              # alias of #get
@@ -131,8 +135,8 @@ module Prosody
     def set: (String key, V value) -> void
     def delete: (String key) -> nil
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
     # Traversals accept optional query keywords (see State::Scanning).
     def each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
                  | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
@@ -188,8 +192,8 @@ module Prosody
     def size: () -> Integer
     def empty?: () -> bool
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
     def get: (Integer index) -> T?
     # Traversals accept optional position keywords (see State::Scanning).
     def each: (?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
@@ -221,8 +225,8 @@ module Prosody
     def get: () -> T?
     def set: (T value) -> void
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   class NativeJsonValueState
@@ -242,8 +246,8 @@ module Prosody
     def clear: () -> void
     def scan: (Symbol direction, ?query_options query) -> S
     def keys: (Symbol direction, ?query_options query) -> NativeMapKeyScan
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   class NativeJsonMapState
@@ -266,8 +270,8 @@ module Prosody
     def pop_back: () -> T?
     def clear: () -> void
     def scan: (Symbol direction, ?query_options query) -> S
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   class NativeJsonDequeState
