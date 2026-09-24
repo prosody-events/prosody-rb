@@ -13,7 +13,7 @@ use magnus::value::ReprValue;
 use magnus::{Error, IntoValue, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
-use prosody::consumer::event_context::StateCursor;
+use prosody::consumer::event_context::{ErasedStateError, StateCursor};
 use prosody::consumer::message::ConsumerMessage;
 use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
@@ -25,6 +25,12 @@ use tracing::Span;
 
 #[allow(clippy::unwrap_used, reason = "256 is a nonzero literal")]
 const SCAN_READY_CHUNK_SIZE: NonZeroUsize = NonZeroUsize::new(256).unwrap();
+
+/// Maps a failed cursor read to a Ruby error.
+///
+/// Owned handles raise the typed state errors. Published readers raise
+/// `RuntimeError`, the same class as their point reads.
+type ReadError = fn(&Ruby, &ErasedStateError) -> Error;
 
 struct ScanInner<T> {
     cursor: Arc<StateCursor<T>>,
@@ -55,7 +61,7 @@ macro_rules! drive_scan {
                     },
                     Span::current(),
                 )?
-                .map_err(|error| state_error($ruby, &error))?;
+                .map_err(|error| ($this.read_error)($ruby, &error))?;
             match chunk {
                 Some(items) => $inner.buffer.extend(items),
                 None => {
@@ -82,14 +88,27 @@ macro_rules! native_scan {
             lock: ThreadSafeValue,
             bridge: Bridge,
             propagator: Arc<TextMapCompositePropagator>,
+            read_error: ReadError,
         }
 
         impl $name {
+            /// Wraps an owned-handle cursor. Read failures raise the typed
+            /// state errors.
             pub(super) fn new(
                 ruby: &Ruby,
                 cursor: StateCursor<$item>,
                 bridge: Bridge,
                 propagator: Arc<TextMapCompositePropagator>,
+            ) -> Result<Self, Error> {
+                Self::with_read_error(ruby, cursor, bridge, propagator, state_error)
+            }
+
+            fn with_read_error(
+                ruby: &Ruby,
+                cursor: StateCursor<$item>,
+                bridge: Bridge,
+                propagator: Arc<TextMapCompositePropagator>,
+                read_error: ReadError,
             ) -> Result<Self, Error> {
                 let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!(ruby, "new"), ())?;
                 let _: Value = queue.funcall(id!(ruby, "push"), (ruby.qnil(),))?;
@@ -102,6 +121,7 @@ macro_rules! native_scan {
                     lock: ThreadSafeValue::new(queue, bridge.clone()),
                     bridge,
                     propagator,
+                    read_error,
                 })
             }
 
@@ -196,7 +216,7 @@ pub(crate) fn published_map_scan(
     bridge: Bridge,
     propagator: Arc<TextMapCompositePropagator>,
 ) -> Result<NativeJsonMapScan, Error> {
-    NativeJsonMapScan::new(ruby, cursor, bridge, propagator)
+    NativeJsonMapScan::with_read_error(ruby, cursor, bridge, propagator, published_error)
 }
 
 pub(crate) fn published_map_key_scan(
@@ -205,7 +225,7 @@ pub(crate) fn published_map_key_scan(
     bridge: Bridge,
     propagator: Arc<TextMapCompositePropagator>,
 ) -> Result<NativeMapKeyScan, Error> {
-    NativeMapKeyScan::new(ruby, cursor, bridge, propagator)
+    NativeMapKeyScan::with_read_error(ruby, cursor, bridge, propagator, published_error)
 }
 
 pub(crate) fn published_deque_scan(
@@ -214,5 +234,10 @@ pub(crate) fn published_deque_scan(
     bridge: Bridge,
     propagator: Arc<TextMapCompositePropagator>,
 ) -> Result<NativeJsonDequeScan, Error> {
-    NativeJsonDequeScan::new(ruby, cursor, bridge, propagator)
+    NativeJsonDequeScan::with_read_error(ruby, cursor, bridge, propagator, published_error)
+}
+
+/// Raises a published-reader read failure as `RuntimeError`.
+fn published_error(ruby: &Ruby, error: &ErasedStateError) -> Error {
+    Error::new(ruby.exception_runtime_error(), error.message().to_owned())
 }

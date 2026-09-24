@@ -719,7 +719,7 @@ current_order = order_reader.get("customer-123")
 
 The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
 
-Map, set, and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block. Reader traversals accept the same [query keywords](#query-keywords) after the key.
+Map, set, and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block. Reader traversals accept the same [query keywords](#query-keywords) after the key. A failed read raises `RuntimeError`, for point reads and traversals alike.
 
 Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
 
