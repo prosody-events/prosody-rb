@@ -44,8 +44,8 @@ Gem::Specification.new do |spec|
   spec.extensions = ["ext/prosody/extconf.rb"]
 
   # Runtime dependencies
-  spec.add_dependency "async", "~> 2.42"
-  spec.add_dependency "opentelemetry-api", "~> 1.10"
+  spec.add_dependency "async", "~> 2.46"
+  spec.add_dependency "opentelemetry-api", "~> 1.11"
   spec.add_dependency "rb_sys", "~> 0.9.130"
 
   # Development dependencies
