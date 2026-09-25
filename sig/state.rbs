@@ -1,6 +1,13 @@
 module Prosody
   type state_config_value = String | Integer | bool
 
+  # The effect of commit or rollback: :applied when buffered operations were
+  # drained, :no_op when nothing was buffered.
+  type store_outcome = :applied | :no_op
+
+  # Query keywords as the traversal methods collect them.
+  type query_options = Hash[Symbol, String | Integer | Range[String?] | Range[Integer?] | nil]
+
   # --- error taxonomy -----------------------------------------------------
   # Raised for keyed-state failures a retry cannot resolve (unregistered
   # collection, identity mismatch, duplicate registration, bad TTL). Never
@@ -61,6 +68,14 @@ module Prosody
     def to_state_config: () -> Hash[Symbol, state_config_value]
   end
 
+  interface _SetDefinition
+    def name: () -> String
+    def kind: () -> "set"
+    def payload: () -> "presence"
+    def read_cache: () -> (Numeric | false)?
+    def to_state_config: () -> Hash[Symbol, state_config_value]
+  end
+
   interface _DequeDefinition[T = json_value]
     def name: () -> String
     def kind: () -> "deque"
@@ -96,6 +111,7 @@ module Prosody
   # `[P]` type parameter is annotation-only, naming the message payload type.
   def self.value: [T] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _ValueDefinition[T]
   def self.map: [V] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _MapDefinition[V]
+  def self.set: (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _SetDefinition
   def self.deque: [T] (_ToS name, ?ttl: Integer?, ?capacity: Integer?, ?read_uncommitted: bool?, ?published: bool?, ?read_cache: (Numeric | false)?) -> _DequeDefinition[T]
   def self.message_value: [P] (_ToS name, ?ttl: Integer?, ?read_uncommitted: bool?) -> _MessageValueDefinition[P]
   def self.message_map: [P] (_ToS name, ?ttl: Integer?, ?keyset_limit: Integer?, ?read_uncommitted: bool?) -> _MessageMapDefinition[P]
@@ -108,8 +124,8 @@ module Prosody
     def get: () -> T?
     def set: (T value) -> void
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
 
     # idiomatic conveniences
     def value: () -> T?              # alias of #get
@@ -125,30 +141,33 @@ module Prosody
 
     def get: (String key) -> V?
     def get_many: (Array[String] keys) -> Array[V?]
+    def contains_many: (Array[String] keys) -> Array[bool]
+    def empty?: () -> bool
     def set: (String key, V value) -> void
     def delete: (String key) -> nil
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
-    def each_pair: () { (String, V) -> void } -> void
-                 | () -> Enumerator[[ String, V ], void]
-    def reverse_each_pair: () { (String, V) -> void } -> void
-                         | () -> Enumerator[[ String, V ], void]
-    def each_key: () { (String) -> void } -> void
-                | () -> Enumerator[String, void]
-    def reverse_each_key: () { (String) -> void } -> void
-                        | () -> Enumerator[String, void]
-    def each_value: () { (V) -> void } -> void
-                  | () -> Enumerator[V, void]
-    def reverse_each_value: () { (V) -> void } -> void
-                          | () -> Enumerator[V, void]
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
+    # Traversals accept optional query keywords (see State::Scanning).
+    def each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+                 | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
+    def reverse_each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+                         | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
+    def each_key: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each_key: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                        | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def each_value: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                  | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
+    def reverse_each_value: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                          | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
 
     # idiomatic Hash-style conveniences (bounded reads only)
     def []: (String key) -> V?                       # alias of #get
     def []=: (String key, V value) -> V              # alias of #set (assignment yields value)
     def store: (String key, V value) -> V            # wrapper over #set, returns value
-    def each: () { (String, V) -> void } -> void     # alias of #each_pair
-            | () -> Enumerator[[ String, V ], void]
+    def each: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void     # alias of #each_pair
+            | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
     def values_at: (*String keys) -> Array[V?]
     def fetch: (String key) -> V
              | [D] (String key, D default) -> (V | D)
@@ -164,10 +183,38 @@ module Prosody
 
     private
     def initialize: ((NativeJsonMapState | NativeMessageMapState) native) -> void
-    def traverse: (Symbol direction) { (String, V) -> void } -> void
-                | (Symbol direction) -> Enumerator[[ String, V ], void]
-    def traverse_keys: (Symbol direction) { (String) -> void } -> void
-                     | (Symbol direction) -> Enumerator[String, void]
+    def traverse: (Symbol direction, query_options query) { (String, V) -> void } -> void
+                | (Symbol direction, query_options query) -> Enumerator[[ String, V ], void]
+    def traverse_keys: (Symbol direction, query_options query) { (String) -> void } -> void
+                     | (Symbol direction, query_options query) -> Enumerator[String, void]
+    def traverse_values: (Symbol direction, query_options query) { (V) -> void } -> void
+                       | (Symbol direction, query_options query) -> Enumerator[V, void]
+  end
+
+  # A presence-only ordered set of String members. Mirrors Ruby's Set.
+  class SetState
+    include State::Scanning
+
+    def add: (String member) -> self
+    def <<: (String member) -> self
+    def delete: (String member) -> self
+    def include?: (String member) -> bool
+    def member?: (String member) -> bool
+    def contains_many: (Array[String] members) -> Array[bool]
+    def empty?: () -> bool
+    def clear: () -> self
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
+    # Traversals accept optional query keywords (see State::Scanning).
+    def each: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+            | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                    | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+
+    private
+    def initialize: (NativeSetState native) -> void
+    def traverse: (Symbol direction, query_options query) { (String) -> void } -> void
+                | (Symbol direction, query_options query) -> Enumerator[String, void]
   end
 
   # A deque keyed-state handle.
@@ -182,13 +229,14 @@ module Prosody
     def size: () -> Integer
     def empty?: () -> bool
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
     def get: (Integer index) -> T?
-    def each: () { (T) -> void } -> void
-            | () -> Enumerator[T, void]
-    def reverse_each: () { (T) -> void } -> void
-                    | () -> Enumerator[T, void]
+    # Traversals accept optional position keywords (see State::Scanning).
+    def each: (?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+            | (?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+    def reverse_each: (?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+                    | (?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
 
     # idiomatic Array-style conveniences (bounded reads only). #get and #fetch
     # take a single Integer index (negatives resolve from the back, Array-style);
@@ -206,16 +254,16 @@ module Prosody
     private
     def initialize: ((NativeJsonDequeState | NativeMessageDequeState) native) -> void
     def at_negative: (Integer index) -> T?
-    def traverse: (Symbol direction) { (T) -> void } -> void
-                | (Symbol direction) -> Enumerator[T, void]
+    def traverse: (Symbol direction, query_options query) { (T) -> void } -> void
+                | (Symbol direction, query_options query) -> Enumerator[T, void]
   end
 
   interface _NativeValueHandle[T]
     def get: () -> T?
     def set: (T value) -> void
     def clear: () -> void
-    def commit: () -> nil
-    def rollback: () -> nil
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   class NativeJsonValueState
@@ -229,14 +277,16 @@ module Prosody
   interface _NativeMapHandle[V, S]
     def get: (String key) -> V?
     def contains_key: (String key) -> bool
+    def is_empty: () -> bool
     def get_many: (Array[String] keys) -> Array[V?]
+    def contains_many: (Array[String] keys) -> Array[bool]
     def set: (String key, V value) -> void
     def remove: (String key) -> void
     def clear: () -> void
-    def scan: (Symbol direction) -> S
-    def keys: (Symbol direction) -> NativeMapKeyScan
-    def commit: () -> nil
-    def rollback: () -> nil
+    def scan: (Symbol direction, ?query_options query) -> S
+    def keys: (Symbol direction, ?query_options query) -> NativeMapKeyScan
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   class NativeJsonMapState
@@ -245,6 +295,18 @@ module Prosody
 
   class NativeMessageMapState
     include _NativeMapHandle[Message[json_value], NativeMessageMapScan]
+  end
+
+  class NativeSetState
+    def contains: (String member) -> bool
+    def contains_many: (Array[String] members) -> Array[bool]
+    def is_empty: () -> bool
+    def insert: (String member) -> void
+    def remove: (String member) -> void
+    def clear: () -> void
+    def keys: (Symbol direction, ?query_options query) -> NativeMapKeyScan
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   interface _NativeDequeHandle[T, S]
@@ -258,9 +320,9 @@ module Prosody
     def pop_front: () -> T?
     def pop_back: () -> T?
     def clear: () -> void
-    def scan: (Symbol direction) -> S
-    def commit: () -> nil
-    def rollback: () -> nil
+    def scan: (Symbol direction, ?query_options query) -> S
+    def commit: () -> store_outcome
+    def rollback: () -> store_outcome
   end
 
   class NativeJsonDequeState
@@ -304,8 +366,17 @@ module Prosody
     def get: (String key, String map_key) -> json_value?
     def get_many: (String key, Array[String] map_keys) -> Array[json_value?]
     def contains_key: (String key, String map_key) -> bool
-    def scan: (String key, Symbol direction) -> NativeJsonMapScan
-    def keys: (String key, Symbol direction) -> NativeMapKeyScan
+    def contains_many: (String key, Array[String] map_keys) -> Array[bool]
+    def is_empty: (String key) -> bool
+    def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonMapScan
+    def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
+  end
+
+  class NativePublishedSet
+    def contains: (String key, String member) -> bool
+    def contains_many: (String key, Array[String] members) -> Array[bool]
+    def is_empty: (String key) -> bool
+    def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
   end
 
   class NativePublishedDeque
@@ -314,7 +385,7 @@ module Prosody
     def is_empty: (String key) -> bool
     def peek_front: (String key) -> json_value?
     def peek_back: (String key) -> json_value?
-    def scan: (String key, Symbol direction) -> NativeJsonDequeScan
+    def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonDequeScan
   end
 
   class PublishedValue[T = json_value]
@@ -328,19 +399,39 @@ module Prosody
     alias has_key? key?
     alias include? key?
     alias member? key?
-    def each_pair: (_ToS key) { (String, V) -> void } -> void
-                 | (_ToS key) -> Enumerator[[String, V], void]
-    def reverse_each_pair: (_ToS key) { (String, V) -> void } -> void
-                         | (_ToS key) -> Enumerator[[String, V], void]
-    def each_key: (_ToS key) { (String) -> void } -> void
-                | (_ToS key) -> Enumerator[String, void]
-    def reverse_each_key: (_ToS key) { (String) -> void } -> void
-                        | (_ToS key) -> Enumerator[String, void]
-    def each_value: (_ToS key) { (V) -> void } -> void
-                  | (_ToS key) -> Enumerator[V, void]
-    def reverse_each_value: (_ToS key) { (V) -> void } -> void
-                          | (_ToS key) -> Enumerator[V, void]
+    def contains_many: (_ToS key, Array[_ToS] map_keys) -> Array[bool]
+    def empty?: (_ToS key) -> bool
+    def each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+                 | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
+    def reverse_each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+                         | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
+    def each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                        | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                  | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
+    def reverse_each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                          | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
     alias each each_pair
+  end
+
+  class PublishedSet
+    include State::Scanning
+
+    def include?: (_ToS key, _ToS member) -> bool
+    alias member? include?
+    def contains_many: (_ToS key, Array[_ToS] members) -> Array[bool]
+    def empty?: (_ToS key) -> bool
+    def each: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+            | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                    | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+
+    private
+    def initialize: (NativePublishedSet native) -> void
+    def traverse: (_ToS key, Symbol direction, query_options query) { (String) -> void } -> void
+                | (_ToS key, Symbol direction, query_options query) -> Enumerator[String, void]
   end
 
   class PublishedDeque[T = json_value]
@@ -350,10 +441,10 @@ module Prosody
     def empty?: (_ToS key) -> bool
     def first: (_ToS key) -> T?
     def last: (_ToS key) -> T?
-    def each: (_ToS key) { (T) -> void } -> void
-            | (_ToS key) -> Enumerator[T, void]
-    def reverse_each: (_ToS key) { (T) -> void } -> void
-                    | (_ToS key) -> Enumerator[T, void]
+    def each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+            | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+    def reverse_each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+                    | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
   end
 
   # --- shared state modules ------------------------------------------------
@@ -362,6 +453,7 @@ module Prosody
     module Vending
       def state: [T] (_ValueDefinition[T]) -> ValueState[T]
                | [V] (_MapDefinition[V]) -> MapState[V]
+               | (_SetDefinition) -> SetState
                | [T] (_DequeDefinition[T]) -> DequeState[T]
                | [P] (_MessageValueDefinition[P]) -> ValueState[Message[P]]
                | [P] (_MessageMapDefinition[P]) -> MapState[Message[P]]
@@ -369,9 +461,12 @@ module Prosody
     end
 
     # Shared native-scan driving mixed into the traversal handles.
+    # Query keywords apply in iteration order and narrow the selection. Map
+    # and set traversals take String keys and `prefix:`. Deque traversals take
+    # non-negative positions from the front.
     module Scanning
       private
-      def scan_each: [T] (Symbol direction, ?Symbol opener) { (T) -> void } -> void
+      def scan_each: [T] (Symbol direction, query_options query, ?Symbol opener) { (T) -> void } -> void
       def scan_items: [T] (_NativeScan[T] scan) { (T) -> void } -> void
     end
   end
@@ -382,6 +477,7 @@ module Prosody
 
     def value_state: (String name) -> NativeJsonValueState
     def map_state: (String name) -> NativeJsonMapState
+    def set_state: (String name) -> NativeSetState
     def deque_state: (String name) -> NativeJsonDequeState
     def message_value_state: (String name) -> NativeMessageValueState
     def message_map_state: (String name) -> NativeMessageMapState

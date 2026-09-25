@@ -116,6 +116,172 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
+  describe "map emptiness and batch presence" do
+    it "reports emptiness and batch presence for owned and published maps" do
+      subsystem = "presence-#{SecureRandom.hex(4)}"
+      definition = Prosody.map(random_state_name("map"), published: true, read_cache: false)
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definition)
+          @sink = sink
+          @def = definition
+        end
+
+        def on_message(context, _message)
+          map = context.state(@def)
+          empty_before = map.empty?
+          map.set("a", 1)
+          map.set("b", false)
+          empty_after = map.empty?
+          present = map.contains_many(%w[a x b a])
+          map.commit
+          @sink.push({empty_before: empty_before, empty_after: empty_after, present: present})
+        end
+      end
+
+      client = build_client(definition, subsystem: subsystem)
+      client.subscribe(handler_class.new(sink, definition))
+
+      client.send_message(topic, "k1", {go: true})
+      observation = sink.wait(1).first
+      expect(observation).to eq({empty_before: true, empty_after: false, present: [true, false, true, true]})
+
+      reader = client.state(subsystem, definition)
+      expect(reader.empty?("k1")).to be(false)
+      expect(reader.empty?("k2")).to be(true)
+      expect(reader.contains_many("k1", %w[x b a])).to eq([false, true, true])
+    end
+  end
+
+  describe "set" do
+    it "wires every set method for owned and published sets", :aggregate_failures do
+      subsystem = "set-#{SecureRandom.hex(4)}"
+      definition = Prosody.set(random_state_name("set"), published: true, read_cache: false)
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definition)
+          @sink = sink
+          @def = definition
+        end
+
+        def on_message(context, _message)
+          set = context.state(@def)
+          observation = {empty_before: set.empty?}
+          set.add("b1") << "a1" << "a2" << "c1"
+          set.delete("c1").delete("absent")
+          observation[:empty_after] = set.empty?
+          observation[:include] = [set.include?("a1"), set.member?("c1")]
+          observation[:many] = set.contains_many(%w[a2 c1 b1])
+          observation[:members] = set.each.to_a
+          observation[:prefix] = set.each(prefix: "a").to_a
+          observation[:reverse] = set.reverse_each(after: "b1", limit: 1).to_a
+          observation[:commit] = set.commit
+          @sink.push(observation)
+        end
+      end
+
+      client = build_client(definition, subsystem: subsystem)
+      client.subscribe(handler_class.new(sink, definition))
+
+      client.send_message(topic, "k1", {go: true})
+      observation = sink.wait(1).first
+      expect(observation).to eq({
+        empty_before: true,
+        empty_after: false,
+        include: [true, false],
+        many: [true, false, true],
+        members: %w[a1 a2 b1],
+        prefix: %w[a1 a2],
+        reverse: %w[a2],
+        commit: :applied
+      })
+
+      reader = client.state(subsystem, definition)
+      expect(reader).to be_a(Prosody::PublishedSet)
+      expect([reader.include?("k1", "a1"), reader.member?("k1", "c1")]).to eq([true, false])
+      expect(reader.contains_many("k1", %w[b1 z])).to eq([true, false])
+      expect([reader.empty?("k1"), reader.empty?("k2")]).to eq([false, true])
+      expect(reader.each("k1", range: "a2"..).to_a).to eq(%w[a2 b1])
+      expect(reader.reverse_each("k1", prefix: "a").to_a).to eq(%w[a2 a1])
+    end
+  end
+
+  describe "published reader errors" do
+    it "raises RuntimeError from point reads and traversals alike" do
+      subsystem = "errors-#{SecureRandom.hex(4)}"
+      name = random_state_name("val")
+      definition = Prosody.value(name, published: true, read_cache: false)
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definition)
+          @sink = sink
+          @def = definition
+        end
+
+        def on_message(context, _message)
+          context.state(@def).set({"v" => 1})
+          @sink.push(:written)
+        end
+      end
+
+      client = build_client(definition, subsystem: subsystem)
+      client.subscribe(handler_class.new(sink, definition))
+      client.send_message(topic, "k1", {go: true})
+      expect(sink.wait(1).first).to eq(:written)
+
+      # Each reader names the published value collection with another kind, so
+      # every read fails with a descriptor identity mismatch.
+      reads = {
+        map: [Prosody.map(name, read_cache: false), ->(r) { r.get("k1", "a") }, ->(r) { r.each_key("k1", limit: 1).to_a }],
+        set: [Prosody.set(name, read_cache: false), ->(r) { r.include?("k1", "a") }, ->(r) { r.each("k1").to_a }],
+        deque: [Prosody.deque(name, read_cache: false), ->(r) { r.get("k1", 0) }, ->(r) { r.reverse_each("k1").to_a }]
+      }
+      reads.each do |kind, (reader_definition, point, traversal)|
+        reader = client.state(subsystem, reader_definition)
+        [point, traversal].each do |read|
+          error = begin
+            read.call(reader)
+            nil
+          rescue RuntimeError => e
+            e
+          end
+          expect([kind, error.class, error&.message]).to match([kind, RuntimeError, /identity mismatch/])
+        end
+      end
+    end
+  end
+
+  describe "reader-only client" do
+    it "reads published state without subscribed topics" do
+      subsystem = "reader-#{SecureRandom.hex(4)}"
+      definition = Prosody.value(random_state_name("val"), published: true, read_cache: false)
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definition)
+          @sink = sink
+          @def = definition
+        end
+
+        def on_message(context, _message)
+          value = context.state(@def)
+          value.set({"v" => 1})
+          @sink.push(value.commit)
+        end
+      end
+
+      owner = build_client(definition, subsystem: subsystem)
+      owner.subscribe(handler_class.new(sink, definition))
+      owner.send_message(topic, "k1", {go: true})
+      expect(sink.wait(1).first).to eq(:applied)
+
+      reader = track_client(Prosody::Client.new(
+        bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
+        cassandra_nodes: TestConfig::CASSANDRA_NODES,
+        group_id: "reader-#{SecureRandom.hex(4)}",
+        source_system: TestConfig::SOURCE_NAME,
+        subscribed_topics: [],
+        probe_port: false
+      ))
+      expect(reader.state(subsystem, definition).get("k1")).to eq({"v" => 1})
+    end
+  end
+
   describe "item 3: deque" do
     it "pushes, unshifts, scans, and pops from both ends" do
       definition = Prosody.deque(random_state_name("deq"))
@@ -439,6 +605,54 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       observation = sink.wait(1).first
       expect(observation[:before]).to eq({kept: 2, dropped: 9})
       expect(observation[:after]).to eq({kept: 1, dropped: nil})
+    end
+  end
+
+  describe "commit and rollback outcomes" do
+    it "maps each store outcome to a symbol for every collection kind" do
+      definitions = {
+        value: Prosody.value(random_state_name("val")),
+        map: Prosody.map(random_state_name("map")),
+        set: Prosody.set(random_state_name("set")),
+        deque: Prosody.deque(random_state_name("deque")),
+        message_map: Prosody.message_map(random_state_name("message-map"))
+      }
+      writes = {
+        value: ->(state, _message) { state.set(1) },
+        map: ->(state, _message) { state.set("k", 1) },
+        set: ->(state, _message) { state.add("m") },
+        deque: ->(state, _message) { state.push(1) },
+        message_map: ->(state, message) { state.set("k", message) }
+      }
+      handler_class = Class.new(CompleteHandler) do
+        def initialize(sink, definitions, writes)
+          @sink = sink
+          @definitions = definitions
+          @writes = writes
+        end
+
+        def on_message(context, message)
+          outcomes = @definitions.to_h do |kind, definition|
+            state = context.state(definition)
+            write = @writes.fetch(kind)
+            idle = [state.commit, state.rollback]
+            write.call(state, message)
+            committed = state.commit
+            write.call(state, message)
+            rolled_back = state.rollback
+            [kind, idle + [committed, rolled_back]]
+          end
+          @sink.push(outcomes)
+        end
+      end
+
+      client = build_client(*definitions.values)
+      client.subscribe(handler_class.new(sink, definitions, writes))
+
+      client.send_message(topic, "k1", {go: true})
+      observation = sink.wait(1).first
+      expected = [:no_op, :no_op, :applied, :applied]
+      expect(observation).to eq(definitions.keys.to_h { |kind| [kind, expected] })
     end
   end
 

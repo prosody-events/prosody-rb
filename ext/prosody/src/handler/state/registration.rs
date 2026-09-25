@@ -3,10 +3,10 @@
 use super::{
     NativeJsonDequeScan, NativeJsonDequeState, NativeJsonMapScan, NativeJsonMapState,
     NativeJsonValueState, NativeMapKeyScan, NativeMessageDequeScan, NativeMessageDequeState,
-    NativeMessageMapScan, NativeMessageMapState, NativeMessageValueState,
+    NativeMessageMapScan, NativeMessageMapState, NativeMessageValueState, NativeSetState,
 };
 use crate::{ROOT_MOD, id};
-use magnus::{Error, Module, Ruby, method};
+use magnus::{Error, Module, RModule, Ruby, method};
 
 macro_rules! register_value {
     ($ruby:expr, $module:expr, $name:literal, $type:ty) => {{
@@ -27,15 +27,38 @@ macro_rules! register_map {
             id!($ruby, "contains_key"),
             method!(<$type>::contains_key, 1),
         )?;
+        class.define_method(id!($ruby, "is_empty"), method!(<$type>::is_empty, 0))?;
         class.define_method(id!($ruby, "get_many"), method!(<$type>::get_many, 1))?;
+        class.define_method(
+            id!($ruby, "contains_many"),
+            method!(<$type>::contains_many, 1),
+        )?;
         class.define_method(id!($ruby, "set"), method!(<$type>::set, 2))?;
         class.define_method(id!($ruby, "remove"), method!(<$type>::remove, 1))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
-        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, 1))?;
-        class.define_method(id!($ruby, "keys"), method!(<$type>::keys, 1))?;
+        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, -1))?;
+        class.define_method(id!($ruby, "keys"), method!(<$type>::keys, -1))?;
         class.define_method(id!($ruby, "commit"), method!(<$type>::commit, 0))?;
         class.define_method(id!($ruby, "rollback"), method!(<$type>::rollback, 0))?;
     }};
+}
+
+/// Registers the set handle. Only one set class exists: sets have no payload.
+fn register_set(ruby: &Ruby, module: RModule) -> Result<(), Error> {
+    let class = module.define_class(id!(ruby, "NativeSetState"), ruby.class_object())?;
+    class.define_method(id!(ruby, "contains"), method!(NativeSetState::contains, 1))?;
+    class.define_method(
+        id!(ruby, "contains_many"),
+        method!(NativeSetState::contains_many, 1),
+    )?;
+    class.define_method(id!(ruby, "is_empty"), method!(NativeSetState::is_empty, 0))?;
+    class.define_method(id!(ruby, "insert"), method!(NativeSetState::insert, 1))?;
+    class.define_method(id!(ruby, "remove"), method!(NativeSetState::remove, 1))?;
+    class.define_method(id!(ruby, "clear"), method!(NativeSetState::clear, 0))?;
+    class.define_method(id!(ruby, "keys"), method!(NativeSetState::keys, -1))?;
+    class.define_method(id!(ruby, "commit"), method!(NativeSetState::commit, 0))?;
+    class.define_method(id!(ruby, "rollback"), method!(NativeSetState::rollback, 0))?;
+    Ok(())
 }
 
 macro_rules! register_deque {
@@ -51,7 +74,7 @@ macro_rules! register_deque {
         class.define_method(id!($ruby, "pop_front"), method!(<$type>::pop_front, 0))?;
         class.define_method(id!($ruby, "pop_back"), method!(<$type>::pop_back, 0))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
-        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, 1))?;
+        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, -1))?;
         class.define_method(id!($ruby, "commit"), method!(<$type>::commit, 0))?;
         class.define_method(id!($ruby, "rollback"), method!(<$type>::rollback, 0))?;
     }};
@@ -82,6 +105,7 @@ pub(crate) fn register(ruby: &Ruby) -> Result<(), Error> {
     );
     register_map!(ruby, module, "NativeJsonMapState", NativeJsonMapState);
     register_map!(ruby, module, "NativeMessageMapState", NativeMessageMapState);
+    register_set(ruby, module)?;
     register_deque!(ruby, module, "NativeJsonDequeState", NativeJsonDequeState);
     register_deque!(
         ruby,

@@ -3,6 +3,7 @@ type keyed_state_order_event = { "order_id" => String, "total" => Integer }
 
 CART: Prosody::_ValueDefinition[keyed_state_cart]
 TOTALS: Prosody::_MapDefinition[Integer]
+SEEN: Prosody::_SetDefinition
 BACKLOG: Prosody::_MessageDequeDefinition[keyed_state_order_event]
 
 class KeyedStateHandler < Prosody::EventHandler[keyed_state_order_event]

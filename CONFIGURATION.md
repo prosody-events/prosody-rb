@@ -10,7 +10,7 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 |-----------------------------------------|---------------------------------------------------|--------------|
 | `bootstrap_servers` / `PROSODY_BOOTSTRAP_SERVERS` | Kafka servers to connect to             | -            |
 | `group_id` / `PROSODY_GROUP_ID`         | Consumer group name                               | -            |
-| `subscribed_topics` / `PROSODY_SUBSCRIBED_TOPICS` | Topics to read from                     | -            |
+| `subscribed_topics` / `PROSODY_SUBSCRIBED_TOPICS` | Topics to read from; a client that only reads published state needs none | -            |
 | `allowed_events` / `PROSODY_ALLOWED_EVENTS` | Only process events matching these prefixes   | (all)        |
 | `source_system` / `PROSODY_SOURCE_SYSTEM` | Tag for outgoing messages (prevents reprocessing)| `<group_id>` |
 | `mock` / `PROSODY_MOCK`                 | Use in-memory Kafka for testing                   | false        |
@@ -141,12 +141,11 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | Option / Environment Variable | Description | Default |
 |-------------------------------|-------------|---------|
 | `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
-| `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise JSON collections whose definitions set `published: true` | (none) |
+| `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise JSON and set collections whose definitions set `published: true` | (none) |
 | `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Disk workspace for the local keyed-state cache; each live client needs its own directory. Set a mounted path in production | per-client temp dir |
 | `state_owned_cache_size` / `PROSODY_STATE_OWNED_CACHE_SIZE` | Capacity of the owning keyed-state cache; accepts sizes such as `64 MiB` or `500 MB` | storage-engine default |
 | `state_read_cache_size` / `PROSODY_STATE_READ_CACHE_SIZE` | Capacity of the published-state read cache; accepts sizes such as `1 MiB` | `state_owned_cache_size` or `PROSODY_STATE_OWNED_CACHE_SIZE` when set; otherwise 1 MiB |
 | `state_read_cache` / `PROSODY_STATE_READ_CACHE_TTL` | Default published-read cache TTL. Use `false` or the environment value `none` to bypass the cache | 5s |
-| `state_recovery_delay` / `PROSODY_STATE_RECOVERY_DELAY` | Whole-second delay between staging a provisional cell and the recovery sweep; every collection TTL must strictly exceed it | 30s |
 
 Prefer the definition constructors from the [API reference](README.md#api-reference). They serialize into `state_collections`, so you can reuse the same object with `context.state`. Each entry has these fields:
 
@@ -155,13 +154,13 @@ Published collections require `subsystem`. Keep it configured for one deployment
 | Field | Description | Default |
 |-------|-------------|---------|
 | `name` | Collection name; non-empty and unique within the client | (required) |
-| `kind` | `"value"`, `"map"`, or `"deque"` | (required) |
-| `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received) | (required) |
-| `ttl_seconds` | Per-write TTL in whole seconds (at least 1; must exceed the recovery delay) | (none) |
+| `kind` | `"value"`, `"map"`, `"set"`, or `"deque"` | (required) |
+| `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received); `"presence"` for a set, which stores membership only | (required) |
+| `ttl_seconds` | Per-write TTL in whole seconds (at least 1) | (none) |
 | `read_uncommitted` | Opt out of transactional staging | false |
-| `published` | Allow read-only access from other consumer groups; JSON collections only | false |
+| `published` | Allow read-only access from other consumer groups; JSON and set collections only | false |
 | `read_cache` | Published-read cache override: a positive duration, `false`, or inherit when omitted | inherit |
-| `keyset_limit` | Map-only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
+| `keyset_limit` | Map and set only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
 | `capacity` | Deque-only window bound (at least 1); keeps at most N slots, enforced lazily on push. Runtime-only and mutable across deploys — not persisted | unbounded |
 
 Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`, `published:`, `read_cache:`). `read_cache` is a positive duration in seconds, `false` to bypass the cache, or `nil` to inherit the client default.

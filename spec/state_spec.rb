@@ -68,9 +68,24 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/keyset_limit.*whole number/)
     end
 
-    it "rejects keyset_limit on a non-map collection" do
+    it "rejects keyset_limit on a collection that is not a map or a set" do
       error = client_error(state_collections: [{name: "v", kind: "value", payload: "json", keyset_limit: 128}])
-      expect(error.message).to match(/keyset_limit.*only valid for map/)
+      expect(error.message).to match(/keyset_limit.*only valid for map and set/)
+    end
+
+    it "accepts a set with presence, a TTL, and a keyset limit" do
+      error = client_error(state_collections: [Prosody.set("s", ttl: 60, keyset_limit: 16)])
+      expect(error).to be_nil
+    end
+
+    it "rejects a set with a JSON payload" do
+      error = client_error(state_collections: [{name: "s", kind: "set", payload: "json"}])
+      expect(error.message).to match(/state_collections\[0\]\.payload: set collections use "presence"/)
+    end
+
+    it "rejects presence on a collection that is not a set" do
+      error = client_error(state_collections: [{name: "m", kind: "map", payload: "presence"}])
+      expect(error.message).to match(/state_collections\[0\]\.payload: "presence" is only valid for set/)
     end
 
     it "accepts keyset_limit 0 on a map" do
@@ -114,33 +129,13 @@ RSpec.describe "Prosody keyed state" do
     end
 
     it "rejects an unknown kind token" do
-      error = client_error(state_collections: [{name: "c", kind: "set", payload: "json"}])
+      error = client_error(state_collections: [{name: "c", kind: "tree", payload: "json"}])
       expect(error.message).to match(/state_collections\[0\]\.kind.*expected/)
     end
 
     it "rejects an unknown payload token" do
       error = client_error(state_collections: [{name: "c", kind: "value", payload: "proto"}])
       expect(error.message).to match(/state_collections\[0\]\.payload.*expected/)
-    end
-
-    it "rejects a fractional recovery delay" do
-      error = client_error(state_recovery_delay: 0.5)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a negative recovery delay" do
-      error = client_error(state_recovery_delay: -1)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a NaN recovery delay" do
-      error = client_error(state_recovery_delay: Float::NAN)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects an infinite recovery delay" do
-      error = client_error(state_recovery_delay: Float::INFINITY)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
     end
 
     it "rejects a zero in-memory block-cache size" do
@@ -198,6 +193,17 @@ RSpec.describe "Prosody keyed state" do
       expect(definition.keyset_limit).to eq(256)
     end
 
+    it "builds a presence-only set definition" do
+      definition = Prosody.set("tags", ttl: 60, keyset_limit: 16, read_uncommitted: true, published: true, read_cache: 2)
+      expect(definition).to be_frozen
+      expect(definition.to_state_config).to eq({
+        name: "tags", kind: "set", payload: "presence", ttl_seconds: 60,
+        read_uncommitted: true, published: true, keyset_limit: 16
+      })
+      expect(definition.read_cache).to eq(2)
+      expect { Prosody.set("tags", capacity: 1) }.to raise_error(ArgumentError)
+    end
+
     it "builds a deque definition" do
       expect(Prosody.deque("events").kind).to eq("deque")
     end
@@ -244,7 +250,7 @@ RSpec.describe "Prosody keyed state" do
       calls = []
       native = Object.new
       reader = Object.new.extend(Prosody::State::Reading)
-      %i[published_value published_map published_deque].each do |vend_method|
+      %i[published_value published_map published_set published_deque].each do |vend_method|
         reader.define_singleton_method(vend_method) do |*args|
           calls << [vend_method, *args]
           native
@@ -254,6 +260,7 @@ RSpec.describe "Prosody keyed state" do
       cases = [
         [Prosody.value("cart", published: true, read_cache: 2), :published_value, Prosody::PublishedValue],
         [Prosody.map("sessions", published: true, read_cache: 2), :published_map, Prosody::PublishedMap],
+        [Prosody.set("tags", published: true, read_cache: 2), :published_set, Prosody::PublishedSet],
         [Prosody.deque("jobs", published: true, read_cache: 2), :published_deque, Prosody::PublishedDeque]
       ]
 
@@ -270,7 +277,7 @@ RSpec.describe "Prosody keyed state" do
     def build_fake_context(calls)
       fake = Object.new.extend(Prosody::State::Vending)
       sentinel = Object.new
-      %i[value_state map_state deque_state message_value_state message_map_state message_deque_state].each do |vend|
+      %i[value_state map_state set_state deque_state message_value_state message_map_state message_deque_state].each do |vend|
         fake.define_singleton_method(vend) do |name|
           calls << [vend, name]
           sentinel
@@ -287,6 +294,7 @@ RSpec.describe "Prosody keyed state" do
       cases = [
         [Prosody.value("value"), :value_state, Prosody::ValueState],
         [Prosody.map("map"), :map_state, Prosody::MapState],
+        [Prosody.set("set"), :set_state, Prosody::SetState],
         [Prosody.deque("deque"), :deque_state, Prosody::DequeState],
         [Prosody.message_value("message-value"), :message_value_state, Prosody::ValueState],
         [Prosody.message_map("message-map"), :message_map_state, Prosody::MapState],
@@ -320,7 +328,7 @@ RSpec.describe "Prosody keyed state" do
       native.define_singleton_method(:get) { |_index| nil }
       native.define_singleton_method(:len) { 0 }
       native.define_singleton_method(:peek_back) { nil }
-      native.define_singleton_method(:scan) do |_direction|
+      native.define_singleton_method(:scan) do |_direction, _query = {}|
         scan = Object.new
         scan.define_singleton_method(:next) { nil }
         scan.define_singleton_method(:close) { nil }
@@ -356,7 +364,7 @@ RSpec.describe "Prosody keyed state" do
     # native handle.
     def fake_scanning_native(items)
       native = Object.new
-      native.define_singleton_method(:scan) do |_direction|
+      native.define_singleton_method(:scan) do |_direction, _query = {}|
         remaining = items.dup
         scan = Object.new
         scan.define_singleton_method(:next) { remaining.empty? ? nil : remaining.shift }
@@ -384,8 +392,8 @@ RSpec.describe "Prosody keyed state" do
       native = fake_scanning_native([])
       original_scan = native.method(:scan)
       native.define_singleton_method(:scan) do |*args|
-        directions << args.last
-        original_scan.call(args.last)
+        directions << args.grep(Symbol).last
+        original_scan.call(args.grep(Symbol).last)
       end
 
       Prosody::MapState.new(native).reverse_each_pair.to_a
@@ -397,11 +405,11 @@ RSpec.describe "Prosody keyed state" do
     it "gives published maps the owned read operations" do
       native = fake_scanning_native([["a", 1], ["b", 2]])
       scan = native.method(:scan)
-      native.define_singleton_method(:scan) { |_key, direction| scan.call(direction) }
+      native.define_singleton_method(:scan) { |_key, direction, _query| scan.call(direction) }
       native.define_singleton_method(:contains_key) { |key, map_key| [key, map_key] == ["user-1", "a"] }
       key_scan = []
       key_native = fake_scanning_native(["b", "a"])
-      native.define_singleton_method(:keys) do |key, direction|
+      native.define_singleton_method(:keys) do |key, direction, _query|
         key_scan << [key, direction]
         key_native.scan(direction)
       end

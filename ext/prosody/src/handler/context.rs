@@ -7,14 +7,15 @@
 use crate::bridge::Bridge;
 use crate::handler::state::{
     NativeJsonDequeState, NativeJsonMapState, NativeJsonValueState, NativeMessageDequeState,
-    NativeMessageMapState, NativeMessageValueState, state_error,
+    NativeMessageMapState, NativeMessageValueState, NativeSetState, state_error,
 };
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::value::ReprValue;
-use magnus::{Error, Module, RClass, Ruby, Value, method};
+use magnus::{Error, Module, RClass, RString, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use prosody::consumer::DemandType;
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::TimerType;
 use prosody::timers::datetime::CompactDateTime;
@@ -49,6 +50,9 @@ pub struct Context {
     /// OpenTelemetry propagator for distributed tracing
     #[educe(Debug(ignore))]
     propagator: Arc<TextMapCompositePropagator>,
+
+    /// Whether this dispatch is a normal delivery or a retry after a failure.
+    demand: DemandType,
 }
 
 impl Context {
@@ -59,16 +63,39 @@ impl Context {
     /// * `inner` - The Prosody event context to wrap
     /// * `bridge` - The bridge for handling async operations
     /// * `propagator` - Shared OpenTelemetry propagator for distributed tracing
+    /// * `demand` - The demand this dispatch serves
     pub fn new(
         inner: BoxEventContext<serde_json::Value>,
         bridge: Bridge,
         propagator: Arc<TextMapCompositePropagator>,
+        demand: DemandType,
     ) -> Self {
         Self {
             inner,
             bridge,
             propagator,
+            demand,
         }
+    }
+
+    /// Returns the dispatch demand as a `Prosody::Demand`.
+    ///
+    /// A normal delivery has kind `:normal` and retry ordinal 0. A retry after
+    /// a failure has kind `:failure` and an ordinal that starts at 1. The
+    /// ordinal is an estimate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Ruby error if `Prosody::Demand` cannot be built.
+    fn demand(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+        let (kind, retry) = match this.demand {
+            DemandType::Normal => ("normal", 0),
+            DemandType::Failure { retry } => ("failure", retry),
+        };
+        let class: RClass = ruby.get_inner(&ROOT_MOD).const_get(id!(ruby, "Demand"))?;
+        // `Data.new` maps positional members to keywords; `new_instance` would
+        // bypass it and call `initialize` with positional arguments.
+        class.funcall(id!(ruby, "new"), (ruby.sym_new(kind), retry))
     }
 
     /// Check if cancellation has been requested.
@@ -364,6 +391,23 @@ impl Context {
         ))
     }
 
+    /// Vends the handle for the named set collection.
+    ///
+    /// # Errors
+    ///
+    /// See [`value_state`](Self::value_state).
+    fn set_state(ruby: &Ruby, this: &Self, name: RString) -> Result<NativeSetState, Error> {
+        let handle = this
+            .inner
+            .set_state(&name.to_string()?)
+            .map_err(|error| state_error(ruby, &error))?;
+        Ok(NativeSetState::new(
+            Arc::from(handle),
+            this.bridge.clone(),
+            Arc::clone(&this.propagator),
+        ))
+    }
+
     /// Vends the handle for the named JSON deque collection.
     ///
     /// # Errors
@@ -471,6 +515,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(Context::should_cancel, 0),
     )?;
     class.define_method(id!(ruby, "on_cancel"), method!(Context::on_cancel, 0))?;
+    class.define_method(id!(ruby, "demand"), method!(Context::demand, 0))?;
 
     // Timer scheduling methods
     class.define_method(id!(ruby, "schedule"), method!(Context::schedule, 1))?;
@@ -488,6 +533,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     // Keyed-state vend methods
     class.define_method(id!(ruby, "value_state"), method!(Context::value_state, 1))?;
     class.define_method(id!(ruby, "map_state"), method!(Context::map_state, 1))?;
+    class.define_method(id!(ruby, "set_state"), method!(Context::set_state, 1))?;
     class.define_method(id!(ruby, "deque_state"), method!(Context::deque_state, 1))?;
     class.define_method(
         id!(ruby, "message_value_state"),

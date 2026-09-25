@@ -1,7 +1,7 @@
 use super::{
     Arc, Class, Client, Duration, ErasedReadCache, Error, FutureExt, Module, Object, RClass,
     RModule, ROOT_MOD, ReprValue, ResponseError, Ruby, RubyHandler, SharedHighLevelClient,
-    Shutdown, Value, function, id, kwargs, method, request,
+    Shutdown, Value, function, id, kwargs, method, readers, request,
 };
 
 pub(super) fn validate_handler(ruby: &Ruby, handler: Value) -> Result<(), Error> {
@@ -89,15 +89,19 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(
         id!(ruby, "published_value"),
-        method!(Client::published_value, 4),
+        method!(readers::published_value, 4),
     )?;
     class.define_method(
         id!(ruby, "published_map"),
-        method!(Client::published_map, 4),
+        method!(readers::published_map, 4),
+    )?;
+    class.define_method(
+        id!(ruby, "published_set"),
+        method!(readers::published_set, 4),
     )?;
     class.define_method(
         id!(ruby, "published_deque"),
-        method!(Client::published_deque, 4),
+        method!(readers::published_deque, 4),
     )?;
 
     Ok(())

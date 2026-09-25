@@ -43,8 +43,8 @@ mod state;
 mod trigger;
 
 pub(crate) use state::{
-    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, parse_direction,
-    published_deque_scan, published_map_key_scan, published_map_scan,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
+    published_deque_scan, published_map_key_scan, published_map_scan, published_scan_arguments,
 };
 
 /// A handler that bridges between Kafka messages and Ruby message processing
@@ -95,6 +95,7 @@ impl RubyHandler {
         &self,
         context: C,
         message: ConsumerMessage<P>,
+        demand: DemandType,
         method: &'static str,
         event_type: &'static str,
         span: Span,
@@ -123,6 +124,7 @@ impl RubyHandler {
             context.boxed(),
             self.bridge.clone(),
             self.propagator.clone(),
+            demand,
         );
         let response_requested = message.response_requested();
         let message = M::from(message);
@@ -188,7 +190,7 @@ impl FallibleHandler for RubyHandler {
         &self,
         context: C,
         message: ConsumerMessage<Self::Payload>,
-        _demand_type: DemandType,
+        demand: DemandType,
     ) -> Result<Self::Output, Self::Error>
     where
         C: EventContext<Payload = Self::Payload>,
@@ -201,7 +203,7 @@ impl FallibleHandler for RubyHandler {
             offset = message.offset(),
             key = %message.key()
         );
-        self.handle_record::<_, _, Message>(context, message, "on_message", "message", span)
+        self.handle_record::<_, _, Message>(context, message, demand, "on_message", "message", span)
             .await
     }
 
@@ -209,7 +211,7 @@ impl FallibleHandler for RubyHandler {
         &self,
         context: C,
         message: ConsumerMessage<()>,
-        _demand_type: DemandType,
+        demand: DemandType,
     ) -> Result<Self::Output, Self::Error>
     where
         C: EventContext<Payload = Self::Payload>,
@@ -222,15 +224,22 @@ impl FallibleHandler for RubyHandler {
             offset = message.offset(),
             key = %message.key()
         );
-        self.handle_record::<_, _, ExciseMessage>(context, message, "on_excise", "excise", span)
-            .await
+        self.handle_record::<_, _, ExciseMessage>(
+            context,
+            message,
+            demand,
+            "on_excise",
+            "excise",
+            span,
+        )
+        .await
     }
 
     async fn on_timer<C>(
         &self,
         context: C,
         trigger: ProsodyTrigger,
-        _demand_type: DemandType,
+        demand: DemandType,
     ) -> Result<Self::Output, Self::Error>
     where
         C: EventContext<Payload = Self::Payload>,
@@ -269,6 +278,7 @@ impl FallibleHandler for RubyHandler {
             context.boxed(),
             self.bridge.clone(),
             self.propagator.clone(),
+            demand,
         );
         let timer: Timer = trigger.into();
 

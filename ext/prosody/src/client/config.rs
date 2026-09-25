@@ -27,7 +27,7 @@ use prosody::loader::KafkaLoader;
 use prosody::loader::KafkaLoaderConfiguration;
 use prosody::producer::ProducerConfigurationBuilder;
 use prosody::state::descriptor::{
-    DequeDescriptor, MapDescriptor, StateDescriptor, deque_state, map_state, value_state,
+    DequeDescriptor, MapDescriptor, StateDescriptor, deque_state, map_state, set_state, value_state,
 };
 use prosody::state::order_codec::Utf8KeyCodec;
 use prosody::subsystem::SubsystemName;
@@ -252,12 +252,6 @@ pub struct NativeConfiguration {
 
     /// Default cache policy for published-state reads.
     state_read_cache: Option<ReadCacheConfig>,
-
-    /// Delay in whole seconds before the keyed-state recovery sweep.
-    ///
-    /// Crosses as an `f64` so fractional/negative/non-finite values reach the
-    /// whole-number guard rather than being silently truncated.
-    state_recovery_delay: Option<f64>,
 }
 
 /// Declares one keyed-state collection to register before subscribe.
@@ -266,10 +260,10 @@ struct StateCollectionConfig {
     /// The collection name. Prosody requires it to be non-empty and unique.
     name: String,
 
-    /// The collection kind: `"value"`, `"map"`, or `"deque"`.
+    /// The collection kind: `"value"`, `"map"`, `"set"`, or `"deque"`.
     kind: String,
 
-    /// The item payload: `"json"` or `"message"`.
+    /// The item payload: `"json"` or `"message"`, or `"presence"` for a set.
     payload: String,
 
     /// Optional per-write TTL in whole seconds. Crosses as `f64` so
@@ -282,8 +276,9 @@ struct StateCollectionConfig {
     /// Whether other consumer groups may read this JSON collection.
     published: Option<bool>,
 
-    /// Optional map-only keyset bound (`0..=4096`). The binding rejects values
-    /// that cannot map to an unsigned integer. Prosody enforces the ceiling.
+    /// Optional map or set keyset bound (`0..=4096`). The binding rejects
+    /// values that cannot map to an unsigned integer. Prosody enforces the
+    /// ceiling.
     keyset_limit: Option<f64>,
 
     /// Optional deque-only window capacity (`>= 1`). Runtime-only and not
@@ -875,6 +870,8 @@ enum CollectionKind {
     Value,
     /// A `String`-keyed ordered map.
     Map,
+    /// A presence-only ordered set of `String` members.
+    Set,
     /// A deque.
     Deque,
 }
@@ -885,6 +882,8 @@ enum CollectionPayload {
     Json,
     /// The full Kafka message the handler received.
     Message,
+    /// Membership only. Only sets use it.
+    Presence,
 }
 
 /// Parses a collection-kind token.
@@ -892,15 +891,16 @@ enum CollectionPayload {
 /// # Errors
 ///
 /// Returns a permanent-category error naming the field if the token is not
-/// `"value"`, `"map"`, or `"deque"`.
+/// `"value"`, `"map"`, `"set"`, or `"deque"`.
 fn parse_kind(index: usize, kind: &str) -> Result<CollectionKind, String> {
     match kind {
         "value" => Ok(CollectionKind::Value),
         "map" => Ok(CollectionKind::Map),
+        "set" => Ok(CollectionKind::Set),
         "deque" => Ok(CollectionKind::Deque),
         other => Err(format!(
-            "state_collections[{index}].kind: expected \"value\", \"map\", or \"deque\", got \
-             {other:?}"
+            "state_collections[{index}].kind: expected \"value\", \"map\", \"set\", or \
+             \"deque\", got {other:?}"
         )),
     }
 }
@@ -910,13 +910,15 @@ fn parse_kind(index: usize, kind: &str) -> Result<CollectionKind, String> {
 /// # Errors
 ///
 /// Returns a permanent-category error naming the field if the token is not
-/// `"json"` or `"message"`.
+/// `"json"`, `"message"`, or `"presence"`.
 fn parse_payload(index: usize, payload: &str) -> Result<CollectionPayload, String> {
     match payload {
         "json" => Ok(CollectionPayload::Json),
         "message" => Ok(CollectionPayload::Message),
+        "presence" => Ok(CollectionPayload::Presence),
         other => Err(format!(
-            "state_collections[{index}].payload: expected \"json\" or \"message\", got {other:?}"
+            "state_collections[{index}].payload: expected \"json\", \"message\", or \
+             \"presence\", got {other:?}"
         )),
     }
 }
@@ -1015,8 +1017,8 @@ fn with_capacity<T>(
     }
 }
 
-/// Maps one collection into its descriptor over the closed 3×2 (kind ×
-/// payload) matrix.
+/// Maps one collection into its descriptor. Values, maps, and deques hold
+/// JSON or messages. Sets, and only sets, hold presence.
 ///
 /// # Errors
 ///
@@ -1098,6 +1100,32 @@ fn register_state_collection(
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
+        (CollectionKind::Set, CollectionPayload::Presence) => {
+            let mut descriptor = with_def(
+                set_state::<Utf8KeyCodec>(name),
+                ttl_seconds,
+                read_uncommitted,
+                collection.published,
+            );
+            if let Some(limit) = keyset_limit {
+                descriptor = descriptor.keyset_limit(limit as usize);
+            }
+            let _ = keyed.register(descriptor);
+        }
+        (CollectionKind::Set, CollectionPayload::Json | CollectionPayload::Message) => {
+            return Err(format!(
+                "state_collections[{index}].payload: set collections use \"presence\""
+            ));
+        }
+        (
+            CollectionKind::Value | CollectionKind::Map | CollectionKind::Deque,
+            CollectionPayload::Presence,
+        ) => {
+            return Err(format!(
+                "state_collections[{index}].payload: \"presence\" is only valid for set \
+                 collections"
+            ));
+        }
     }
 
     Ok(())
@@ -1111,9 +1139,9 @@ fn keyset_limit(
     let Some(value) = value else {
         return Ok(None);
     };
-    if !matches!(kind, CollectionKind::Map) {
+    if !matches!(kind, CollectionKind::Map | CollectionKind::Set) {
         return Err(format!(
-            "state_collections[{index}].keyset_limit: only valid for map collections"
+            "state_collections[{index}].keyset_limit: only valid for map and set collections"
         ));
     }
     whole_number_field(
@@ -1160,11 +1188,6 @@ fn build_keyed_state_config(
 
     if let Some(dir) = &config.state_cache_dir {
         builder.cache_dir(PathBuf::from(dir));
-    }
-
-    if let Some(seconds) = config.state_recovery_delay {
-        let seconds = whole_number_field(seconds, "state_recovery_delay", 0, u32::MAX)?;
-        builder.recovery_delay(CompactDuration::new(seconds));
     }
 
     if let Some(size) = &config.state_owned_cache_size {

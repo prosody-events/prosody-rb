@@ -22,7 +22,7 @@ use prosody::consumer::event_context::{
     DynDequeState, DynMapState, DynValueState, ErasedCategory, ErasedStateError,
 };
 use prosody::consumer::message::ConsumerMessage;
-use prosody::state::Direction;
+use prosody::state::StoreOutcome;
 use serde_json::Value as JsonValue;
 use serde_magnus::{deserialize, serialize};
 use std::sync::Arc;
@@ -140,17 +140,14 @@ fn message_write_item(
     Ok(message.consumer_message())
 }
 
-/// Parses a scan-direction token into the core [`Direction`].
+/// Maps a core [`StoreOutcome`] to `:applied` or `:no_op`.
 ///
-/// An invalid token is a caller mistake and rejects transient.
-pub(crate) fn parse_direction(ruby: &Ruby, direction: StaticSymbol) -> Result<Direction, Error> {
-    match direction.name()? {
-        "forward" => Ok(Direction::Forward),
-        "backward" => Ok(Direction::Backward),
-        other => Err(transient_state_error(
-            ruby,
-            format!("direction: expected :forward or :backward, got :{other}"),
-        )),
+/// `:applied` means the call drained buffered operations. `:no_op` means
+/// nothing was buffered.
+fn outcome_symbol(ruby: &Ruby, outcome: StoreOutcome) -> StaticSymbol {
+    match outcome {
+        StoreOutcome::Applied => ruby.sym_new("applied"),
+        StoreOutcome::NoOp => ruby.sym_new("no_op"),
     }
 }
 
@@ -172,8 +169,8 @@ macro_rules! run_op {
     }};
 }
 
-/// Drives an infallible erased async op (returning `()`) through
-/// [`Bridge::wait_for`] with the extracted carrier active.
+/// Drives an infallible erased async op through [`Bridge::wait_for`] with the
+/// extracted carrier active, yielding the op's value.
 macro_rules! run_infallible {
     ($ruby:expr, $this:expr, $handle:expr, $call:ident ()) => {{
         let handle = Arc::clone($handle);
@@ -224,14 +221,14 @@ macro_rules! value_state {
                 Ok(ruby.qnil().as_value())
             }
 
-            fn commit(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, commit())?;
-                Ok(ruby.qnil().as_value())
+            fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_op!(ruby, this, &this.state, commit())?;
+                Ok(outcome_symbol(ruby, outcome))
             }
 
-            fn rollback(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_infallible!(ruby, this, &this.state, rollback());
-                Ok(ruby.qnil().as_value())
+            fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                Ok(outcome_symbol(ruby, outcome))
             }
         }
     };
@@ -287,11 +284,23 @@ macro_rules! map_state {
                 Ok(run_op!(ruby, this, &this.state, contains_key(key))?.into_value_with(ruby))
             }
 
+            fn is_empty(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+                run_op!(ruby, this, &this.state, is_empty())
+            }
+
             fn get_many(ruby: &Ruby, this: &Self, keys: Vec<String>) -> Result<Value, Error> {
                 let items = run_op!(ruby, this, &this.state, get_many(keys))?;
                 let array =
                     ruby.ary_try_from_iter(items.into_iter().map(|item| ($restore)(ruby, item)))?;
                 Ok(array.as_value())
+            }
+
+            fn contains_many(
+                ruby: &Ruby,
+                this: &Self,
+                keys: Vec<String>,
+            ) -> Result<Vec<bool>, Error> {
+                run_op!(ruby, this, &this.state, contains_many(keys))
             }
 
             fn set(ruby: &Ruby, this: &Self, key: String, value: Value) -> Result<Value, Error> {
@@ -310,40 +319,36 @@ macro_rules! map_state {
                 Ok(ruby.qnil().as_value())
             }
 
-            fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<$scan, Error> {
-                let direction = parse_direction(ruby, direction)?;
-                let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
+            fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
+                let (direction, options) = scan_arguments(args)?;
+                let query = key_query(ruby, direction, options)?;
                 $scan::new(
                     ruby,
-                    this.state.scan(direction),
+                    this.state.entries().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
             }
 
-            fn keys(
-                ruby: &Ruby,
-                this: &Self,
-                direction: StaticSymbol,
-            ) -> Result<NativeMapKeyScan, Error> {
-                let direction = parse_direction(ruby, direction)?;
-                let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
+            fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
+                let (direction, options) = scan_arguments(args)?;
+                let query = key_query(ruby, direction, options)?;
                 NativeMapKeyScan::new(
                     ruby,
-                    this.state.keys(direction),
+                    this.state.keys().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
             }
 
-            fn commit(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, commit())?;
-                Ok(ruby.qnil().as_value())
+            fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_op!(ruby, this, &this.state, commit())?;
+                Ok(outcome_symbol(ruby, outcome))
             }
 
-            fn rollback(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_infallible!(ruby, this, &this.state, rollback());
-                Ok(ruby.qnil().as_value())
+            fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                Ok(outcome_symbol(ruby, outcome))
             }
         }
     };
@@ -437,25 +442,25 @@ macro_rules! deque_state {
                 Ok(ruby.qnil().as_value())
             }
 
-            fn scan(ruby: &Ruby, this: &Self, direction: StaticSymbol) -> Result<$scan, Error> {
-                let direction = parse_direction(ruby, direction)?;
-                let _guard = extract_opentelemetry_context(ruby, &this.propagator)?.attach();
+            fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
+                let (direction, options) = scan_arguments(args)?;
+                let query = position_query(ruby, direction, options)?;
                 $scan::new(
                     ruby,
-                    this.state.scan(direction),
+                    this.state.values().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
                 )
             }
 
-            fn commit(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, commit())?;
-                Ok(ruby.qnil().as_value())
+            fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_op!(ruby, this, &this.state, commit())?;
+                Ok(outcome_symbol(ruby, outcome))
             }
 
-            fn rollback(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_infallible!(ruby, this, &this.state, rollback());
-                Ok(ruby.qnil().as_value())
+            fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                Ok(outcome_symbol(ruby, outcome))
             }
         }
     };
@@ -477,12 +482,16 @@ deque_state!(
     |ruby, value| message_write_item(ruby, value, " to push into a message deque"),
     message_or_nil
 );
+mod query;
 mod scan;
+mod set;
 
+pub(crate) use query::{key_query, position_query, published_scan_arguments, scan_arguments};
 pub(crate) use scan::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, NativeMessageDequeScan,
     NativeMessageMapScan, published_deque_scan, published_map_key_scan, published_map_scan,
 };
+pub(crate) use set::NativeSetState;
 mod registration;
 
 pub(crate) use registration::register;

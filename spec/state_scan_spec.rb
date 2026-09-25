@@ -20,7 +20,7 @@ RSpec.describe "Prosody keyed state scans" do
   def recording_native(items)
     closes = []
     native = Object.new
-    native.define_singleton_method(:scan) do |_direction|
+    native.define_singleton_method(:scan) do |_direction, _query = {}|
       remaining = items.dup
       cursor = Object.new
       cursor.define_singleton_method(:next) { remaining.empty? ? nil : remaining.shift }
