@@ -20,7 +20,7 @@ use mimalloc::MiMalloc;
 use std::io::{self, Write};
 use std::process;
 use std::sync::{LazyLock, OnceLock};
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder, Runtime};
 
 mod admin;
 mod bridge;
@@ -32,6 +32,12 @@ mod published;
 mod scheduler;
 mod tracing_util;
 mod util;
+
+/// Stack size of each Tokio worker thread.
+///
+/// Core futures are large in debug builds. A timer write that polls through
+/// the Cassandra driver overflows the Tokio default of 2 MiB.
+const WORKER_STACK_SIZE: usize = 8 * 1024 * 1024;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -47,14 +53,21 @@ pub static TRACING_INIT: OnceLock<()> = OnceLock::new();
 ///
 /// This runtime powers all async operations in the extension, including
 /// message processing, scheduling, and communication with Ruby.
-static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| match Runtime::new() {
-    Ok(runtime) => runtime,
-    Err(error) => {
-        drop(writeln!(
-            io::stderr().lock(),
-            "failed to create Tokio runtime: {error:#}"
-        ));
-        process::abort();
+static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(WORKER_STACK_SIZE)
+        .build();
+
+    match runtime {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            drop(writeln!(
+                io::stderr().lock(),
+                "failed to create Tokio runtime: {error:#}"
+            ));
+            process::abort();
+        }
     }
 });
 
