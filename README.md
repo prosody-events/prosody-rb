@@ -826,9 +826,9 @@ all traces to Ruby.
 To use OpenTelemetry tracing with Prosody, you need to install the following gems:
 
 ```ruby
-gem 'opentelemetry-sdk', '~> 1.10'
-gem 'opentelemetry-api', '~> 1.7'
-gem 'opentelemetry-exporter-otlp', '~> 0.31'
+gem 'opentelemetry-sdk', '~> 1.13'
+gem 'opentelemetry-api', '~> 1.11'
+gem 'opentelemetry-exporter-otlp', '~> 0.36'
 ```
 
 ### Initializing Tracing
