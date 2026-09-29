@@ -326,6 +326,13 @@ module Prosody
     # selects its default.
     config_param :state_owned_cache_size, converter: lambda(&:to_s)
 
+    # Bytes of in-memory writes the local keyed-state cache holds for each
+    # assigned partition before it flushes them to disk. Memory use scales
+    # with the number of assigned partitions. Uses
+    # PROSODY_STATE_MEMTABLE_SIZE when omitted. Unset uses the storage
+    # engine's default of 64 MiB.
+    config_param :state_memtable_size, converter: lambda(&:to_s)
+
     # Capacity of the published-state read-through cache, such as "1 MiB".
     # Uses PROSODY_STATE_READ_CACHE_SIZE when omitted. It then uses the owned
     # cache size when set, or 1 MiB when both sizes are unset.

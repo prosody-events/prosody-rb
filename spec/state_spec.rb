@@ -143,6 +143,11 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/state_owned_cache_size/)
     end
 
+    it "rejects a zero memtable size" do
+      error = client_error(state_memtable_size: "0")
+      expect(error.message).to match(/state_memtable_size/)
+    end
+
     it "rejects a zero published-read cache size" do
       error = client_error(state_read_cache_size: "0")
       expect(error.message).to match(/state_read_cache_size/)

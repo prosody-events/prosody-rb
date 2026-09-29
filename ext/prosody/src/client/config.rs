@@ -247,6 +247,10 @@ pub struct NativeConfiguration {
     /// Capacity of the owning keyed-state cache.
     state_owned_cache_size: Option<String>,
 
+    /// Size at which the local keyed-state cache flushes a partition's
+    /// in-memory writes to disk.
+    state_memtable_size: Option<String>,
+
     /// Capacity of the published-state read-through cache.
     state_read_cache_size: Option<String>,
 
@@ -1195,6 +1199,13 @@ fn build_keyed_state_config(
             .parse::<ByteSize>()
             .map_err(|error| format!("state_owned_cache_size: {error}"))?;
         builder.owned_cache_size(Some(size));
+    }
+
+    if let Some(size) = &config.state_memtable_size {
+        let size = size
+            .parse::<ByteSize>()
+            .map_err(|error| format!("state_memtable_size: {error}"))?;
+        builder.memtable_size(Some(size));
     }
 
     if let Some(size) = &config.state_read_cache_size {
