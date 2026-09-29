@@ -15,7 +15,9 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 | `source_system` / `PROSODY_SOURCE_SYSTEM` | Tag for outgoing messages (prevents reprocessing)| `<group_id>` |
 | `mock` / `PROSODY_MOCK`                 | Use in-memory Kafka for testing                   | false        |
 | `mode` / -                              | Processing mode: `pipeline`, `low_latency`, or `best_effort` | `pipeline` |
-| - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info` |
+| - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info`, with `warn` for `scylla` and `opentelemetry` |
+
+`PROSODY_LOG` directives apply on top of the defaults above. A value that names only targets, such as `prosody=debug`, keeps other targets at `info`. Set `PROSODY_LOG=opentelemetry=info` to restore the OpenTelemetry info events.
 
 ## Requests
 
