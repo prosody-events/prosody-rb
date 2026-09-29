@@ -316,9 +316,11 @@ module Prosody
     # Uses PROSODY_SUBSYSTEM when omitted. Published collections require it.
     config_param :subsystem, converter: lambda(&:to_s)
 
-    # Disk workspace for the local keyed-state cache. Each live client
-    # needs its own directory. Falls back to the
-    # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
+    # Directory for the local keyed-state caches. Each consumer opens its
+    # cache in a new subdirectory and removes it when the consumer stops, so
+    # clients can share the directory. Falls back to the
+    # PROSODY_STATE_CACHE_DIR environment variable, then to
+    # <temp>/prosody/keyed-state. Must not be an empty string.
     config_param :state_cache_dir, converter: lambda(&:to_s)
 
     # Capacity of the owning keyed-state cache, such as "64 MiB". Uses

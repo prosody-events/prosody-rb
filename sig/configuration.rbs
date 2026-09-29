@@ -266,8 +266,10 @@ module Prosody
     def subsystem: () -> String?
     def subsystem=: (_ToS) -> String
 
-    # Root directory for the local keyed-state cache. Falls back to
-    # PROSODY_STATE_CACHE_DIR. Must not be an empty string.
+    # Directory for the local keyed-state caches. Each consumer uses a new
+    # subdirectory, so clients can share it. Falls back to
+    # PROSODY_STATE_CACHE_DIR, then to <temp>/prosody/keyed-state. Must not be
+    # an empty string.
     def state_cache_dir: () -> String?
     def state_cache_dir=: (_ToS) -> String
 

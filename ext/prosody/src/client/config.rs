@@ -242,7 +242,8 @@ pub struct NativeConfiguration {
     /// Subsystem under which published collections are advertised.
     subsystem: Option<String>,
 
-    /// Root directory for the local keyed-state cache. Must not be empty.
+    /// Directory for the local keyed-state caches. Each consumer uses a new
+    /// subdirectory, so clients can share it. Must not be empty.
     state_cache_dir: Option<String>,
 
     /// Capacity of the owning keyed-state cache.
