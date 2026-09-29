@@ -250,7 +250,8 @@ pub struct NativeConfiguration {
     state_owned_cache_size: Option<String>,
 
     /// Size at which the local keyed-state cache flushes a partition's
-    /// in-memory writes to disk.
+    /// in-memory writes to disk. `None` uses `PROSODY_STATE_MEMTABLE_SIZE`,
+    /// or the engine default of 64 MiB when that is unset.
     state_memtable_size: Option<String>,
 
     /// Capacity of the published-state read-through cache.

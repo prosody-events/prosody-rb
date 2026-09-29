@@ -280,10 +280,10 @@ module Prosody
     def state_owned_cache_size=: (String | _ToS) -> String
 
     # Bytes of in-memory writes the local keyed-state cache holds for each
-    # assigned partition before it flushes them to disk. Memory use scales
-    # with the number of assigned partitions. Uses
-    # PROSODY_STATE_MEMTABLE_SIZE when omitted. Unset uses the storage
-    # engine's default of 64 MiB.
+    # assigned partition before it flushes them to disk. Accepts a
+    # human-readable size. Memory use scales with the number of assigned
+    # partitions. Uses PROSODY_STATE_MEMTABLE_SIZE when omitted. Otherwise,
+    # the engine uses its default of 64 MiB.
     def state_memtable_size: () -> String?
     def state_memtable_size=: (String | _ToS) -> String
 

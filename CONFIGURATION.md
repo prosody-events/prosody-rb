@@ -146,7 +146,7 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise JSON and set collections whose definitions set `published: true` | (none) |
 | `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Directory for the local keyed-state caches. Each consumer opens its cache in a new subdirectory and removes it when the consumer stops, so clients can share the directory. Set a mounted path in production | `<temp>/prosody/keyed-state` |
 | `state_owned_cache_size` / `PROSODY_STATE_OWNED_CACHE_SIZE` | Capacity of the owning keyed-state cache; accepts sizes such as `64 MiB` or `500 MB` | storage-engine default |
-| `state_memtable_size` / `PROSODY_STATE_MEMTABLE_SIZE` | Bytes of in-memory writes the local keyed-state cache holds for each assigned partition before it flushes them to disk. Memory use scales with the number of assigned partitions | storage-engine default of 64 MiB |
+| `state_memtable_size` / `PROSODY_STATE_MEMTABLE_SIZE` | Bytes of in-memory writes the local keyed-state cache holds for each assigned partition before it flushes them to disk; accepts sizes such as `16 MiB`. Memory use scales with the number of assigned partitions | storage-engine default of 64 MiB |
 | `state_read_cache_size` / `PROSODY_STATE_READ_CACHE_SIZE` | Capacity of the published-state read cache; accepts sizes such as `1 MiB` | `state_owned_cache_size` or `PROSODY_STATE_OWNED_CACHE_SIZE` when set; otherwise 1 MiB |
 | `state_read_cache` / `PROSODY_STATE_READ_CACHE_TTL` | Default published-read cache TTL. Use `false` or the environment value `none` to bypass the cache | 5s |
 
