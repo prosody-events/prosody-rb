@@ -632,6 +632,8 @@ State operations look synchronous. They yield the current fiber while Prosody pe
 
 Map, set, and deque scans return enumerators when called without a block. Map keys and set members are strings. A set stores membership only, so it has no payload type.
 
+A value, map, or deque read returns `nil` when no value is present. Do not store `nil` as a value. Use `clear` or `delete` to remove a value.
+
 A set handle mirrors Ruby's `Set`:
 
 ```ruby
@@ -645,8 +647,6 @@ def on_message(context, message)
   fulfill(message)
 end
 ```
-
-`nil` means absence. Do not store this value. Use `clear` or `delete`.
 
 ### Query keywords
 
