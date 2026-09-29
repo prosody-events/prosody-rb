@@ -16,7 +16,7 @@
 use crate::bridge::Bridge;
 use magnus::value::Lazy;
 use magnus::{Error, RModule, Ruby};
-use mimalloc::MiMalloc;
+use rustfs_mimalloc::MiMalloc;
 use std::io::{self, Write};
 use std::process;
 use std::sync::{LazyLock, OnceLock};
