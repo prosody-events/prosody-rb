@@ -261,7 +261,7 @@ module Prosody
     def state_collections: () -> Array[untyped]?
     def state_collections=: (untyped) -> Array[untyped]
 
-    # Subsystem under which published JSON collections are advertised.
+    # Subsystem under which published JSON and set collections are advertised.
     # Uses PROSODY_SUBSYSTEM when omitted. Published collections require it.
     def subsystem: () -> String?
     def subsystem=: (_ToS) -> String

@@ -251,7 +251,7 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "Prosody::State::Reading#state" do
-    it "uses every JSON descriptor's typed published-state access strategy" do
+    it "uses every JSON and set descriptor's typed published-state access strategy" do
       calls = []
       native = Object.new
       reader = Object.new.extend(Prosody::State::Reading)
@@ -272,6 +272,14 @@ RSpec.describe "Prosody keyed state" do
       cases.each do |definition, vend_method, wrapper|
         expect(reader.state(:accounts, definition)).to be_a(wrapper)
         expect(calls.last).to eq([vend_method, "accounts", definition.name, 2, false])
+      end
+    end
+
+    it "rejects message collections" do
+      reader = Object.new.extend(Prosody::State::Reading)
+      [Prosody.message_value("v"), Prosody.message_map("m"), Prosody.message_deque("d")].each do |definition|
+        expect { reader.state(:accounts, definition) }
+          .to raise_error(ArgumentError, "published state readers support JSON and set collections only")
       end
     end
   end

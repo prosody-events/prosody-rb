@@ -183,11 +183,11 @@ module Prosody
   # Shared state wrapper behavior.
   module State
     module Reading
-      # Opens a read-only view of a published JSON collection.
+      # Opens a read-only view of a published JSON or set collection.
       def state(subsystem, definition)
         access = definition.access
         if access.published_vend_method.nil? || access.published_wrapper.nil?
-          raise ArgumentError, "published state readers support JSON collections only"
+          raise ArgumentError, "published state readers support JSON and set collections only"
         end
         cache_seconds = definition.read_cache unless definition.read_cache == false
         native = public_send(access.published_vend_method, subsystem.to_s, definition.name, cache_seconds,

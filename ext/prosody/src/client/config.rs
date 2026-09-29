@@ -277,7 +277,7 @@ struct StateCollectionConfig {
     /// Optional opt-out of transactional staging.
     read_uncommitted: Option<bool>,
 
-    /// Whether other consumer groups may read this JSON collection.
+    /// Whether other consumer groups may read this JSON or set collection.
     published: Option<bool>,
 
     /// Optional map or set keyset bound (`0..=4096`). The binding rejects

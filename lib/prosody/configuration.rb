@@ -312,7 +312,7 @@ module Prosody
         list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
       }
 
-    # Subsystem under which published JSON collections are advertised.
+    # Subsystem under which published JSON and set collections are advertised.
     # Uses PROSODY_SUBSYSTEM when omitted. Published collections require it.
     config_param :subsystem, converter: lambda(&:to_s)
 
