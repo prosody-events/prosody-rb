@@ -97,11 +97,11 @@ jobs:
         # https://github.com/oxidize-rb/actions/pull/71
         #
         # The pre-script's *windows-gnu* branch defines ERROR_COMMITMENT_MINIMUM=635
-        # so libmimalloc-sys (>= 0.1.39) can cross-compile against rb-sys-dock's
+        # so rustfs-mimalloc-sys can cross-compile against rb-sys-dock's
         # x64-mingw-ucrt image, which ships mingw-w64 < 10.0.0. The constant was
-        # first added to mingw-w64 in 10.0.0; mimalloc's prim/windows/prim.c
-        # references it unconditionally. See microsoft/mimalloc#910 and
-        # purpleprotocol/mimalloc_rust#125. Same workaround Apache Arrow ships.
+        # first added to mingw-w64 in 10.0.0. The mimalloc v3 source that
+        # rustfs-mimalloc-sys bundles still references it unconditionally in
+        # prim/windows/prim.c. See microsoft/mimalloc#910.
         uses: prosody-events/actions/cross-gem@add-pre-script-input
         id: cross-gem
         with:
