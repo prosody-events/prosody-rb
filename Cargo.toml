@@ -14,7 +14,7 @@ educe = "0.8"
 futures = "0.3"
 magnus = { version = "0.9", default-features = false }
 opentelemetry = "0.33"
-prosody = { version = "0.6.0", features = ["libz-static"] }
+prosody = { version = "0.7.0", features = ["libz-static"] }
 rb-sys = "0.9"
 rustfs-mimalloc = "0.5.6"
 serde = "1.0"
@@ -78,8 +78,6 @@ unreachable = "warn"
 unwrap_used = "deny"
 verbose_file_reads = "warn"
 
-# Temporary: build against unreleased prosody main. Remove after release.
 [patch.crates-io]
-prosody = { git = "https://github.com/prosody-events/prosody", rev = "914ccf135786530bdf7166cb874283aba13d3650" }
 # TODO: Use a crates.io release after serde_magnus supports magnus 0.9.
 serde_magnus = { git = "https://github.com/hadronzoo/serde-magnus", rev = "27aee737829a6bca399289b6e64ce4bcc08bfd94" }
