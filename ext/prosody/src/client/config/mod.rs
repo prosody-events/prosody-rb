@@ -68,7 +68,7 @@ pub struct NativeConfiguration {
     max_concurrency: Option<u32>,
 
     /// Maximum number of messages to process before committing offsets
-    max_uncommitted: Option<u16>,
+    max_uncommitted: Option<u32>,
 
     /// Threshold in seconds after which a stalled consumer is detected
     stall_threshold: Option<f64>,

@@ -71,5 +71,9 @@ RSpec.describe Prosody::Client, integration: true do
       client = mock_client(statistics_interval: 0, subscribed_topics: "statistics")
       expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /statistics_interval/)
     end
+
+    it "accepts a max_uncommitted above 65535" do
+      expect(mock_client(max_uncommitted: 100_000)).to be_a(Prosody::Client)
+    end
   end
 end
