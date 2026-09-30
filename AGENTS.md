@@ -297,13 +297,13 @@ Constants → Statics → Types → Implementations → Functions → Errors (bo
 
 - `sig/` — public RBS signatures; `sig-private/` — internal signatures.
   Every API change updates the signatures in the same commit.
-- `lib/prosody/native_stubs.rb` and `lib/prosody/native_stubs/` — documented
-  Ruby stubs for the classes and methods the Rust extension implements, one
-  file per native class family. Editors and documentation tools read
-  them; the runtime does not (the native extension provides the real
-  definitions), and Steep ignores the files. When the extension's public
-  surface changes, update the matching stub and its YARD doc in the same
-  commit.
+- Public API docs are YARD comments on the public Ruby classes. A public
+  class that the Rust extension implements (`Client`, `Context`, `Message`,
+  `Timer`) keeps a documented stub in `lib/prosody/native_stubs/`. Do not
+  write stubs for internal native classes or private methods; `sig/` and
+  `sig-private/` type them. The runtime does not load the stubs, and Steep
+  ignores them. When a public native method changes, update its stub in the
+  same commit.
 - Steep targets (`Steepfile`): `lib` checks the implementation;
   `consumer_types` (`typecheck/`) verifies a payload type flows through the
   public API; `typed_examples` checks every runnable example;

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# Native stubs for {Prosody::Client}: sending, subscribing, and opening
-# published-state readers.
+# Native stubs for {Prosody::Client}: sending and subscribing.
 
 module Prosody
   # Main client for interacting with the Prosody messaging system.
@@ -42,10 +41,6 @@ module Prosody
     #
     # @return [Symbol] The current consumer state
     def consumer_state
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    def native_request(_request)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -156,28 +151,6 @@ module Prosody
     # @example Getting the source system
     #   puts client.source_system  # => "my-service"
     def source_system
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    private
-
-    # @private
-    def published_value(subsystem, name, read_cache, read_cache_disabled)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # @private
-    def published_map(subsystem, name, read_cache, read_cache_disabled)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # @private
-    def published_set(subsystem, name, read_cache, read_cache_disabled)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # @private
-    def published_deque(subsystem, name, read_cache, read_cache_disabled)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end

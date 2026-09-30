@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Native stubs for {Prosody::Context}: event metadata, cancellation, timer
-# scheduling, and keyed-state vending.
+# Native stubs for {Prosody::Context}: event metadata, cancellation, and timer
+# scheduling.
 
 module Prosody
   # Represents the context of a Kafka message, providing metadata and control
@@ -172,101 +172,6 @@ module Prosody
     #     end
     #   end
     def scheduled
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    private
-
-    # Vends the native single-value JSON state handle for the named collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeJsonValueState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def value_state(name)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # Vends the native ordered-map JSON state handle for the named collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeJsonMapState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def map_state(name)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # Vends the native set state handle for the named collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeSetState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def set_state(name)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # Vends the native deque JSON state handle for the named collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeJsonDequeState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def deque_state(name)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # Vends the native single-value message state handle for the named
-    # collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeMessageValueState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def message_value_state(name)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # Vends the native ordered-map message state handle for the named
-    # collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeMessageMapState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def message_map_state(name)
-      raise NotImplementedError, "This method is implemented natively in Rust"
-    end
-
-    # Vends the native deque message state handle for the named collection.
-    #
-    # Internal routing target for {Prosody::State::Vending#state}; prefer
-    # +context.state(definition)+.
-    #
-    # @param name [String] the registered collection name
-    # @return [NativeMessageDequeState] the native handle
-    # @raise [PermanentStateError] if the name is unregistered or mismatched
-    # @private
-    def message_deque_state(name)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
   end
