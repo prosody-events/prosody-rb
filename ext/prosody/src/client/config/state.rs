@@ -33,9 +33,8 @@ pub(super) struct StateCollectionConfig {
     /// only, so it has no payload.
     payload: Option<String>,
 
-    /// Optional per-write TTL in whole seconds. Crosses as `f64` so
-    /// fractional/negative/non-finite values reach the whole-number guard.
-    ttl_seconds: Option<f64>,
+    /// Optional per-write TTL in whole seconds.
+    ttl_seconds: Option<u32>,
 
     /// Optional opt-out of transactional staging.
     read_uncommitted: Option<bool>,
@@ -43,15 +42,12 @@ pub(super) struct StateCollectionConfig {
     /// Whether other consumer groups may read this JSON or set collection.
     published: Option<bool>,
 
-    /// Optional map or set keyset bound (`0..=4096`). The binding rejects
-    /// values that cannot map to an unsigned integer. Prosody enforces the
+    /// Optional map or set keyset bound (`0..=4096`). Prosody enforces the
     /// ceiling.
-    keyset_limit: Option<f64>,
+    keyset_limit: Option<usize>,
 
-    /// Optional deque-only window capacity (`>= 1`). Runtime-only and not
-    /// persisted. Crosses as `f64` so fractional/negative/non-finite values
-    /// reach the whole-number guard.
-    capacity: Option<f64>,
+    /// Optional deque-only window capacity. Runtime-only and not persisted.
+    capacity: Option<NonZeroUsize>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -116,28 +112,6 @@ fn parse_payload(index: usize, payload: &str) -> Result<CollectionPayload, Strin
     }
 }
 
-/// Validates a numeric field as a whole number within `min..=max`.
-///
-/// The field arrives as an `f64` (the raw Ruby number, un-coerced) so that
-/// fractional, negative, and non-finite values reach this guard instead of
-/// being silently truncated or wrapped by an earlier integer conversion.
-///
-/// # Errors
-///
-/// Returns a permanent-category error naming the field if the value is not a
-/// whole number in the inclusive range.
-fn whole_number_field(value: f64, field: &str, min: u32, max: u32) -> Result<u32, String> {
-    if value.is_finite()
-        && value.fract() == 0.0
-        && value >= f64::from(min)
-        && value <= f64::from(max)
-    {
-        Ok(value as u32)
-    } else {
-        Err(format!("{field}: must be a whole number in {min}..={max}"))
-    }
-}
-
 /// Applies the shared descriptor options (TTL, commit mode) fluently.
 fn with_def<D: StateDescriptor>(
     descriptor: D,
@@ -161,10 +135,10 @@ fn with_def<D: StateDescriptor>(
 /// Applies the map keyset bound when configured.
 fn with_keyset<KC, V>(
     descriptor: MapDescriptor<KC, V>,
-    keyset_limit: Option<u32>,
+    keyset_limit: Option<usize>,
 ) -> MapDescriptor<KC, V> {
     match keyset_limit {
-        Some(limit) => descriptor.keyset_limit(limit as usize),
+        Some(limit) => descriptor.keyset_limit(limit),
         None => descriptor,
     }
 }
@@ -172,10 +146,10 @@ fn with_keyset<KC, V>(
 /// Applies the set keyset bound when configured.
 fn with_set_keyset<KC>(
     descriptor: SetDescriptor<KC>,
-    keyset_limit: Option<u32>,
+    keyset_limit: Option<usize>,
 ) -> SetDescriptor<KC> {
     match keyset_limit {
-        Some(limit) => descriptor.keyset_limit(limit as usize),
+        Some(limit) => descriptor.keyset_limit(limit),
         None => descriptor,
     }
 }
@@ -209,16 +183,7 @@ fn register_state_collection(
         None => None,
     };
 
-    let ttl_seconds = match collection.ttl_seconds {
-        Some(value) => Some(whole_number_field(
-            value,
-            &format!("state_collections[{index}].ttl_seconds"),
-            0,
-            u32::MAX,
-        )?),
-        None => None,
-    };
-
+    let ttl_seconds = collection.ttl_seconds;
     let keyset_limit = keyset_limit(collection.keyset_limit, &kind, index)?;
     let capacity = capacity(collection.capacity, &kind, index)?;
 
@@ -302,48 +267,32 @@ fn register_state_collection(
     Ok(())
 }
 
+/// Rejects a keyset limit on a collection that is not a map or a set.
 fn keyset_limit(
-    value: Option<f64>,
+    value: Option<usize>,
     kind: &CollectionKind,
     index: usize,
-) -> Result<Option<u32>, String> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    if !matches!(kind, CollectionKind::Map | CollectionKind::Set) {
+) -> Result<Option<usize>, String> {
+    if value.is_some() && !matches!(kind, CollectionKind::Map | CollectionKind::Set) {
         return Err(format!(
             "state_collections[{index}].keyset_limit: only valid for map and set collections"
         ));
     }
-    whole_number_field(
-        value,
-        &format!("state_collections[{index}].keyset_limit"),
-        0,
-        u32::MAX,
-    )
-    .map(Some)
+    Ok(value)
 }
 
+/// Rejects a capacity on a collection that is not a deque.
 fn capacity(
-    value: Option<f64>,
+    value: Option<NonZeroUsize>,
     kind: &CollectionKind,
     index: usize,
 ) -> Result<Option<NonZeroUsize>, String> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    if !matches!(kind, CollectionKind::Deque) {
+    if value.is_some() && !matches!(kind, CollectionKind::Deque) {
         return Err(format!(
             "state_collections[{index}].capacity: only valid for deque collections"
         ));
     }
-    let value = whole_number_field(
-        value,
-        &format!("state_collections[{index}].capacity"),
-        1,
-        u32::MAX,
-    )?;
-    Ok(NonZeroUsize::new(value as usize))
+    Ok(value)
 }
 
 /// Builds the `KeyedStateConfiguration` by mapping each declared collection.

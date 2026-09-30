@@ -28,44 +28,46 @@ RSpec.describe "Prosody keyed state" do
       expect(error).to be_nil
     end
 
-    it "rejects a fractional TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 30.5}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
+    it "rejects a fractional or Float TTL" do
+      [30.5, 5.0].each do |ttl|
+        error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: ttl}])
+        expect(error&.message).to match(/expected u32/), ttl.to_s
+      end
     end
 
     it "rejects a negative TTL" do
       error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: -5}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
+      expect(error.message).to match(/expected u32/)
     end
 
     it "rejects a NaN TTL" do
       error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: Float::NAN}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
+      expect(error.message).to match(/expected u32/)
     end
 
     it "rejects an infinite TTL" do
       error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: Float::INFINITY}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
+      expect(error.message).to match(/expected u32/)
     end
 
     it "rejects a TTL above the u32 ceiling" do
       error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 2**32}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
+      expect(error.message).to match(/expected u32/)
     end
 
     it "rejects a fractional keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 128.5}])
-      expect(error.message).to match(/keyset_limit.*whole number/)
+      expect(error.message).to match(/expected usize/)
     end
 
     it "rejects a negative keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: -1}])
-      expect(error.message).to match(/keyset_limit.*whole number/)
+      expect(error.message).to match(/expected usize/)
     end
 
     it "rejects an infinite keyset_limit on a map" do
       error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: Float::INFINITY}])
-      expect(error.message).to match(/keyset_limit.*whole number/)
+      expect(error.message).to match(/expected usize/)
     end
 
     it "rejects keyset_limit on a collection that is not a map or a set" do
@@ -107,27 +109,27 @@ RSpec.describe "Prosody keyed state" do
 
     it "rejects a zero capacity on a deque" do
       error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 0}])
-      expect(error.message).to match(/capacity.*whole number/)
+      expect(error.message).to match(/expected a nonzero usize/)
     end
 
     it "rejects a negative capacity on a deque" do
       error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: -1}])
-      expect(error.message).to match(/capacity.*whole number/)
+      expect(error.message).to match(/expected a nonzero usize/)
     end
 
     it "rejects a fractional capacity on a deque" do
       error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 1.5}])
-      expect(error.message).to match(/capacity.*whole number/)
+      expect(error.message).to match(/expected a nonzero usize/)
     end
 
     it "rejects a NaN capacity on a deque" do
       error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::NAN}])
-      expect(error.message).to match(/capacity.*whole number/)
+      expect(error.message).to match(/expected a nonzero usize/)
     end
 
     it "rejects an infinite capacity on a deque" do
       error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::INFINITY}])
-      expect(error.message).to match(/capacity.*whole number/)
+      expect(error.message).to match(/expected a nonzero usize/)
     end
 
     it "rejects an unknown kind token" do
