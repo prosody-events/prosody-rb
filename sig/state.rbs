@@ -390,9 +390,14 @@ module Prosody
 
   class PublishedValue[T = json_value]
     def get: (_ToS key) -> T?
+
+    private
+    def initialize: (NativePublishedValue native) -> void
   end
 
   class PublishedMap[V = json_value]
+    include State::Scanning
+
     def get: (_ToS key, _ToS map_key) -> V?
     def get_many: (_ToS key, Array[_ToS] map_keys) -> Array[V?]
     def key?: (_ToS key, _ToS map_key) -> bool
@@ -414,6 +419,15 @@ module Prosody
     def reverse_each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
                           | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
     alias each each_pair
+
+    private
+    def initialize: (NativePublishedMap native) -> void
+    def traverse: (_ToS key, Symbol direction, query_options query) { ([String, V]) -> void } -> void
+                | (_ToS key, Symbol direction, query_options query) -> Enumerator[[String, V], void]
+    def traverse_keys: (_ToS key, Symbol direction, query_options query) { (String) -> void } -> void
+                     | (_ToS key, Symbol direction, query_options query) -> Enumerator[String, void]
+    def traverse_values: (_ToS key, Symbol direction, query_options query) { (V) -> void } -> void
+                       | (_ToS key, Symbol direction, query_options query) -> Enumerator[V, void]
   end
 
   class PublishedSet
@@ -435,6 +449,8 @@ module Prosody
   end
 
   class PublishedDeque[T = json_value]
+    include State::Scanning
+
     def get: (_ToS key, Integer index) -> T?
     def length: (_ToS key) -> Integer
     alias size length
@@ -445,6 +461,11 @@ module Prosody
             | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
     def reverse_each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
                     | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+
+    private
+    def initialize: (NativePublishedDeque native) -> void
+    def traverse: (_ToS key, Symbol direction, query_options query) { (T) -> void } -> void
+                | (_ToS key, Symbol direction, query_options query) -> Enumerator[T, void]
   end
 
   # --- shared state modules ------------------------------------------------

@@ -187,11 +187,16 @@ module Prosody
       warn "warning: block supersedes default value argument" if block && !default.empty?
 
       value = index.negative? ? at_negative(index) : @native.get(index)
-      return value unless value.nil?
-      return block.call(index) if block
-      return default.first unless default.empty?
+      case value
+      when nil
+        return block.call(index) if block
+        raise IndexError, "index #{index} outside deque bounds" if default.empty?
 
-      raise IndexError, "index #{index} outside deque bounds"
+        # Steep merges the overloads, so it cannot type the default as D.
+        default.fetch(0) #: untyped
+      else
+        value
+      end
     end
 
     private
@@ -247,7 +252,7 @@ module Prosody
     private
 
     def traverse(key, direction, query)
-      return enum_for(__method__, key, direction, query) unless block_given?
+      return enum_for(:traverse, key, direction, query) unless block_given?
 
       scan_items(@native.scan(key.to_s, direction, query)) { |item| yield item }
     end

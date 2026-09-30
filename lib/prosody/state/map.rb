@@ -192,9 +192,10 @@ module Prosody
       value = @native.get(key)
       return value unless value.nil?
       return block.call(key) if block
-      return default.first unless default.empty?
+      raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self) if default.empty?
 
-      raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
+      # Steep merges the overloads, so it cannot type the default as D.
+      default.fetch(0) #: untyped
     end
 
     # Whether +key+ has a live value (mirrors +Hash#key?+). A presence check:
@@ -232,13 +233,7 @@ module Prosody
     #
     # @param keys [Array<String>] the keys to read
     # @return [Hash{String => Object}] present keys mapped to their values
-    def slice(*keys)
-      result = {}
-      keys.zip(get_many(keys)) do |key, value|
-        result[key] = value unless value.nil?
-      end
-      result
-    end
+    def slice(*keys) = keys.zip(get_many(keys)).to_h.compact
 
     # Reads +keys+ as a single bounded batch, requiring every key to be present
     # (mirrors +Hash#fetch_values+). Without a block, a missing key raises
@@ -251,10 +246,14 @@ module Prosody
     # @raise [KeyError] when a key is absent and no block is given
     def fetch_values(*keys, &block)
       keys.zip(get_many(keys)).map do |key, value|
-        next value unless value.nil?
-        next block.call(key) if block
+        case value
+        when nil
+          next block.call(key) if block
 
-        raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
+          raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
+        else
+          value
+        end
       end
     end
 
@@ -309,19 +308,19 @@ module Prosody
     private
 
     def traverse(key, direction, query)
-      return enum_for(__method__, key, direction, query) unless block_given?
+      return enum_for(:traverse, key, direction, query) unless block_given?
 
       scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield entry }
     end
 
     def traverse_keys(key, direction, query)
-      return enum_for(__method__, key, direction, query) unless block_given?
+      return enum_for(:traverse_keys, key, direction, query) unless block_given?
 
       scan_items(@native.keys(key.to_s, direction, query)) { |map_key| yield map_key }
     end
 
     def traverse_values(key, direction, query)
-      return enum_for(__method__, key, direction, query) unless block_given?
+      return enum_for(:traverse_values, key, direction, query) unless block_given?
 
       scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield entry[1] }
     end
