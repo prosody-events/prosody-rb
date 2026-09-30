@@ -242,7 +242,8 @@ fn position(ruby: &Ruby, keyword: &'static str, value: Value) -> Result<usize, E
     integer.to_usize().map_err(|_| invalid())
 }
 
-/// Translates a result limit.
+/// Translates a result limit. It keeps its own Integer check: a helper shared
+/// with `position` saves no lines.
 fn limit(ruby: &Ruby, value: Value) -> Result<NonZeroUsize, Error> {
     let invalid = || {
         argument_error(

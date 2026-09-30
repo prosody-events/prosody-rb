@@ -225,6 +225,7 @@ module Prosody
       end
 
       return @native.get(key, index) unless index.negative?
+      # This repeats DequeState#at_negative, because a reader needs the key.
       return last(key) if index == -1
 
       resolved = length(key) + index
