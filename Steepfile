@@ -6,6 +6,11 @@ target :lib do
   ignore "lib/prosody/configuration.rb"
   ignore "lib/prosody/demand.rb"
   ignore "lib/prosody/state.rb"
+  # These handles came from state.rb, which Steep ignores. Their bodies do not
+  # yet type-check against sig/state.rbs, so keep them ignored until they do.
+  ignore "lib/prosody/state/value.rb"
+  ignore "lib/prosody/state/map.rb"
+  ignore "lib/prosody/state/deque.rb"
   ignore "lib/prosody/native_stubs.rb"
   signature "sig"
   signature "sig-private"
