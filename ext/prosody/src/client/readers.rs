@@ -15,14 +15,15 @@ use std::fmt::Display;
 use std::sync::Arc;
 use tracing::Span;
 
-/// Opens one published-state reader. `open` receives the shared client and
+/// Opens one published-state reader, and returns it with the client's
+/// bridge, propagator, and fork guard. `open` receives the shared client and
 /// the resolved cache policy.
 fn open_reader<F, Fut, R, E>(
     ruby: &Ruby,
     this: &Client,
     read_cache: Value,
     open: F,
-) -> Result<R, Error>
+) -> Result<(R, Reads), Error>
 where
     F: FnOnce(SharedHighLevelClient<RubyHandler>, ErasedReadCache) -> Fut,
     Fut: Future<Output = Result<R, E>> + Send + 'static,
@@ -32,18 +33,16 @@ where
     this.fork.check(ruby)?;
     let cache = read_cache_policy("read_cache", deserialize(ruby, read_cache)?)
         .map_err(|error| Error::new(ruby.exception_arg_error(), error))?;
-    this.bridge
+    let reader = this
+        .bridge
         .wait_for(ruby, open(this.inner.clone(), cache), Span::current())?
-        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
-}
-
-/// Shares the client's bridge, propagator, and fork guard with a reader.
-fn reads(client: &Client) -> Reads {
-    Reads::new(
-        client.bridge.clone(),
-        Arc::clone(&client.propagator),
-        client.fork,
-    )
+        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+    let reads = Reads {
+        bridge: this.bridge.clone(),
+        propagator: Arc::clone(&this.propagator),
+        fork: this.fork,
+    };
+    Ok((reader, reads))
 }
 
 pub(super) fn published_value(
@@ -53,13 +52,10 @@ pub(super) fn published_value(
     name: String,
     read_cache: Value,
 ) -> Result<NativePublishedValue, Error> {
-    let inner = open_reader(ruby, this, read_cache, |client, cache| async move {
+    let (inner, reads) = open_reader(ruby, this, read_cache, |client, cache| async move {
         client.value_state(subsystem, name, cache).await
     })?;
-    Ok(NativePublishedValue {
-        inner,
-        reads: reads(this),
-    })
+    Ok(NativePublishedValue { inner, reads })
 }
 
 pub(super) fn published_map(
@@ -69,13 +65,10 @@ pub(super) fn published_map(
     name: String,
     read_cache: Value,
 ) -> Result<NativePublishedMap, Error> {
-    let inner = open_reader(ruby, this, read_cache, |client, cache| async move {
+    let (inner, reads) = open_reader(ruby, this, read_cache, |client, cache| async move {
         client.map_state(subsystem, name, cache).await
     })?;
-    Ok(NativePublishedMap {
-        inner,
-        reads: reads(this),
-    })
+    Ok(NativePublishedMap { inner, reads })
 }
 
 pub(super) fn published_set(
@@ -85,13 +78,10 @@ pub(super) fn published_set(
     name: String,
     read_cache: Value,
 ) -> Result<NativePublishedSet, Error> {
-    let inner = open_reader(ruby, this, read_cache, |client, cache| async move {
+    let (inner, reads) = open_reader(ruby, this, read_cache, |client, cache| async move {
         client.set_state(subsystem, name, cache).await
     })?;
-    Ok(NativePublishedSet {
-        inner,
-        reads: reads(this),
-    })
+    Ok(NativePublishedSet { inner, reads })
 }
 
 pub(super) fn published_deque(
@@ -101,11 +91,8 @@ pub(super) fn published_deque(
     name: String,
     read_cache: Value,
 ) -> Result<NativePublishedDeque, Error> {
-    let inner = open_reader(ruby, this, read_cache, |client, cache| async move {
+    let (inner, reads) = open_reader(ruby, this, read_cache, |client, cache| async move {
         client.deque_state(subsystem, name, cache).await
     })?;
-    Ok(NativePublishedDeque {
-        inner,
-        reads: reads(this),
-    })
+    Ok(NativePublishedDeque { inner, reads })
 }

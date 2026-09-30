@@ -27,24 +27,12 @@ use tracing::Span;
 /// The bridge, trace propagator, and fork guard that every reader shares.
 #[derive(Clone)]
 pub(crate) struct Reads {
-    bridge: Bridge,
-    propagator: Arc<TextMapCompositePropagator>,
-    fork: ForkGuard,
+    pub(crate) bridge: Bridge,
+    pub(crate) propagator: Arc<TextMapCompositePropagator>,
+    pub(crate) fork: ForkGuard,
 }
 
 impl Reads {
-    pub(crate) fn new(
-        bridge: Bridge,
-        propagator: Arc<TextMapCompositePropagator>,
-        fork: ForkGuard,
-    ) -> Self {
-        Self {
-            bridge,
-            propagator,
-            fork,
-        }
-    }
-
     /// Waits for one read in the caller's trace.
     ///
     /// # Errors
