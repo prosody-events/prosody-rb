@@ -14,7 +14,7 @@ use crate::ROOT_MOD;
 use crate::bridge::Bridge;
 use crate::handler::message::Message;
 use crate::tracing_util::extract_opentelemetry_context;
-use magnus::value::{Lazy, ReprValue};
+use magnus::value::ReprValue;
 use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, StaticSymbol, TryConvert, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
@@ -28,38 +28,19 @@ use serde_magnus::{deserialize, serialize};
 use std::sync::Arc;
 use tracing::Span;
 
-/// Lazily resolved `Prosody::PermanentStateError` class (defined in Ruby).
-#[allow(
-    clippy::expect_used,
-    reason = "mirrors bridge.rs QUEUE_CLASS Lazy pattern"
-)]
-static PERMANENT_STATE_ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| {
-    ruby.get_inner(&ROOT_MOD)
-        .const_get("PermanentStateError")
-        .expect("Prosody::PermanentStateError")
-});
-
-/// Lazily resolved `Prosody::TransientStateError` class (defined in Ruby).
-#[allow(
-    clippy::expect_used,
-    reason = "mirrors bridge.rs QUEUE_CLASS Lazy pattern"
-)]
-static TRANSIENT_STATE_ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| {
-    ruby.get_inner(&ROOT_MOD)
-        .const_get("TransientStateError")
-        .expect("Prosody::TransientStateError")
-});
-
-/// Lazily resolved `Prosody::NullValueError` class (defined in Ruby).
-#[allow(
-    clippy::expect_used,
-    reason = "mirrors bridge.rs QUEUE_CLASS Lazy pattern"
-)]
-static NULL_VALUE_ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| {
-    ruby.get_inner(&ROOT_MOD)
-        .const_get("NullValueError")
-        .expect("Prosody::NullValueError")
-});
+/// Builds an error of the Ruby-defined `Prosody::<class>` exception class.
+///
+/// A failed class lookup returns the lookup error in place of the state
+/// error.
+fn ruby_error(ruby: &Ruby, class: &str, message: String) -> Error {
+    match ruby
+        .get_inner(&ROOT_MOD)
+        .const_get::<_, ExceptionClass>(class)
+    {
+        Ok(class) => Error::new(class, message),
+        Err(error) => error,
+    }
+}
 
 /// Maps an erased state error to the matching Ruby state-error class.
 ///
@@ -68,22 +49,22 @@ static NULL_VALUE_ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| {
 /// `#permanent?` path reclassifies a rethrown error with no change.
 pub(crate) fn state_error(ruby: &Ruby, error: &ErasedStateError) -> Error {
     let class = match error.category() {
-        ErasedCategory::Permanent => ruby.get_inner(&PERMANENT_STATE_ERROR),
-        ErasedCategory::Transient => ruby.get_inner(&TRANSIENT_STATE_ERROR),
+        ErasedCategory::Permanent => "PermanentStateError",
+        ErasedCategory::Transient => "TransientStateError",
     };
-    Error::new(class, error.message().to_owned())
+    ruby_error(ruby, class, error.message().to_owned())
 }
 
 /// Builds a transient state error for a caller-caused condition the glue
 /// detects (a wrong item shape, an invalid direction token, an unrepresentable
 /// value).
 fn transient_state_error(ruby: &Ruby, message: String) -> Error {
-    Error::new(ruby.get_inner(&TRANSIENT_STATE_ERROR), message)
+    ruby_error(ruby, "TransientStateError", message)
 }
 
 /// Builds a null-value error for a rejected JSON-null write.
 fn null_value_error(ruby: &Ruby, message: String) -> Error {
-    Error::new(ruby.get_inner(&NULL_VALUE_ERROR), message)
+    ruby_error(ruby, "NullValueError", message)
 }
 
 /// Converts an optional JSON item into a Ruby value or `nil`.
@@ -95,14 +76,10 @@ fn json_or_nil(ruby: &Ruby, item: Option<JsonValue>) -> Result<Value, Error> {
 }
 
 /// Converts an optional message item into a `Prosody::Message` or `nil`.
-#[allow(
-    clippy::unnecessary_wraps,
-    reason = "parity with json_or_nil for uniform call sites"
-)]
-fn message_or_nil(ruby: &Ruby, item: Option<ConsumerMessage<JsonValue>>) -> Result<Value, Error> {
+fn message_or_nil(ruby: &Ruby, item: Option<ConsumerMessage<JsonValue>>) -> Value {
     match item {
-        Some(message) => Ok(Message::from(message).into_value_with(ruby)),
-        None => Ok(ruby.qnil().as_value()),
+        Some(message) => Message::from(message).into_value_with(ruby),
+        None => ruby.qnil().as_value(),
     }
 }
 
@@ -250,7 +227,7 @@ value_state!(
         value,
         "; use clear to delete a message value collection"
     ),
-    message_or_nil
+    |ruby, item| Ok::<_, Error>(message_or_nil(ruby, item))
 );
 
 macro_rules! map_state {
@@ -372,7 +349,7 @@ map_state!(
         value,
         "; use delete(key) to remove a message map entry"
     ),
-    message_or_nil
+    |ruby, item| Ok::<_, Error>(message_or_nil(ruby, item))
 );
 macro_rules! deque_state {
     ($name:ident, $class:literal, $item:ty, $scan:ident, $prepare:expr, $restore:expr) => {
@@ -480,7 +457,7 @@ deque_state!(
     ConsumerMessage<JsonValue>,
     NativeMessageDequeScan,
     |ruby, value| message_write_item(ruby, value, " to push into a message deque"),
-    message_or_nil
+    |ruby, item| Ok::<_, Error>(message_or_nil(ruby, item))
 );
 mod query;
 mod scan;

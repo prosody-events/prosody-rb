@@ -40,7 +40,6 @@ impl AdminClient {
     /// Returns a `Magnus::Error` if:
     /// - The client cannot be created with the provided bootstrap servers
     /// - The bridge is not initialized
-    #[allow(clippy::needless_pass_by_value)]
     pub fn new(ruby: &Ruby, bootstrap_servers: Vec<String>) -> Result<Self, Error> {
         let _guard = ensure_runtime_context(ruby);
         let admin_config = AdminConfiguration::new(bootstrap_servers)

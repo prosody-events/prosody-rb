@@ -54,7 +54,6 @@ use tracing::error;
 ///
 /// Adapted from: <https://github.com/temporalio/sdk-ruby/blob/main/temporalio/ext/src/util.rs>,
 /// plus various examples in the Rust/Ruby ecosystem.
-#[allow(unsafe_code)]
 pub(crate) fn without_gvl<F, R, U>(func: F, unblock: U) -> Result<R, GvlError>
 where
     F: FnOnce() -> R,
@@ -76,20 +75,22 @@ where
         let result = catch_unwind(AssertUnwindSafe(|| (*func)())).map_err(|_| GvlError::Panicked);
 
         // SAFETY: We box the result, returning a raw pointer. The caller
-        // will Box::from_raw it exactly once after `rb_thread_call_without_gvl`.
+        // will Box::from_raw it exactly once after
+        // `rb_thread_call_without_gvl`.
         Box::into_raw(Box::new(result)).cast::<c_void>()
     }
 
     // SAFETY: Another FFI callback. Ruby may call this multiple times, so we do
     // NOT call `Box::from_raw` here. Instead, we just dereference the pointer
-    // each time. We also catch any panic and abort to avoid unwinding across FFI.
+    // each time. We also catch any panic and abort to avoid unwinding across
+    // FFI.
     unsafe extern "C" fn anon_unblock<U>(data: *mut c_void)
     where
         U: FnMut() + Send,
     {
         // We take a pointer to `U`; we do NOT consume the Box here.
-        // Note that `&mut *ptr` is not automatically UnwindSafe, so we wrap the call
-        // in `AssertUnwindSafe`.
+        // Note that `&mut *ptr` is not automatically UnwindSafe, so we wrap the
+        // call in `AssertUnwindSafe`.
         let closure_ptr = data.cast::<U>();
 
         if catch_unwind(AssertUnwindSafe(|| {
@@ -117,7 +118,8 @@ where
     // - Call `anon_func` once, passing `func_ptr`.
     // - Potentially call `anon_unblock` multiple times with `unblock_ptr`.
     // After `rb_thread_call_without_gvl` returns, we are guaranteed that Ruby
-    // won't call `anon_unblock` again, so we can safely free the unblock closure.
+    // won't call `anon_unblock` again, so we can safely free the unblock
+    // closure.
     let raw_result = unsafe {
         rb_thread_call_without_gvl(
             Some(anon_func::<F, R>),

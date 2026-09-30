@@ -20,11 +20,10 @@ use std::sync::Arc;
 ///
 /// Returns a permanent state error if the name is unregistered or its
 /// registered identity mismatches.
-#[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-fn value_state(ruby: &Ruby, this: &Context, name: String) -> Result<NativeJsonValueState, Error> {
+fn value_state(ruby: &Ruby, this: &Context, name: RString) -> Result<NativeJsonValueState, Error> {
     let handle = this
         .inner
-        .value_state(&name)
+        .value_state(&name.to_string()?)
         .map_err(|error| state_error(ruby, &error))?;
     Ok(NativeJsonValueState::new(
         Arc::from(handle),
@@ -38,11 +37,10 @@ fn value_state(ruby: &Ruby, this: &Context, name: String) -> Result<NativeJsonVa
 /// # Errors
 ///
 /// See [`value_state`].
-#[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-fn map_state(ruby: &Ruby, this: &Context, name: String) -> Result<NativeJsonMapState, Error> {
+fn map_state(ruby: &Ruby, this: &Context, name: RString) -> Result<NativeJsonMapState, Error> {
     let handle = this
         .inner
-        .map_state(&name)
+        .map_state(&name.to_string()?)
         .map_err(|error| state_error(ruby, &error))?;
     Ok(NativeJsonMapState::new(
         Arc::from(handle),
@@ -73,11 +71,10 @@ fn set_state(ruby: &Ruby, this: &Context, name: RString) -> Result<NativeSetStat
 /// # Errors
 ///
 /// See [`value_state`].
-#[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-fn deque_state(ruby: &Ruby, this: &Context, name: String) -> Result<NativeJsonDequeState, Error> {
+fn deque_state(ruby: &Ruby, this: &Context, name: RString) -> Result<NativeJsonDequeState, Error> {
     let handle = this
         .inner
-        .deque_state(&name)
+        .deque_state(&name.to_string()?)
         .map_err(|error| state_error(ruby, &error))?;
     Ok(NativeJsonDequeState::new(
         Arc::from(handle),
@@ -91,15 +88,14 @@ fn deque_state(ruby: &Ruby, this: &Context, name: String) -> Result<NativeJsonDe
 /// # Errors
 ///
 /// See [`value_state`].
-#[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
 fn message_value_state(
     ruby: &Ruby,
     this: &Context,
-    name: String,
+    name: RString,
 ) -> Result<NativeMessageValueState, Error> {
     let handle = this
         .inner
-        .message_value_state(&name)
+        .message_value_state(&name.to_string()?)
         .map_err(|error| state_error(ruby, &error))?;
     Ok(NativeMessageValueState::new(
         Arc::from(handle),
@@ -113,15 +109,14 @@ fn message_value_state(
 /// # Errors
 ///
 /// See [`value_state`].
-#[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
 fn message_map_state(
     ruby: &Ruby,
     this: &Context,
-    name: String,
+    name: RString,
 ) -> Result<NativeMessageMapState, Error> {
     let handle = this
         .inner
-        .message_map_state(&name)
+        .message_map_state(&name.to_string()?)
         .map_err(|error| state_error(ruby, &error))?;
     Ok(NativeMessageMapState::new(
         Arc::from(handle),
@@ -135,15 +130,14 @@ fn message_map_state(
 /// # Errors
 ///
 /// See [`value_state`].
-#[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
 fn message_deque_state(
     ruby: &Ruby,
     this: &Context,
-    name: String,
+    name: RString,
 ) -> Result<NativeMessageDequeState, Error> {
     let handle = this
         .inner
-        .message_deque_state(&name)
+        .message_deque_state(&name.to_string()?)
         .map_err(|error| state_error(ruby, &error))?;
     Ok(NativeMessageDequeState::new(
         Arc::from(handle),

@@ -23,8 +23,10 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use tracing::Span;
 
-#[allow(clippy::unwrap_used, reason = "256 is a nonzero literal")]
-const SCAN_READY_CHUNK_SIZE: NonZeroUsize = NonZeroUsize::new(256).unwrap();
+const SCAN_READY_CHUNK_SIZE: NonZeroUsize = match NonZeroUsize::new(256) {
+    Some(size) => size,
+    None => NonZeroUsize::MIN,
+};
 
 /// Maps a failed cursor read to a Ruby error.
 ///

@@ -13,6 +13,8 @@ use prosody::tracing::{
     TracingError, flush_telemetry as core_flush_telemetry, initialize_tracing,
     shutdown_telemetry as core_shutdown_telemetry,
 };
+use std::fmt;
+use std::io::{self, Write};
 use std::mem::{ManuallyDrop, forget};
 use std::process;
 use std::time::Duration;
@@ -181,6 +183,14 @@ impl Drop for RubyDrop {
     }
 }
 
+/// Writes one line to standard error.
+///
+/// Use it only where no logger exists: before tracing starts, or when the
+/// Ruby logger itself fails.
+pub(crate) fn report(message: fmt::Arguments<'_>) {
+    drop(writeln!(io::stderr().lock(), "{message}"));
+}
+
 /// Converts a Ruby number of seconds into a [`Duration`].
 ///
 /// # Errors
@@ -260,14 +270,13 @@ pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
     let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby));
 
     // Initialize tracing for observability
-    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
     TRACING_INIT.get_or_init(|| {
         let maybe_logger = Logger::new(ruby, bridge.clone())
-            .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
+            .inspect_err(|error| report(format_args!("failed to create logger: {error:#}")))
             .ok();
 
         if let Err(error) = initialize_tracing(maybe_logger) {
-            eprintln!("failed to initialize tracing: {error:#}");
+            report(format_args!("failed to initialize tracing: {error:#}"));
         }
     });
 

@@ -8,16 +8,17 @@
 //! provides client functionality for interacting with message brokers,
 //! manages message handling, and includes logging and scheduling capabilities.
 
-// Temporarily removing allows to see what lints we have
-
-#![allow(clippy::multiple_crate_versions, missing_docs)]
+#![expect(
+    clippy::multiple_crate_versions,
+    reason = "the dependency graph resolves some crates at two versions"
+)]
 #![recursion_limit = "256"]
 
 use crate::bridge::Bridge;
+use crate::util::report;
+use magnus::RModule;
 use magnus::value::Lazy;
-use magnus::{Error, RModule, Ruby};
 use rustfs_mimalloc::MiMalloc;
-use std::io::{self, Write};
 use std::process;
 use std::sync::{LazyLock, OnceLock};
 use tokio::runtime::{Builder, Runtime};
@@ -62,10 +63,7 @@ static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     match runtime {
         Ok(runtime) => runtime,
         Err(error) => {
-            drop(writeln!(
-                io::stderr().lock(),
-                "failed to create Tokio runtime: {error:#}"
-            ));
+            report(format_args!("failed to create Tokio runtime: {error:#}"));
             process::abort();
         }
     }
@@ -75,32 +73,38 @@ static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
 ///
 /// This is lazily initialized during extension startup and provides
 /// access to the `Prosody` module in Ruby.
-#[allow(clippy::expect_used)]
+#[expect(
+    clippy::expect_used,
+    reason = "magnus Lazy takes an infallible initializer"
+)]
 pub static ROOT_MOD: Lazy<RModule> = Lazy::new(|ruby| {
     ruby.define_module("Prosody")
         .expect("Failed to define Prosody module")
 });
 
-/// Initializes the Prosody Ruby extension.
+/// The extension entry point that Ruby calls when it loads the library.
 ///
-/// This function initializes the various components of the extension.
-///
-/// # Arguments
-///
-/// * `ruby` - Reference to the Ruby VM instance
-///
-/// # Errors
-///
-/// Returns a Magnus error if any initialization step fails, such as
-/// defining Ruby classes or configuring components.
-#[magnus::init]
-fn init(ruby: &Ruby) -> Result<(), Error> {
-    admin::init(ruby)?;
-    bridge::init(ruby)?;
-    handler::init(ruby)?;
-    published::init(ruby)?;
-    client::init(ruby)?;
-    util::init(ruby)?;
+/// `#[magnus::init]` generates the exported `Init_prosody` function beside
+/// `init`. The module is private, so that generated function is not public
+/// API.
+mod entry {
+    use magnus::{Error, Ruby};
 
-    Ok(())
+    /// Initializes the Prosody Ruby extension.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Magnus error if any initialization step fails, such as
+    /// defining Ruby classes or configuring components.
+    #[magnus::init]
+    fn init(ruby: &Ruby) -> Result<(), Error> {
+        crate::admin::init(ruby)?;
+        crate::bridge::init(ruby)?;
+        crate::handler::init(ruby)?;
+        crate::published::init(ruby)?;
+        crate::client::init(ruby)?;
+        crate::util::init(ruby)?;
+
+        Ok(())
+    }
 }

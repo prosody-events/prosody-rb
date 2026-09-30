@@ -24,18 +24,13 @@ mod callback;
 /// Maximum number of commands to process in a single poll operation.
 const POLL_BATCH_SIZE: usize = 16;
 
-/// Lazily initialized reference to Ruby's Thread class.
-#[allow(clippy::expect_used)]
-pub static THREAD_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
-    ruby.class_object()
-        .const_get(id!(ruby, "Thread"))
-        .expect("Failed to load Thread class")
-});
-
 /// Lazily initialized reference to Ruby's `Thread::Queue` class.
-#[allow(clippy::expect_used)]
+#[expect(
+    clippy::expect_used,
+    reason = "magnus Lazy takes an infallible initializer"
+)]
 pub static QUEUE_CLASS: Lazy<RClass> = Lazy::new(|ruby| {
-    ruby.get_inner(&THREAD_CLASS)
+    ruby.class_thread()
         .const_get(id!(ruby, "Queue"))
         .expect("Failed to load Queue class")
 });
