@@ -10,7 +10,7 @@ RSpec.describe Prosody::Client, integration: true do
   it "returns the local handler response for a request" do
     handler_class = Class.new(CompleteHandler) do
       def on_message(_context, message)
-        {"key" => message.key, "accepted" => true}
+        {"key" => message.key, "requested" => message.response_requested?}
       end
     end
 
@@ -24,14 +24,14 @@ RSpec.describe Prosody::Client, integration: true do
     )
 
     expect(results).to eq(
-      "inventory" => Prosody::Success.new(value: {"key" => "order-1", "accepted" => true})
+      "inventory" => Prosody::Success.new(value: {"key" => "order-1", "requested" => true})
     )
   end
 
   it "returns the local handler response for an excise request" do
     handler_class = Class.new(CompleteHandler) do
       def on_excise(_context, message)
-        {"key" => message.key, "accepted" => true}
+        {"key" => message.key, "requested" => message.response_requested?}
       end
     end
 
@@ -44,7 +44,7 @@ RSpec.describe Prosody::Client, integration: true do
     )
 
     expect(results).to eq(
-      "inventory" => Prosody::Success.new(value: {"key" => "order-1", "accepted" => true})
+      "inventory" => Prosody::Success.new(value: {"key" => "order-1", "requested" => true})
     )
   end
 

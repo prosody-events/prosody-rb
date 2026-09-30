@@ -116,6 +116,8 @@ RSpec.describe Prosody::Client, integration: true do
       expect(received_message).not_to be_nil
       expect(received_message.topic).to eq(topic)
       expect(received_message.key).to eq(test_message[:key])
+      expect(received_message.source_system).to eq(TestConfig::SOURCE_NAME)
+      expect(received_message.response_requested?).to be(false)
       # Compare with string keys since JSON serializes to string keys
       expect(received_message.payload).to eq(test_message[:payload].transform_keys(&:to_s))
     end
@@ -138,6 +140,8 @@ RSpec.describe Prosody::Client, integration: true do
 
     expect(message.key).to eq("obsolete-key")
     expect(message).to be_a(Prosody::ExciseMessage)
+    expect(message.source_system).to eq(TestConfig::SOURCE_NAME)
+    expect(message.response_requested?).to be(false)
     expect(message).not_to respond_to(:payload)
   end
 

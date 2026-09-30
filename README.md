@@ -1199,10 +1199,12 @@ Messages have the following attributes:
 - `timestamp` (Time): The timestamp when the message was created or sent.
 - `key` (String): The message key.
 - `payload` (`Payload`): The JSON-deserialized message payload.
+- `source_system` (String or nil): The source system of the producer that sent the message, or `nil` when the message has none.
+- `response_requested?` (Boolean): Whether the producer requested a response. When it is false, Prosody discards the handler result, so a handler can skip work that only builds the response.
 
 ### Prosody::ExciseMessage
 
-An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, and `key` attributes. It has no `payload` attribute.
+An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, `key`, `source_system`, and `response_requested?` attributes. It has no `payload` attribute.
 
 ### Prosody::Context
 

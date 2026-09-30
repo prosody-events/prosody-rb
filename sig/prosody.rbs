@@ -131,6 +131,12 @@ module Prosody
     # Returns the deserialized message payload.
     # @return [Payload] The message content
     def payload: () -> Payload
+
+    # Returns the producer's source system, or nil when the message has none.
+    def source_system: () -> String?
+
+    # Reports whether the producer requested a response to this message.
+    def response_requested?: () -> bool
   end
 
   # Represents an excise record with no payload.
@@ -140,6 +146,8 @@ module Prosody
     def offset: () -> Integer
     def key: () -> String
     def timestamp: () -> Time
+    def source_system: () -> String?
+    def response_requested?: () -> bool
   end
 
   # Represents a timer that was scheduled to fire at a specific time.

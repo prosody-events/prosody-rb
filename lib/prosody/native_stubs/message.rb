@@ -56,6 +56,21 @@ module Prosody
     def payload
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
+
+    # Returns the source system of the producer that sent this message.
+    #
+    # @return [String, nil] The source system, or nil when the message has none
+    def source_system
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
+
+    # Reports whether the producer requested a response to this message.
+    # Prosody discards the handler result when it is false.
+    #
+    # @return [Boolean]
+    def response_requested?
+      raise NotImplementedError, "This method is implemented natively in Rust"
+    end
   end
 
   # An excise record with Kafka metadata and no payload.
@@ -74,6 +89,12 @@ module Prosody
 
     # @return [Time] The record timestamp
     def timestamp = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [String, nil] The producer's source system, or nil when the record has none
+    def source_system = raise NotImplementedError, "This method is implemented natively in Rust"
+
+    # @return [Boolean] Whether the producer requested a response to this record
+    def response_requested? = raise NotImplementedError, "This method is implemented natively in Rust"
   end
 
   # Represents a timer that was scheduled to fire at a specific time.

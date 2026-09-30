@@ -7,6 +7,7 @@ use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, RClass, Ruby, Value, method};
+use prosody::SourceSystem;
 use prosody::consumer::Keyed;
 use prosody::consumer::message::ConsumerMessage;
 use serde_magnus::serialize;
@@ -118,6 +119,17 @@ impl Message {
         serialize(ruby, this.inner.payload())
     }
 
+    /// Returns the producer's source system, or `None` when the record has
+    /// no source system header.
+    fn source_system(&self) -> Option<&str> {
+        self.inner.source_system().map(SourceSystem::as_str)
+    }
+
+    /// Reports whether the producer requested a response to this record.
+    fn response_requested(&self) -> bool {
+        self.inner.response_requested()
+    }
+
     /// Clones the wrapped `ConsumerMessage` for a message-collection write.
     ///
     /// The wrapper holds the real `ConsumerMessage`, so a message write clones
@@ -156,6 +168,14 @@ impl ExciseMessage {
                 id!(ruby, "at"),
                 (epoch_micros, ruby.to_symbol("microsecond")),
             )
+    }
+
+    fn source_system(&self) -> Option<&str> {
+        self.inner.source_system().map(SourceSystem::as_str)
+    }
+
+    fn response_requested(&self) -> bool {
+        self.inner.response_requested()
     }
 }
 
@@ -199,6 +219,14 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_method(id!(ruby, "key"), method!(Message::key, 0))?;
     class.define_method(id!(ruby, "timestamp"), method!(Message::timestamp, 0))?;
     class.define_method(id!(ruby, "payload"), method!(Message::payload, 0))?;
+    class.define_method(
+        id!(ruby, "source_system"),
+        method!(Message::source_system, 0),
+    )?;
+    class.define_method(
+        id!(ruby, "response_requested?"),
+        method!(Message::response_requested, 0),
+    )?;
 
     let class = module.define_class(id!(ruby, "ExciseMessage"), ruby.class_object())?;
     class.define_method(id!(ruby, "topic"), method!(ExciseMessage::topic, 0))?;
@@ -206,6 +234,14 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_method(id!(ruby, "offset"), method!(ExciseMessage::offset, 0))?;
     class.define_method(id!(ruby, "key"), method!(ExciseMessage::key, 0))?;
     class.define_method(id!(ruby, "timestamp"), method!(ExciseMessage::timestamp, 0))?;
+    class.define_method(
+        id!(ruby, "source_system"),
+        method!(ExciseMessage::source_system, 0),
+    )?;
+    class.define_method(
+        id!(ruby, "response_requested?"),
+        method!(ExciseMessage::response_requested, 0),
+    )?;
 
     Ok(())
 }
