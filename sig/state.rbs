@@ -30,7 +30,7 @@ module Prosody
   class StateDefinition < Data
     attr_reader name: String
     attr_reader kind: String
-    attr_reader payload: String
+    attr_reader payload: String?
     attr_reader ttl_seconds: Integer?
     attr_reader read_uncommitted: bool?
     attr_reader published: bool?
@@ -63,7 +63,7 @@ module Prosody
   interface _SetDefinition
     def name: () -> String
     def kind: () -> "set"
-    def payload: () -> "presence"
+    def payload: () -> nil
     def read_cache: () -> (Numeric | false)?
     def to_state_config: () -> Hash[Symbol, state_config_value]
   end

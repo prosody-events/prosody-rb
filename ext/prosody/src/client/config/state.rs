@@ -29,8 +29,9 @@ pub(super) struct StateCollectionConfig {
     /// The collection kind: `"value"`, `"map"`, `"set"`, or `"deque"`.
     kind: String,
 
-    /// The item payload: `"json"` or `"message"`, or `"presence"` for a set.
-    payload: String,
+    /// The item payload: `"json"` or `"message"`. A set stores membership
+    /// only, so it has no payload.
+    payload: Option<String>,
 
     /// Optional per-write TTL in whole seconds. Crosses as `f64` so
     /// fractional/negative/non-finite values reach the whole-number guard.
@@ -72,14 +73,12 @@ enum CollectionKind {
     Deque,
 }
 
-/// The item payload of a keyed-state collection.
+/// The item payload of a value, map, or deque collection.
 enum CollectionPayload {
     /// JSON values.
     Json,
     /// The full Kafka message the handler received.
     Message,
-    /// Membership only. Only sets use it.
-    Presence,
 }
 
 /// Parses a collection-kind token.
@@ -95,8 +94,8 @@ fn parse_kind(index: usize, kind: &str) -> Result<CollectionKind, String> {
         "set" => Ok(CollectionKind::Set),
         "deque" => Ok(CollectionKind::Deque),
         other => Err(format!(
-            "state_collections[{index}].kind: expected \"value\", \"map\", \"set\", or \
-             \"deque\", got {other:?}"
+            "state_collections[{index}].kind: expected \"value\", \"map\", \"set\", or \"deque\", \
+             got {other:?}"
         )),
     }
 }
@@ -106,15 +105,13 @@ fn parse_kind(index: usize, kind: &str) -> Result<CollectionKind, String> {
 /// # Errors
 ///
 /// Returns a permanent-category error naming the field if the token is not
-/// `"json"`, `"message"`, or `"presence"`.
+/// `"json"` or `"message"`.
 fn parse_payload(index: usize, payload: &str) -> Result<CollectionPayload, String> {
     match payload {
         "json" => Ok(CollectionPayload::Json),
         "message" => Ok(CollectionPayload::Message),
-        "presence" => Ok(CollectionPayload::Presence),
         other => Err(format!(
-            "state_collections[{index}].payload: expected \"json\", \"message\", or \
-             \"presence\", got {other:?}"
+            "state_collections[{index}].payload: expected \"json\" or \"message\", got {other:?}"
         )),
     }
 }
@@ -195,7 +192,7 @@ fn with_capacity<T>(
 }
 
 /// Maps one collection into its descriptor. Values, maps, and deques hold
-/// JSON or messages. Sets, and only sets, hold presence.
+/// JSON or messages. Sets have no payload.
 ///
 /// # Errors
 ///
@@ -207,7 +204,10 @@ fn register_state_collection(
     collection: &StateCollectionConfig,
 ) -> Result<(), String> {
     let kind = parse_kind(index, &collection.kind)?;
-    let payload = parse_payload(index, &collection.payload)?;
+    let payload = match &collection.payload {
+        Some(payload) => Some(parse_payload(index, payload)?),
+        None => None,
+    };
 
     let ttl_seconds = match collection.ttl_seconds {
         Some(value) => Some(whole_number_field(
@@ -225,7 +225,7 @@ fn register_state_collection(
     let read_uncommitted = collection.read_uncommitted;
     let name = collection.name.as_str();
     match (kind, payload) {
-        (CollectionKind::Value, CollectionPayload::Json) => {
+        (CollectionKind::Value, Some(CollectionPayload::Json)) => {
             let _ = keyed.register(with_def(
                 value_state::<JsonCodec>(name),
                 ttl_seconds,
@@ -233,7 +233,7 @@ fn register_state_collection(
                 collection.published,
             ));
         }
-        (CollectionKind::Map, CollectionPayload::Json) => {
+        (CollectionKind::Map, Some(CollectionPayload::Json)) => {
             let descriptor = with_def(
                 map_state::<Utf8KeyCodec, JsonCodec>(name),
                 ttl_seconds,
@@ -242,7 +242,7 @@ fn register_state_collection(
             );
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
-        (CollectionKind::Deque, CollectionPayload::Json) => {
+        (CollectionKind::Deque, Some(CollectionPayload::Json)) => {
             let descriptor = with_def(
                 deque_state::<JsonCodec>(name),
                 ttl_seconds,
@@ -251,7 +251,7 @@ fn register_state_collection(
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
-        (CollectionKind::Value, CollectionPayload::Message) => {
+        (CollectionKind::Value, Some(CollectionPayload::Message)) => {
             let _ = keyed.register(with_def(
                 message_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
@@ -259,7 +259,7 @@ fn register_state_collection(
                 collection.published,
             ));
         }
-        (CollectionKind::Map, CollectionPayload::Message) => {
+        (CollectionKind::Map, Some(CollectionPayload::Message)) => {
             let descriptor = with_def(
                 message_map_state::<Utf8KeyCodec, KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
@@ -268,7 +268,7 @@ fn register_state_collection(
             );
             let _ = keyed.register(with_keyset(descriptor, keyset_limit));
         }
-        (CollectionKind::Deque, CollectionPayload::Message) => {
+        (CollectionKind::Deque, Some(CollectionPayload::Message)) => {
             let descriptor = with_def(
                 message_deque_state::<KafkaLoader<JsonCodec>>(name),
                 ttl_seconds,
@@ -277,7 +277,7 @@ fn register_state_collection(
             );
             let _ = keyed.register(with_capacity(descriptor, capacity));
         }
-        (CollectionKind::Set, CollectionPayload::Presence) => {
+        (CollectionKind::Set, None) => {
             let descriptor = with_def(
                 set_state::<Utf8KeyCodec>(name),
                 ttl_seconds,
@@ -286,17 +286,14 @@ fn register_state_collection(
             );
             let _ = keyed.register(with_set_keyset(descriptor, keyset_limit));
         }
-        (CollectionKind::Set, CollectionPayload::Json | CollectionPayload::Message) => {
+        (CollectionKind::Set, Some(_)) => {
             return Err(format!(
-                "state_collections[{index}].payload: set collections use \"presence\""
+                "state_collections[{index}].payload: omit it for a set collection"
             ));
         }
-        (
-            CollectionKind::Value | CollectionKind::Map | CollectionKind::Deque,
-            CollectionPayload::Presence,
-        ) => {
+        (CollectionKind::Value | CollectionKind::Map | CollectionKind::Deque, None) => {
             return Err(format!(
-                "state_collections[{index}].payload: \"presence\" is only valid for set \
+                "state_collections[{index}].payload: required for value, map, and deque \
                  collections"
             ));
         }

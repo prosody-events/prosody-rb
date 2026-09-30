@@ -63,11 +63,13 @@ module Prosody
   StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted,
     :published, :read_cache, :keyset_limit, :capacity, :access) do
     # Serializes this definition into the native-registration hash, omitting
-    # unset optionals so they fall back to the core defaults.
+    # unset optionals so they fall back to the core defaults. A set has no
+    # payload, so its hash has no payload key.
     #
     # @return [Hash] the registration hash for the native layer
     def to_state_config
-      config = {name: name, kind: kind, payload: payload}
+      config = {name: name, kind: kind}
+      config[:payload] = payload unless payload.nil?
       config[:ttl_seconds] = ttl_seconds unless ttl_seconds.nil?
       config[:read_uncommitted] = read_uncommitted unless read_uncommitted.nil?
       config[:published] = published unless published.nil?
@@ -115,7 +117,7 @@ module Prosody
   # @param read_cache [Numeric, false, nil] published-read cache override
   # @return [StateDefinition] a frozen definition
   def self.set(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
-    StateDefinition.new(name: name.to_s, kind: "set", payload: "presence",
+    StateDefinition.new(name: name.to_s, kind: "set", payload: nil,
       ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
       read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
       access: SET_ACCESS)

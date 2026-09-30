@@ -73,19 +73,21 @@ RSpec.describe "Prosody keyed state" do
       expect(error.message).to match(/keyset_limit.*only valid for map and set/)
     end
 
-    it "accepts a set with presence, a TTL, and a keyset limit" do
+    it "accepts a set with a TTL and a keyset limit" do
       error = client_error(state_collections: [Prosody.set("s", ttl: 60, keyset_limit: 16)])
       expect(error).to be_nil
     end
 
-    it "rejects a set with a JSON payload" do
-      error = client_error(state_collections: [{name: "s", kind: "set", payload: "json"}])
-      expect(error.message).to match(/state_collections\[0\]\.payload: set collections use "presence"/)
+    it "rejects a set with a payload" do
+      %w[json presence].each do |payload|
+        error = client_error(state_collections: [{name: "s", kind: "set", payload: payload}])
+        expect(error&.message).to match(/state_collections\[0\]\.payload/), payload
+      end
     end
 
-    it "rejects presence on a collection that is not a set" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "presence"}])
-      expect(error.message).to match(/state_collections\[0\]\.payload: "presence" is only valid for set/)
+    it "rejects a map without a payload" do
+      error = client_error(state_collections: [{name: "m", kind: "map"}])
+      expect(error.message).to match(/state_collections\[0\]\.payload: required/)
     end
 
     it "accepts keyset_limit 0 on a map" do
@@ -198,11 +200,12 @@ RSpec.describe "Prosody keyed state" do
       expect(definition.keyset_limit).to eq(256)
     end
 
-    it "builds a presence-only set definition" do
+    it "builds a set definition with no payload" do
       definition = Prosody.set("tags", ttl: 60, keyset_limit: 16, read_uncommitted: true, published: true, read_cache: 2)
       expect(definition).to be_frozen
+      expect(definition.payload).to be_nil
       expect(definition.to_state_config).to eq({
-        name: "tags", kind: "set", payload: "presence", ttl_seconds: 60,
+        name: "tags", kind: "set", ttl_seconds: 60,
         read_uncommitted: true, published: true, keyset_limit: 16
       })
       expect(definition.read_cache).to eq(2)
