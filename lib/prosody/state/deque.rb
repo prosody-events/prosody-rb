@@ -140,15 +140,9 @@ module Prosody
       self
     end
 
-    # Appends +value+ at the back and returns +self+ for chaining
-    # (mirrors +Array#<<+).
-    #
-    # @param value [Object]
-    # @return [self]
-    def <<(value)
-      push(value)
-      self
-    end
+    # Appends +value+ and returns +self+ (mirrors +Array#<<+). Alias of
+    # {#append}.
+    alias_method :<<, :append
 
     # The front element, or +nil+ when empty (mirrors +Array#first+). An
     # endpoint-slot read in one round trip (no length read). Under a TTL an
@@ -181,12 +175,9 @@ module Prosody
       if default.length > 1
         raise ArgumentError, "wrong number of arguments (given #{default.length + 1}, expected 1..2)"
       end
-      unless index.is_a?(Integer)
-        raise TransientStateError, "fetch: index must be an Integer, got #{index.inspect}"
-      end
       warn "warning: block supersedes default value argument" if block && !default.empty?
 
-      value = index.negative? ? at_negative(index) : @native.get(index)
+      value = get(index)
       case value
       when nil
         return block.call(index) if block
