@@ -149,9 +149,9 @@ module Prosody
     def commit: () -> store_outcome
     def rollback: () -> store_outcome
     # Traversals accept optional query keywords (see State::Scanning).
-    def each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+    def each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
                  | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
-    def reverse_each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+    def reverse_each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
                          | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
     def each_key: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
                 | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
@@ -166,7 +166,7 @@ module Prosody
     def []: (String key) -> V?                       # alias of #get
     def []=: (String key, V value) -> V              # alias of #set (assignment yields value)
     def store: (String key, V value) -> V            # wrapper over #set, returns value
-    def each: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void     # alias of #each_pair
+    def each: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void     # alias of #each_pair
             | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
     def values_at: (*String keys) -> Array[V?]
     def fetch: (String key) -> V
@@ -183,7 +183,7 @@ module Prosody
 
     private
     def initialize: ((NativeJsonMapState | NativeMessageMapState) native) -> void
-    def traverse: (Symbol direction, query_options query) { (String, V) -> void } -> void
+    def traverse: (Symbol direction, query_options query) { ([String, V]) -> void } -> void
                 | (Symbol direction, query_options query) -> Enumerator[[ String, V ], void]
     def traverse_keys: (Symbol direction, query_options query) { (String) -> void } -> void
                      | (Symbol direction, query_options query) -> Enumerator[String, void]
@@ -401,9 +401,9 @@ module Prosody
     alias member? key?
     def contains_many: (_ToS key, Array[_ToS] map_keys) -> Array[bool]
     def empty?: (_ToS key) -> bool
-    def each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+    def each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
                  | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
-    def reverse_each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String, V) -> void } -> void
+    def reverse_each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
                          | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
     def each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
                 | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]

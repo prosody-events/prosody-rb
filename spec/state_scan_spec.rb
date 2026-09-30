@@ -63,6 +63,27 @@ RSpec.describe "Prosody keyed state scans" do
       expect(closes.length).to eq(1)
     end
 
+    # Hash#each_pair yields one [key, value] Array. The owned and published map
+    # traversals yield the same shape to a block, a lambda, and an Enumerator.
+    it "yields each map entry as one [key, value] pair" do
+      pairs = [["a", 1], ["b", 2]]
+      owned, = recording_native(pairs)
+      published = Object.new
+      published.define_singleton_method(:scan) { |_key, direction, query| owned.scan(direction, query) }
+      traversals = {
+        owned: ->(&block) { Prosody::MapState.new(owned).each_pair(&block) },
+        published: ->(&block) { Prosody::PublishedMap.new(published).each_pair("user", &block) }
+      }
+
+      traversals.each do |name, traverse|
+        from_lambda = []
+        traverse.call(&->(pair) { from_lambda << pair })
+        expect(from_lambda).to eq(pairs), "#{name}: lambda"
+        expect(traverse.call.map { |entry| entry }).to eq(pairs), "#{name}: one-parameter block"
+        expect(traverse.call.map(&:first)).to eq(%w[a b]), "#{name}: symbol block"
+      end
+    end
+
     it "closes the deque scan exactly once on early break" do
       native, closes = recording_native([1, 2, 3])
       Prosody::DequeState.new(native).each { break }

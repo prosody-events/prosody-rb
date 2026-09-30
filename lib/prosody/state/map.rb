@@ -311,7 +311,7 @@ module Prosody
     def traverse(key, direction, query)
       return enum_for(__method__, key, direction, query) unless block_given?
 
-      scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield(*entry) }
+      scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield entry }
     end
 
     def traverse_keys(key, direction, query)
