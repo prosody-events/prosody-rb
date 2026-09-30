@@ -1,0 +1,112 @@
+module Prosody
+  # --- published-state readers, opened by Client#state -------------------
+  class NativePublishedValue
+    def get: (String key) -> json_value?
+  end
+
+  class NativePublishedMap
+    def get: (String key, String map_key) -> json_value?
+    def get_many: (String key, Array[String] map_keys) -> Array[json_value?]
+    def contains_key: (String key, String map_key) -> bool
+    def contains_many: (String key, Array[String] map_keys) -> Array[bool]
+    def is_empty: (String key) -> bool
+    def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonMapScan
+    def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
+  end
+
+  class NativePublishedSet
+    def contains: (String key, String member) -> bool
+    def contains_many: (String key, Array[String] members) -> Array[bool]
+    def is_empty: (String key) -> bool
+    def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
+  end
+
+  class NativePublishedDeque
+    def get: (String key, Integer index) -> json_value?
+    def length: (String key) -> Integer
+    def is_empty: (String key) -> bool
+    def peek_front: (String key) -> json_value?
+    def peek_back: (String key) -> json_value?
+    def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonDequeScan
+  end
+
+  class PublishedValue[T = json_value]
+    def get: (_ToS key) -> T?
+
+    private
+    def initialize: (NativePublishedValue native) -> void
+  end
+
+  class PublishedMap[V = json_value]
+    include State::Scanning
+
+    def get: (_ToS key, _ToS map_key) -> V?
+    def get_many: (_ToS key, Array[_ToS] map_keys) -> Array[V?]
+    def key?: (_ToS key, _ToS map_key) -> bool
+    alias has_key? key?
+    alias include? key?
+    alias member? key?
+    def contains_many: (_ToS key, Array[_ToS] map_keys) -> Array[bool]
+    def empty?: (_ToS key) -> bool
+    def each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
+                 | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
+    def reverse_each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
+                         | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
+    def each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                        | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                  | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
+    def reverse_each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                          | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
+    alias each each_pair
+
+    private
+    def initialize: (NativePublishedMap native) -> void
+    def traverse: (_ToS key, Symbol direction, query_options query) { ([String, V]) -> void } -> void
+                | (_ToS key, Symbol direction, query_options query) -> Enumerator[[String, V], void]
+    def traverse_keys: (_ToS key, Symbol direction, query_options query) { (String) -> void } -> void
+                     | (_ToS key, Symbol direction, query_options query) -> Enumerator[String, void]
+    def traverse_values: (_ToS key, Symbol direction, query_options query) { (V) -> void } -> void
+                       | (_ToS key, Symbol direction, query_options query) -> Enumerator[V, void]
+  end
+
+  class PublishedSet
+    include State::Scanning
+
+    def include?: (_ToS key, _ToS member) -> bool
+    alias member? include?
+    def contains_many: (_ToS key, Array[_ToS] members) -> Array[bool]
+    def empty?: (_ToS key) -> bool
+    def each: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+            | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                    | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+
+    private
+    def initialize: (NativePublishedSet native) -> void
+    def traverse: (_ToS key, Symbol direction, query_options query) { (String) -> void } -> void
+                | (_ToS key, Symbol direction, query_options query) -> Enumerator[String, void]
+  end
+
+  class PublishedDeque[T = json_value]
+    include State::Scanning
+
+    def get: (_ToS key, Integer index) -> T?
+    def length: (_ToS key) -> Integer
+    alias size length
+    def empty?: (_ToS key) -> bool
+    def first: (_ToS key) -> T?
+    def last: (_ToS key) -> T?
+    def each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+            | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+    def reverse_each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+                    | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+
+    private
+    def initialize: (NativePublishedDeque native) -> void
+    def traverse: (_ToS key, Symbol direction, query_options query) { (T) -> void } -> void
+                | (_ToS key, Symbol direction, query_options query) -> Enumerator[T, void]
+  end
+end
