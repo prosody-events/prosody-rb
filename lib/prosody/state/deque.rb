@@ -174,6 +174,9 @@ module Prosody
       if default.length > 1
         raise ArgumentError, "wrong number of arguments (given #{default.length + 1}, expected 1..2)"
       end
+      unless index.is_a?(Integer)
+        raise TransientStateError, "fetch: index must be an Integer, got #{index.inspect}"
+      end
       warn "warning: block supersedes default value argument" if block && !default.empty?
 
       value = get(index)
