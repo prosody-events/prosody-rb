@@ -40,7 +40,7 @@ pub struct NativeConfiguration {
     mock: Option<bool>,
 
     /// Maximum time to wait for a send operation to complete (in seconds)
-    send_timeout: Option<f32>,
+    send_timeout: Option<f64>,
 
     /// Kafka consumer group ID
     group_id: Option<String>,
@@ -71,28 +71,28 @@ pub struct NativeConfiguration {
     max_uncommitted: Option<u16>,
 
     /// Threshold in seconds after which a stalled consumer is detected
-    stall_threshold: Option<f32>,
+    stall_threshold: Option<f64>,
 
     /// Maximum time to wait for a clean shutdown (in seconds)
-    shutdown_timeout: Option<f32>,
+    shutdown_timeout: Option<f64>,
 
     /// Interval between Kafka poll operations (in seconds)
-    poll_interval: Option<f32>,
+    poll_interval: Option<f64>,
 
     /// Interval between offset commit operations (in seconds)
-    commit_interval: Option<f32>,
+    commit_interval: Option<f64>,
 
     /// Operation mode of the client (`pipeline`, `low_latency`, `best_effort`)
     mode: Option<String>,
 
     /// Base delay for retry operations (in seconds)
-    retry_base: Option<f32>,
+    retry_base: Option<f64>,
 
     /// Maximum number of retry attempts
     max_retries: Option<u32>,
 
     /// Maximum delay between retries (in seconds)
-    max_retry_delay: Option<f32>,
+    max_retry_delay: Option<f64>,
 
     /// Topic to send failed messages to
     failure_topic: Option<String>,
@@ -120,11 +120,11 @@ pub struct NativeConfiguration {
 
     /// Retention period for persistent timer and deferral data in Cassandra,
     /// in seconds.
-    cassandra_retention: Option<f32>,
+    cassandra_retention: Option<f64>,
 
     /// Timer slab partitioning duration in seconds.
     /// Controls how timers are grouped for storage and retrieval.
-    slab_size: Option<f32>,
+    slab_size: Option<f64>,
 
     // Scheduler configuration
     /// Target proportion of execution time for failure/retry task processing
@@ -134,7 +134,7 @@ pub struct NativeConfiguration {
 
     /// Wait duration (in seconds) at which urgency boost reaches maximum
     /// intensity.
-    scheduler_max_wait: Option<f32>,
+    scheduler_max_wait: Option<f64>,
 
     /// Maximum urgency boost (in seconds of virtual time) for waiting tasks.
     scheduler_wait_weight: Option<f64>,
@@ -150,7 +150,7 @@ pub struct NativeConfiguration {
     monopolization_threshold: Option<f64>,
 
     /// Rolling window duration (in seconds) for monopolization detection.
-    monopolization_window: Option<f32>,
+    monopolization_window: Option<f64>,
 
     /// Cache size for tracking key execution intervals.
     monopolization_cache_size: Option<u32>,
@@ -160,16 +160,16 @@ pub struct NativeConfiguration {
     defer_enabled: Option<bool>,
 
     /// Base exponential backoff delay for deferred retries (in seconds).
-    defer_base: Option<f32>,
+    defer_base: Option<f64>,
 
     /// Maximum delay between deferred retries (in seconds).
-    defer_max_delay: Option<f32>,
+    defer_max_delay: Option<f64>,
 
     /// Failure rate threshold for disabling deferral (0.0 to 1.0).
     defer_failure_threshold: Option<f64>,
 
     /// Sliding window duration (in seconds) for failure rate tracking.
-    defer_failure_window: Option<f32>,
+    defer_failure_window: Option<f64>,
 
     /// Maximum messages retained by the shared Kafka loader.
     loader_cache_size: Option<u32>,
@@ -179,14 +179,14 @@ pub struct NativeConfiguration {
     defer_store_cache_size: Option<u32>,
 
     /// Timeout for Kafka loader seek operations (in seconds).
-    loader_seek_timeout: Option<f32>,
+    loader_seek_timeout: Option<f64>,
 
     /// Messages to read sequentially before seeking.
     loader_discard_threshold: Option<i64>,
 
     // Timeout configuration
     /// Fixed timeout duration for handler execution (in seconds).
-    timeout: Option<f32>,
+    timeout: Option<f64>,
 
     // Telemetry emitter configuration
     /// Kafka topic to produce telemetry events to.
@@ -378,7 +378,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
     /// - The Kafka loader configuration cannot be built (e.g. a tuning value
     ///   fails validation).
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
-        let mut consumer: ConsumerConfigurationBuilder = config.into();
+        let mut consumer: ConsumerConfigurationBuilder = config.try_into()?;
 
         if let Some(s) = &config.message_spans {
             let relation = s
@@ -406,7 +406,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
             }
 
             if let Some(seek_timeout) = &config.loader_seek_timeout {
-                loader.seek_timeout(Duration::from_secs_f32(*seek_timeout));
+                loader.seek_timeout(seconds("loader_seek_timeout", *seek_timeout)?);
             }
 
             if let Some(discard_threshold) = &config.loader_discard_threshold {
@@ -418,12 +418,12 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
 
         Ok(Self {
             consumer,
-            retry: config.into(),
+            retry: config.try_into()?,
             failure_topic: config.into(),
-            scheduler: config.into(),
-            monopolization: config.into(),
-            defer: config.into(),
-            timeout: config.into(),
+            scheduler: config.try_into()?,
+            monopolization: config.try_into()?,
+            defer: config.try_into()?,
+            timeout: config.try_into()?,
             dedup: config.try_into()?,
             emitter: config.try_into()?,
             keyed_state: build_keyed_state_config(config)?,
@@ -454,10 +454,18 @@ fn build_peer_config(config: &NativeConfiguration) -> Result<PeerConfiguration, 
         builder.peer_cache_capacity(value);
     }
     if let Some(value) = config.peer_registration_ttl {
-        builder.registration_ttl(
-            Duration::try_from_secs_f64(value)
-                .map_err(|_| "peer_registration_ttl: must be a valid duration".to_owned())?,
-        );
+        builder.registration_ttl(seconds("peer_registration_ttl", value)?);
     }
     builder.build().map_err(|error| error.to_string())
+}
+
+/// Converts a Ruby number of seconds into a [`Duration`].
+///
+/// # Errors
+///
+/// Returns an error that names `option` if the value is negative, not
+/// finite, or too large for a [`Duration`].
+fn seconds(option: &str, value: f64) -> Result<Duration, String> {
+    Duration::try_from_secs_f64(value)
+        .map_err(|_| format!("{option}: must be a finite, non-negative number of seconds"))
 }

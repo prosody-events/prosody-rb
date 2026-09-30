@@ -40,4 +40,22 @@ RSpec.describe Prosody::Client, integration: true do
 
     expect(@client).to be_a(Prosody::Client)
   end
+
+  describe "duration options" do
+    options = %i[
+      send_timeout stall_threshold shutdown_timeout poll_interval commit_interval
+      retry_base max_retry_delay idempotence_ttl peer_registration_ttl
+      cassandra_retention slab_size scheduler_max_wait monopolization_window
+      defer_base defer_max_delay defer_failure_window loader_seek_timeout timeout
+    ]
+
+    # Every duration option converts to a Rust Duration. A value that has no
+    # Duration form raises ArgumentError and never ends the process.
+    options.product([-1, Float::NAN, Float::INFINITY, 1e40]).each do |option, value|
+      it "rejects #{option} = #{value}" do
+        config = {mock: true, bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS}.merge(option => value)
+        expect { Prosody::Client.new(config) }.to raise_error(ArgumentError, /#{option}: must be a finite, non-negative number of seconds/)
+      end
+    end
+  end
 end

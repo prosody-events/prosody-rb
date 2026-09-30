@@ -31,6 +31,7 @@ use prosody::high_level::erased::{
     ErasedConsumerState, ErasedReadCache, SharedHighLevelClient, new_erased,
 };
 use prosody::high_level::mode::Mode;
+use prosody::producer::ProducerConfigurationBuilder;
 use prosody::propagator::new_propagator;
 use prosody::requester::ResponseError;
 use prosody::subsystem::SubsystemName;
@@ -126,8 +127,12 @@ impl Client {
                 "Bridge not initialized",
             ))?
             .clone();
-        let cassandra = Into::<CassandraConfigurationBuilder>::into(config_ref);
-        let mut producer = config_ref.into();
+        let cassandra: CassandraConfigurationBuilder = config_ref
+            .try_into()
+            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
+        let mut producer: ProducerConfigurationBuilder = config_ref
+            .try_into()
+            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
         let client = bridge
             .wait_for(
                 ruby,

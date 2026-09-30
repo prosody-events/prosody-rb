@@ -2,7 +2,7 @@
 //! scheduler, monopolization, defer, timeout, and deduplication middleware
 //! builders.
 
-use super::NativeConfiguration;
+use super::{NativeConfiguration, seconds};
 use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
 use prosody::consumer::middleware::monopolization::MonopolizationConfigurationBuilder;
@@ -11,10 +11,11 @@ use prosody::consumer::middleware::scheduler::SchedulerConfigurationBuilder;
 use prosody::consumer::middleware::timeout::TimeoutConfigurationBuilder;
 use prosody::consumer::middleware::topic::FailureTopicConfigurationBuilder;
 use std::num::NonZeroUsize;
-use std::time::Duration;
 
-impl<'a> From<&'a NativeConfiguration> for RetryConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for RetryConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `RetryConfigurationBuilder`.
     ///
     /// This takes the relevant retry settings from the configuration and
@@ -26,12 +27,17 @@ impl<'a> From<&'a NativeConfiguration> for RetryConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `RetryConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `RetryConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(retry_base) = &config.retry_base {
-            builder.base(Duration::from_secs_f32(*retry_base));
+            builder.base(seconds("retry_base", *retry_base)?);
         }
 
         if let Some(max_retries) = &config.max_retries {
@@ -39,10 +45,10 @@ impl<'a> From<&'a NativeConfiguration> for RetryConfigurationBuilder {
         }
 
         if let Some(max_retry_delay) = &config.max_retry_delay {
-            builder.max_delay(Duration::from_secs_f32(*max_retry_delay));
+            builder.max_delay(seconds("max_retry_delay", *max_retry_delay)?);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
@@ -71,8 +77,10 @@ impl<'a> From<&'a NativeConfiguration> for FailureTopicConfigurationBuilder {
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `SchedulerConfigurationBuilder`.
     ///
     /// This takes the relevant scheduler settings from the configuration and
@@ -84,8 +92,13 @@ impl<'a> From<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `SchedulerConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `SchedulerConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(max_concurrency) = &config.max_concurrency {
@@ -97,7 +110,7 @@ impl<'a> From<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
         }
 
         if let Some(max_wait) = &config.scheduler_max_wait {
-            builder.max_wait(Duration::from_secs_f32(*max_wait));
+            builder.max_wait(seconds("scheduler_max_wait", *max_wait)?);
         }
 
         if let Some(wait_weight) = &config.scheduler_wait_weight {
@@ -108,12 +121,14 @@ impl<'a> From<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
             builder.cache_size(*cache_size as usize);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for MonopolizationConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for MonopolizationConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `MonopolizationConfigurationBuilder`.
     ///
     /// This takes the relevant monopolization settings from the configuration
@@ -125,8 +140,13 @@ impl<'a> From<&'a NativeConfiguration> for MonopolizationConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `MonopolizationConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `MonopolizationConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(enabled) = &config.monopolization_enabled {
@@ -138,19 +158,21 @@ impl<'a> From<&'a NativeConfiguration> for MonopolizationConfigurationBuilder {
         }
 
         if let Some(window) = &config.monopolization_window {
-            builder.window_duration(Duration::from_secs_f32(*window));
+            builder.window_duration(seconds("monopolization_window", *window)?);
         }
 
         if let Some(cache_size) = &config.monopolization_cache_size {
             builder.cache_size(*cache_size as usize);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for DeferConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `DeferConfigurationBuilder`.
     ///
     /// This takes the relevant defer settings from the configuration and
@@ -162,8 +184,13 @@ impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `DeferConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `DeferConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(enabled) = &config.defer_enabled {
@@ -171,11 +198,11 @@ impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
         }
 
         if let Some(base) = &config.defer_base {
-            builder.base(Duration::from_secs_f32(*base));
+            builder.base(seconds("defer_base", *base)?);
         }
 
         if let Some(max_delay) = &config.defer_max_delay {
-            builder.max_delay(Duration::from_secs_f32(*max_delay));
+            builder.max_delay(seconds("defer_max_delay", *max_delay)?);
         }
 
         if let Some(failure_threshold) = &config.defer_failure_threshold {
@@ -183,19 +210,21 @@ impl<'a> From<&'a NativeConfiguration> for DeferConfigurationBuilder {
         }
 
         if let Some(failure_window) = &config.defer_failure_window {
-            builder.failure_window(Duration::from_secs_f32(*failure_window));
+            builder.failure_window(seconds("defer_failure_window", *failure_window)?);
         }
 
         if let Some(store_cache_size) = &config.defer_store_cache_size {
             builder.store_cache_size(*store_cache_size as usize);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `TimeoutConfigurationBuilder`.
     ///
     /// This takes the relevant timeout settings from the configuration and
@@ -207,15 +236,20 @@ impl<'a> From<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `TimeoutConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `TimeoutConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(timeout) = &config.timeout {
-            builder.timeout(Some(Duration::from_secs_f32(*timeout)));
+            builder.timeout(Some(seconds("timeout", *timeout)?));
         }
 
-        builder
+        Ok(builder)
     }
 }
 
@@ -228,12 +262,9 @@ impl<'a> TryFrom<&'a NativeConfiguration> for DeduplicationConfigurationBuilder 
     /// This takes the relevant deduplication settings from the configuration
     /// and sets them on a new `DeduplicationConfigurationBuilder` instance.
     ///
-    /// Consumer deduplication is mandatory in the core (it is the keyed-state
-    /// commit oracle), so `cache_capacity` is `NonZeroUsize` and a zero
-    /// capacity is unrepresentable rather than a silent "disable". An explicit
-    /// `idempotence_cache_size` of `0` is therefore rejected here rather than
-    /// silently defaulting; this mirrors the sibling `prosody-js` binding and
-    /// the core's own rejection of `PROSODY_IDEMPOTENCE_CACHE_SIZE=0`.
+    /// Core deduplication is mandatory, so its cache capacity is a
+    /// `NonZeroUsize`. An `idempotence_cache_size` of `0` cannot convert to
+    /// that type, so the conversion fails.
     ///
     /// # Arguments
     ///
@@ -245,8 +276,8 @@ impl<'a> TryFrom<&'a NativeConfiguration> for DeduplicationConfigurationBuilder 
     ///
     /// # Errors
     ///
-    /// Returns a `String` error if `idempotence_cache_size` is explicitly set
-    /// to `0`.
+    /// Returns a `String` error if `idempotence_cache_size` is `0`, or if
+    /// `idempotence_ttl` is negative, not finite, or too large.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -260,11 +291,8 @@ impl<'a> TryFrom<&'a NativeConfiguration> for DeduplicationConfigurationBuilder 
             builder.version(version.clone());
         }
 
-        if let Some(ttl) = &config.idempotence_ttl
-            && ttl.is_finite()
-            && *ttl >= 0.0_f64
-        {
-            builder.ttl(Duration::from_secs_f64(*ttl));
+        if let Some(ttl) = &config.idempotence_ttl {
+            builder.ttl(seconds("idempotence_ttl", *ttl)?);
         }
 
         Ok(builder)

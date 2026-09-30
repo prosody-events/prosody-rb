@@ -1,15 +1,16 @@
 //! Conversion of [`NativeConfiguration`] into the Kafka producer, Kafka
 //! consumer, Cassandra, and telemetry emitter builders.
 
-use super::{NativeConfiguration, ProbePort};
+use super::{NativeConfiguration, ProbePort, seconds};
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::producer::ProducerConfigurationBuilder;
 use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
-use std::time::Duration;
 
-impl<'a> From<&'a NativeConfiguration> for ProducerConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for ProducerConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `ProducerConfigurationBuilder`.
     ///
     /// This takes the relevant producer settings from the configuration and
@@ -21,8 +22,13 @@ impl<'a> From<&'a NativeConfiguration> for ProducerConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `ProducerConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `ProducerConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(bootstrap_servers) = &config.bootstrap_servers {
@@ -30,7 +36,7 @@ impl<'a> From<&'a NativeConfiguration> for ProducerConfigurationBuilder {
         }
 
         if let Some(send_timeout) = &config.send_timeout {
-            builder.send_timeout(Duration::from_secs_f32(*send_timeout));
+            builder.send_timeout(seconds("send_timeout", *send_timeout)?);
         }
 
         if let Some(idempotence_cache_size) = &config.idempotence_cache_size {
@@ -45,12 +51,14 @@ impl<'a> From<&'a NativeConfiguration> for ProducerConfigurationBuilder {
             builder.mock(*mock);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `ConsumerConfigurationBuilder`.
     ///
     /// This takes the relevant consumer settings from the configuration and
@@ -62,8 +70,13 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `ConsumerConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `ConsumerConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(bootstrap_servers) = &config.bootstrap_servers {
@@ -87,19 +100,19 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
         }
 
         if let Some(stall_threshold) = &config.stall_threshold {
-            builder.stall_threshold(Duration::from_secs_f32(*stall_threshold));
+            builder.stall_threshold(seconds("stall_threshold", *stall_threshold)?);
         }
 
         if let Some(shutdown_timeout) = &config.shutdown_timeout {
-            builder.shutdown_timeout(Duration::from_secs_f32(*shutdown_timeout));
+            builder.shutdown_timeout(seconds("shutdown_timeout", *shutdown_timeout)?);
         }
 
         if let Some(poll_interval) = &config.poll_interval {
-            builder.poll_interval(Duration::from_secs_f32(*poll_interval));
+            builder.poll_interval(seconds("poll_interval", *poll_interval)?);
         }
 
         if let Some(commit_interval) = &config.commit_interval {
-            builder.commit_interval(Duration::from_secs_f32(*commit_interval));
+            builder.commit_interval(seconds("commit_interval", *commit_interval)?);
         }
 
         if let Some(mock) = &config.mock {
@@ -119,15 +132,17 @@ impl<'a> From<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
         }
 
         if let Some(slab_size) = &config.slab_size {
-            builder.slab_size(Duration::from_secs_f32(*slab_size));
+            builder.slab_size(seconds("slab_size", *slab_size)?);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
-impl<'a> From<&'a NativeConfiguration> for CassandraConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
+impl<'a> TryFrom<&'a NativeConfiguration> for CassandraConfigurationBuilder {
+    type Error = String;
+
+    /// Attempts to convert a `NativeConfiguration` reference into a
     /// `CassandraConfigurationBuilder`.
     ///
     /// This takes the relevant Cassandra settings from the configuration and
@@ -139,8 +154,13 @@ impl<'a> From<&'a NativeConfiguration> for CassandraConfigurationBuilder {
     ///
     /// # Returns
     ///
-    /// A configured `CassandraConfigurationBuilder`
-    fn from(config: &'a NativeConfiguration) -> Self {
+    /// A configured `CassandraConfigurationBuilder` if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` error if a duration is negative, not finite, or too
+    /// large.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
         if let Some(nodes) = &config.cassandra_nodes {
@@ -168,10 +188,10 @@ impl<'a> From<&'a NativeConfiguration> for CassandraConfigurationBuilder {
         }
 
         if let Some(retention) = &config.cassandra_retention {
-            builder.retention(Duration::from_secs_f32(*retention));
+            builder.retention(seconds("cassandra_retention", *retention)?);
         }
 
-        builder
+        Ok(builder)
     }
 }
 
