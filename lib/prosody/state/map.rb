@@ -7,8 +7,8 @@ module Prosody
   # A `String`-keyed ordered-map keyed-state handle.
   #
   # Traversal is explicit: {#each_pair}/{#reverse_each_pair} yield `key, value`
-  # pairs over a native scan, closing the scan via `ensure`. No aggregate-mixin
-  # methods are provided — they would silently materialize an unbounded remote
+  # pairs over a native scan, closing the scan via `ensure`. The map has no
+  # aggregate mixin methods, because they would load the whole remote
   # collection.
   class MapState
     include State::Scanning
@@ -106,12 +106,11 @@ module Prosody
     def reverse_each_pair(**query, &block) = traverse(:scan, :backward, query, &block)
 
     # Traverses the live keys in key order, yielding each key (mirrors
-    # +Hash#each_key+). The key scan skips value decode and the resolver — a
-    # message-backed map yields keys with zero Kafka fetches, though not
-    # zero-I/O. Without a block, returns a demand-driven {Enumerator}; there is
-    # deliberately no eager +keys+ array (it would materialize the whole remote
-    # keyset). Mirrors {#each_pair}'s block-form return (+nil+), not stdlib's
-    # +self+, for in-repo sibling consistency.
+    # +Hash#each_key+). The key scan decodes no values, so a message-backed map
+    # fetches no Kafka messages. It can still read the store. Without a block,
+    # it returns an {Enumerator} that reads on demand. The map has no +keys+
+    # array, because it would load the whole remote keyset. The block form
+    # returns +nil+, as {#each_pair} does.
     #
     # @param query [Hash] optional query keywords, as on {#each_pair}
     # @yieldparam key [String]
@@ -153,8 +152,8 @@ module Prosody
     alias_method :[]=, :set
 
     # Writes +key+, returning the stored +value+ (mirrors +Hash#store+). A
-    # wrapper, not an alias: unlike +[]=+, +store+ is called normally, so its
-    # return is observed — and the native write returns +nil+.
+    # wrapper, not an alias: a caller sees the return value of +store+, and
+    # the native write returns +nil+.
     #
     # @param key [String]
     # @param value [Object]
@@ -198,11 +197,10 @@ module Prosody
       default.fetch(0) #: untyped
     end
 
-    # Whether +key+ has a live value (mirrors +Hash#key?+). A presence check:
-    # no value decode and no resolver run (not no-I/O). A message-backed map
-    # answers presence with zero Kafka fetches — +true+ even for an entry
-    # whose message cannot be fetched — though a cache miss may still touch
-    # the store.
+    # Whether +key+ has a live value (mirrors +Hash#key?+). The check decodes
+    # no value, so a message-backed map fetches no Kafka message. It returns
+    # +true+ for an entry whose message cannot be fetched. A cache miss can
+    # still read the store.
     #
     # @param key [String]
     # @return [Boolean]

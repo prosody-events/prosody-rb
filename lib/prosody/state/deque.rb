@@ -161,9 +161,8 @@ module Prosody
 
     # Reads the element at +index+, raising or defaulting when out of range
     # (mirrors +Array#fetch+). A +nil+ result is unambiguously "out of range"
-    # under the null ban. Negatives resolve Array-style like {#get} — +-1+ is
-    # the back element, +-n+ the nth from the end; a fractional or non-Integer
-    # index is a caller mistake, rejected {TransientStateError}.
+    # under the null ban. A negative index counts from the back, as in {#get}.
+    # A non-Integer index raises {TransientStateError}.
     #
     # @param index [Integer] the position (negative counts from the back)
     # @param default [Object] returned when +index+ is out of range
