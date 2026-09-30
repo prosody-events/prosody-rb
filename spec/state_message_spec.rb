@@ -45,7 +45,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
       ],
       Prosody.message_map(random_state_name("mmap")) => [
         ->(map, message) { %w[primary café].each { |key| map.set(key, message) } },
-        ->(map) { [map.get("café"), *map.get_many(%w[primary absent]), *map.each_pair.to_a.flatten] }
+        ->(map) { [map.get("café"), *map.get_many(%w[primary absent]), *map.each_pair.to_a.flatten, *map.each_key.to_a] }
       ]
     }
 
@@ -61,7 +61,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
     expect(reads).to eq([
       [message],
       [message, message],
-      [message, message, nil, "café", message, "primary", message]
+      [message, message, nil, "café", message, "primary", message, "café", "primary"]
     ])
   end
 end
