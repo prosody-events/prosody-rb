@@ -31,7 +31,7 @@ mod state;
 /// This structure contains all possible configuration options that can be
 /// provided by the Ruby side, which are then converted to the appropriate
 /// Prosody configuration builder types.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 pub struct NativeConfiguration {
     /// List of Kafka bootstrap server addresses
     bootstrap_servers: Option<Vec<String>>,
