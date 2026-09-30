@@ -55,12 +55,11 @@ RSpec.describe Prosody::Client, integration: true do
   it "handles permanent errors without retry" do
     tracer.in_span("test.permanent_error") do |span|
       message_count = [0] # Use array to share state
-      error_event = EventNotifier.new
 
       # Create a handler that permanently fails
       handler_class = Class.new(CompleteHandler) do
-        def initialize(error_event, message_count)
-          @error_event = error_event
+        def initialize(sink, message_count)
+          @sink = sink
           @message_count = message_count
         end
 
@@ -68,7 +67,7 @@ RSpec.describe Prosody::Client, integration: true do
         permanent :on_message, StandardError
 
         def on_message(_context, message)
-          return @error_event.emit("drained", message) if message.payload["drain"]
+          return @sink.push(:drained) if message.payload["drain"]
 
           @message_count[0] += 1
           raise StandardError, "Permanent error occurred"
@@ -76,14 +75,14 @@ RSpec.describe Prosody::Client, integration: true do
       end
 
       # Subscribe
-      handler = handler_class.new(error_event, message_count)
+      handler = handler_class.new(sink, message_count)
       client.subscribe(handler)
 
       # A later message on the same key runs only after every attempt of the
       # first message, so its arrival proves that no retry is pending.
       client.send_message(topic, "test-key", {content: "Trigger permanent error"})
       client.send_message(topic, "test-key", {drain: true})
-      expect(error_event.once("drained", TestConfig::MESSAGE_TIMEOUT)).not_to be_nil
+      expect(sink.wait(1)).to eq([:drained])
 
       # Expect message_count to be exactly 1 (no retries)
       expect(message_count[0]).to eq(1)
