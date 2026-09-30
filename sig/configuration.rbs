@@ -45,7 +45,7 @@ module Prosody
 
     # Maximum time to wait for a send operation (seconds)
     def send_timeout: () -> Float?
-    def send_timeout=: (Numeric?) -> Float?
+    def send_timeout=: (Numeric) -> Float
 
     # Time threshold for detecting stalled consumers (seconds)
     def stall_threshold: () -> Float?

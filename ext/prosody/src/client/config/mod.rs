@@ -39,9 +39,8 @@ pub struct NativeConfiguration {
     /// Whether to use mock mode (for testing)
     mock: Option<bool>,
 
-    /// Maximum time to wait for a send operation to complete
-    #[serde(default)]
-    send_timeout: SendTimeout,
+    /// Maximum time to wait for a send operation to complete (in seconds)
+    send_timeout: Option<f64>,
 
     /// Kafka consumer group ID
     group_id: Option<String>,
@@ -296,34 +295,6 @@ impl<'de> Deserialize<'de> for ProbePort {
                 }
             })
             .unit(|| Ok(Self::Unconfigured))
-            .deserialize(deserializer)
-    }
-}
-
-/// The producer send timeout.
-///
-/// An explicit Ruby `nil` is a value here, so the option has three states.
-#[derive(Copy, Clone, Debug, Default)]
-pub enum SendTimeout {
-    /// The option is absent: use `PROSODY_SEND_TIMEOUT` or the core default.
-    #[default]
-    Unset,
-
-    /// The option is `nil`: retry each send until it succeeds.
-    Never,
-
-    /// Give up on a send after this many seconds.
-    Seconds(f64),
-}
-
-impl<'de> Deserialize<'de> for SendTimeout {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        UntaggedEnumVisitor::new()
-            .f64(|seconds| Ok(Self::Seconds(seconds)))
-            .unit(|| Ok(Self::Never))
             .deserialize(deserializer)
     }
 }
