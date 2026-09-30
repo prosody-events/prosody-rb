@@ -260,7 +260,7 @@ module Prosody
     def timer_spans=: (_ToS) -> String
 
     # Keyed-state collections to register before subscribe. Accepts an array of
-    # definition objects (from Prosody.value/map/deque and their message_*
+    # definition objects (from Prosody.value/map/set/deque and their message_*
     # siblings) or already-serialized registration hashes.
     def state_collections: () -> Array[untyped]?
     def state_collections=: (untyped) -> Array[untyped]

@@ -59,9 +59,17 @@ module Prosody
   end
 
   # A read-only view of a published value, opened by
-  # +client.state(subsystem, definition)+. Each read takes the user key.
+  # +client.state(subsystem, definition)+. Each read takes the user key and
+  # sees only committed state. A read raises +RuntimeError+ when it fails or
+  # when it runs in a forked child process.
   class PublishedValue
+    # @param native [Prosody::NativePublishedValue] the native reader
     def initialize(native) = @native = native
+
+    # Reads the committed value for +key+.
+    #
+    # @param key [#to_s] the user key
+    # @return [Object, nil] the value, or +nil+ when it is absent
     def get(key) = @native.get(key.to_s)
   end
 end

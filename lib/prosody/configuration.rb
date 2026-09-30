@@ -307,7 +307,7 @@ module Prosody
 
     # Keyed-state collections to register before subscribe.
     #
-    # Accepts an array of StateDefinition objects (from Prosody.value/map/deque
+    # Accepts an array of StateDefinition objects (from Prosody.value/map/set/deque
     # and their message_* siblings) or already-serialized registration hashes.
     # Duplicate names within the set are rejected by the native layer.
     config_param :state_collections,

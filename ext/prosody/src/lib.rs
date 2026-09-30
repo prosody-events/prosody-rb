@@ -36,8 +36,9 @@ mod util;
 
 /// Stack size of each Tokio worker thread.
 ///
-/// Core futures are large in debug builds. A timer write that polls through
-/// the Cassandra driver overflows the Tokio default of 2 MiB.
+/// Core futures are large, most of all in debug builds. A timer write that
+/// polls through the Cassandra driver can overflow the Tokio default of
+/// 2 MiB. The size applies to every build.
 const WORKER_STACK_SIZE: usize = 8 * 1024 * 1024;
 
 #[global_allocator]

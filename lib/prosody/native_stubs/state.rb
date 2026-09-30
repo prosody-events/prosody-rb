@@ -82,12 +82,12 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
-    # Answers whether a stored cell exists for a key. No value decode and no
+    # Answers whether a live entry exists for a key. No value decode and no
     # resolver run (a message-backed map answers with zero Kafka fetches), but
     # not no-I/O: a cache miss still reads the store.
     #
     # @param key [String] the map key
-    # @return [Boolean] whether a live cell exists for the key
+    # @return [Boolean] whether a live entry exists for the key
     def contains_key(key)
       raise NotImplementedError, "This method is implemented natively in Rust"
     end

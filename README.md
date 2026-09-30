@@ -650,7 +650,7 @@ end
 
 ### Query keywords
 
-Every traversal method accepts optional query keywords. Prosody applies them in storage, so a query reads only the selected entries. The `each_*` methods iterate forward. The `reverse_each*` methods iterate backward.
+Every traversal method accepts optional query keywords. Prosody applies them in storage, so a query reads only the selected entries. The `each` and `each_*` methods iterate forward. The `reverse_each` and `reverse_each_*` methods iterate backward.
 
 | Keyword | Selects |
 | --- | --- |
@@ -1136,7 +1136,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `request_excise(topic:, key:, subsystems:, timeout:)`: Return one excise outcome for each subsystem.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
-- `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
+- `state(subsystem, definition)`: Open a typed, read-only published value, map, set, or deque.
 - `subscribe(handler)`: Start event processing with the specified handler.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
@@ -1224,7 +1224,7 @@ Represents the current event context:
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
 - `on_cancel`: Wait until cancellation occurs.
 - `demand`: A `Prosody::Demand` that tells whether this call is a normal delivery or a retry. `kind` is `:normal` or `:failure`, and `normal?` and `failure?` test it. `retry` is the retry ordinal: 0 for a normal delivery and 1 on the first retry. The ordinal is an estimate. Keep an exact attempt count in keyed state if you need one.
-- `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state-2).
+- `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state).
 
 Timer scheduling methods:
 

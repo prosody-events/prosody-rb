@@ -220,12 +220,21 @@ module Prosody
   end
 
   # A read-only view of a published deque, opened by
-  # +client.state(subsystem, definition)+. Each read takes the user key.
+  # +client.state(subsystem, definition)+. Each read takes the user key and
+  # sees only committed state. A read raises +RuntimeError+ when it fails or
+  # when it runs in a forked child process.
   class PublishedDeque
     include State::Scanning
 
+    # @param native [Prosody::NativePublishedDeque] the native reader
     def initialize(native) = @native = native
 
+    # Reads the committed element at +index+ in the deque for +key+. A
+    # negative index counts from the back, as in {DequeState#get}.
+    #
+    # @param index [Integer] the position (negative counts from the back)
+    # @return [Object, nil] the element, or +nil+ outside the bounds
+    # @raise [TransientStateError] if +index+ is not an Integer
     def get(key, index)
       unless index.is_a?(Integer)
         raise TransientStateError, "get: index must be an Integer, got #{index.inspect}"
@@ -238,15 +247,36 @@ module Prosody
       resolved.negative? ? nil : @native.get(key.to_s, resolved)
     end
 
+    # The number of committed elements in the deque for +key+.
+    #
+    # @return [Integer]
     def length(key) = @native.length(key.to_s)
     alias_method :size, :length
+
+    # Whether the deque for +key+ has no committed elements.
+    #
+    # @return [Boolean]
     def empty?(key) = @native.is_empty(key.to_s)
+
+    # The front element of the deque for +key+.
+    #
+    # @return [Object, nil] the element, or +nil+ when the deque is empty
     def first(key) = @native.peek_front(key.to_s)
+
+    # The back element of the deque for +key+.
+    #
+    # @return [Object, nil] the element, or +nil+ when the deque is empty
     def last(key) = @native.peek_back(key.to_s)
 
-    # Each traversal accepts the position keywords documented on
-    # {State::Scanning}.
+    # Traverses the committed elements for +key+ from front to back. Each
+    # traversal accepts the position keywords documented on {State::Scanning}.
+    #
+    # @return [Enumerator, void]
     def each(key, **query, &block) = traverse(key, :forward, query, &block)
+
+    # Traverses the committed elements for +key+ from back to front.
+    #
+    # @return [Enumerator, void]
     def reverse_each(key, **query, &block) = traverse(key, :backward, query, &block)
 
     private

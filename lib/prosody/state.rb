@@ -33,14 +33,7 @@ module Prosody
   # @see TransientStateError
   class NullValueError < TransientStateError; end
 
-  # An immutable keyed-state collection definition.
-  #
-  # Definitions are frozen value objects produced by the {Prosody.value},
-  # {Prosody.map}, {Prosody.set}, {Prosody.deque}, and their `message_*`
-  # siblings. A definition
-  # both serializes into `Configuration#state_collections` (via
-  # {#to_state_config}) so the collection is registered before subscribe, and
-  # drives {Prosody::Context#state} to vend the matching typed handle.
+  # How a definition opens its handle and its published reader.
   StateAccess = Data.define(:vend_method, :wrapper, :published_vend_method, :published_wrapper)
   private_constant :StateAccess
   VALUE_ACCESS = StateAccess.new(vend_method: :value_state, wrapper: :ValueState,
@@ -60,6 +53,14 @@ module Prosody
   private_constant :VALUE_ACCESS, :MAP_ACCESS, :SET_ACCESS, :DEQUE_ACCESS,
     :MESSAGE_VALUE_ACCESS, :MESSAGE_MAP_ACCESS, :MESSAGE_DEQUE_ACCESS
 
+  # An immutable keyed-state collection definition.
+  #
+  # The {Prosody.value}, {Prosody.map}, {Prosody.set}, and {Prosody.deque}
+  # constructors and their `message_*` siblings return frozen definitions. A
+  # definition serializes into `Configuration#state_collections` through
+  # {#to_state_config}, so the collection is registered before subscribe.
+  # {Prosody::Context#state} uses it to open the matching typed handle, and
+  # {Prosody::Client#state} uses it to open a published reader.
   StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted,
     :published, :read_cache, :keyset_limit, :capacity, :access) do
     # Serializes this definition into the native-registration hash, omitting
@@ -84,6 +85,10 @@ module Prosody
   # @param name [#to_s] the collection name (unique within the client)
   # @param ttl [Integer, nil] optional per-write TTL in whole seconds
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
+  # @param published [Boolean, nil] allow read-only access from other consumer groups
+  # @param read_cache [Numeric, false, nil] cache TTL in seconds for the readers
+  #   that +client.state+ opens, +false+ to bypass the cache, or +nil+ to
+  #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "value", payload: "json",
@@ -98,6 +103,10 @@ module Prosody
   # @param ttl [Integer, nil] optional per-write TTL in whole seconds
   # @param keyset_limit [Integer, nil] optional map-only keyset bound (`0..=4096`)
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
+  # @param published [Boolean, nil] allow read-only access from other consumer groups
+  # @param read_cache [Numeric, false, nil] cache TTL in seconds for the readers
+  #   that +client.state+ opens, +false+ to bypass the cache, or +nil+ to
+  #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "map", payload: "json",
@@ -106,15 +115,17 @@ module Prosody
       access: MAP_ACCESS)
   end
 
-  # Defines a presence-only ordered set of String members. A set stores
-  # membership only, so it has no payload type.
+  # Defines an ordered set of String members. A set stores membership only,
+  # so it has no payload.
   #
   # @param name [#to_s] the collection name (unique within the client)
   # @param ttl [Integer, nil] optional per-write TTL in whole seconds
   # @param keyset_limit [Integer, nil] optional keyset bound (`0..=4096`)
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @param published [Boolean, nil] allow read-only access from other consumer groups
-  # @param read_cache [Numeric, false, nil] published-read cache override
+  # @param read_cache [Numeric, false, nil] cache TTL in seconds for the readers
+  #   that +client.state+ opens, +false+ to bypass the cache, or +nil+ to
+  #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.set(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "set", payload: nil,
@@ -131,6 +142,10 @@ module Prosody
   #   deque keeps at most this many slots, enforced lazily on push. Runtime-only
   #   and mutable across deploys, never persisted (see {DequeState#push}).
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
+  # @param published [Boolean, nil] allow read-only access from other consumer groups
+  # @param read_cache [Numeric, false, nil] cache TTL in seconds for the readers
+  #   that +client.state+ opens, +false+ to bypass the cache, or +nil+ to
+  #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)
     StateDefinition.new(name: name.to_s, kind: "deque", payload: "json",

@@ -200,9 +200,9 @@ module Prosody
 
     # Whether +key+ has a live value (mirrors +Hash#key?+). A presence check:
     # no value decode and no resolver run (not no-I/O). A message-backed map
-    # answers presence with zero Kafka fetches — +true+ even for a
-    # present-but-unfetchable cell — though a cache miss may still touch the
-    # store.
+    # answers presence with zero Kafka fetches — +true+ even for an entry
+    # whose message cannot be fetched — though a cache miss may still touch
+    # the store.
     #
     # @param key [String]
     # @return [Boolean]
@@ -282,26 +282,73 @@ module Prosody
   end
 
   # A read-only view of a published map, opened by
-  # +client.state(subsystem, definition)+. Each read takes the user key.
+  # +client.state(subsystem, definition)+. Each read takes the user key and
+  # sees only committed state. A read raises +RuntimeError+ when it fails or
+  # when it runs in a forked child process.
   class PublishedMap
     include State::Scanning
 
+    # @param native [Prosody::NativePublishedMap] the native reader
     def initialize(native) = @native = native
+
+    # Reads the committed entry for +map_key+ in the map for +key+.
+    #
+    # @return [Object, nil] the value, or +nil+ when the entry is absent
     def get(key, map_key) = @native.get(key.to_s, map_key.to_s)
+
+    # Reads several entries of the map for +key+ in one batch.
+    #
+    # @return [Array<Object, nil>] one result per map key; +nil+ for an absent entry
     def get_many(key, map_keys) = @native.get_many(key.to_s, map_keys.map(&:to_s))
+
+    # Whether the map for +key+ has a committed entry for +map_key+.
+    #
+    # @return [Boolean]
     def key?(key, map_key) = @native.contains_key(key.to_s, map_key.to_s)
     alias_method :has_key?, :key?
     alias_method :include?, :key?
     alias_method :member?, :key?
+
+    # Tests several entries of the map for +key+ in one batch.
+    #
+    # @return [Array<Boolean>] one result per map key
     def contains_many(key, map_keys) = @native.contains_many(key.to_s, map_keys.map(&:to_s))
+
+    # Whether the map for +key+ has no committed entries.
+    #
+    # @return [Boolean]
     def empty?(key) = @native.is_empty(key.to_s)
 
-    # Each traversal accepts the query keywords documented on {State::Scanning}.
+    # Traverses the committed entries for +key+ in key order, yielding one
+    # +[map_key, value]+ pair for each entry. Each traversal accepts the query
+    # keywords documented on {State::Scanning}.
+    #
+    # @return [Enumerator, void]
     def each_pair(key, **query, &block) = traverse(key, :forward, query, &block)
+
+    # Traverses the committed entries for +key+ in reverse key order.
+    #
+    # @return [Enumerator, void]
     def reverse_each_pair(key, **query, &block) = traverse(key, :backward, query, &block)
+
+    # Traverses the committed map keys for +key+ in key order.
+    #
+    # @return [Enumerator, void]
     def each_key(key, **query, &block) = traverse_keys(key, :forward, query, &block)
+
+    # Traverses the committed map keys for +key+ in reverse key order.
+    #
+    # @return [Enumerator, void]
     def reverse_each_key(key, **query, &block) = traverse_keys(key, :backward, query, &block)
+
+    # Traverses the committed values for +key+ in key order.
+    #
+    # @return [Enumerator, void]
     def each_value(key, **query, &block) = traverse_values(key, :forward, query, &block)
+
+    # Traverses the committed values for +key+ in reverse key order.
+    #
+    # @return [Enumerator, void]
     def reverse_each_value(key, **query, &block) = traverse_values(key, :backward, query, &block)
     alias_method :each, :each_pair
 

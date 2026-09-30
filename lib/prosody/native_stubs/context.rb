@@ -10,7 +10,7 @@ module Prosody
   # Instances of this class are created by the native code and passed to your
   # EventHandler's #on_message method.
   #
-  # @see ext/prosody/src/handler/context.rs for implementation
+  # @see ext/prosody/src/handler/context/mod.rs for implementation
   class Context
     # @private
     def initialize

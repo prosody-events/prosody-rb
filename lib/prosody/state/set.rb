@@ -104,7 +104,9 @@ module Prosody
   end
 
   # A read-only view of a published set, opened by
-  # +client.state(subsystem, definition)+. Each read takes the user key.
+  # +client.state(subsystem, definition)+. Each read takes the user key and
+  # sees only committed state. A read raises +RuntimeError+ when it fails or
+  # when it runs in a forked child process.
   class PublishedSet
     include State::Scanning
 

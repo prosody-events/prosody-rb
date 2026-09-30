@@ -150,9 +150,9 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | `state_read_cache_size` / `PROSODY_STATE_READ_CACHE_SIZE` | Capacity of the published-state read cache; accepts sizes such as `1 MiB` | `state_owned_cache_size` or `PROSODY_STATE_OWNED_CACHE_SIZE` when set; otherwise 1 MiB |
 | `state_read_cache` / `PROSODY_STATE_READ_CACHE_TTL` | Default published-read cache TTL. Use `false` or the environment value `none` to bypass the cache | 5s |
 
-Prefer the definition constructors from the [API reference](README.md#api-reference). They serialize into `state_collections`, so you can reuse the same object with `context.state`. Each entry has these fields:
-
 Published collections require `subsystem`. Keep it configured for one deployment after removing `published: true` so readers can observe the collection's retirement.
+
+Prefer the definition constructors from the [API reference](README.md#api-reference). They serialize into `state_collections`, so you can reuse the same object with `context.state`. Each entry has these fields:
 
 | Field | Description | Default |
 |-------|-------------|---------|
@@ -162,8 +162,9 @@ Published collections require `subsystem`. Keep it configured for one deployment
 | `ttl_seconds` | Per-write TTL in whole seconds (at least 1) | (none) |
 | `read_uncommitted` | Opt out of transactional staging | false |
 | `published` | Allow read-only access from other consumer groups; JSON and set collections only | false |
-| `read_cache` | Published-read cache override: a positive duration, `false`, or inherit when omitted | inherit |
 | `keyset_limit` | Map and set only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
 | `capacity` | Deque-only window bound (at least 1); keeps at most N slots, enforced lazily on push. Runtime-only and mutable across deploys — not persisted | unbounded |
 
-Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`, `published:`, `read_cache:`). `read_cache` is a positive duration in seconds, `false` to bypass the cache, or `nil` to inherit the client default.
+Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`, `published:`).
+
+A JSON or set constructor also takes `read_cache:`. It is not a registration field: it applies only to the readers that `client.state` opens with the definition. `read_cache` is a positive duration in seconds, `false` to bypass the cache, or `nil` to inherit the client default.
