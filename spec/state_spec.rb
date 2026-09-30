@@ -23,138 +23,46 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "host-value mapping" do
-    it "accepts a single bare registration hash" do
-      error = client_error(state_collections: {name: "cart", kind: "value", payload: "json"})
-      expect(error).to be_nil
-    end
+    value = {name: "c", kind: "value", payload: "json"}
+    map = {name: "m", kind: "map", payload: "json"}
+    deque = {name: "d", kind: "deque", payload: "json"}
 
-    it "rejects a fractional or Float TTL" do
-      [30.5, 5.0].each do |ttl|
-        error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: ttl}])
-        expect(error&.message).to match(/expected u32/), ttl.to_s
+    # Each row is [label, client options, expected message], where a nil
+    # message means the options are valid.
+    [
+      ["a single bare registration hash", {state_collections: value}, nil],
+      ["a set with a TTL and a keyset limit", {state_collections: [Prosody.set("s", ttl: 60, keyset_limit: 16)]}, nil],
+      ["keyset_limit 0 on a map", {state_collections: [map.merge(keyset_limit: 0)]}, nil],
+      ["a positive capacity on a deque", {state_collections: [deque.merge(capacity: 100)]}, nil],
+      ["a fractional TTL", {state_collections: [value.merge(ttl_seconds: 30.5)]}, /expected u32/],
+      ["a Float TTL", {state_collections: [value.merge(ttl_seconds: 5.0)]}, /expected u32/],
+      ["a negative TTL", {state_collections: [value.merge(ttl_seconds: -5)]}, /expected u32/],
+      ["a NaN TTL", {state_collections: [value.merge(ttl_seconds: Float::NAN)]}, /expected u32/],
+      ["an infinite TTL", {state_collections: [value.merge(ttl_seconds: Float::INFINITY)]}, /expected u32/],
+      ["a TTL above the u32 ceiling", {state_collections: [value.merge(ttl_seconds: 2**32)]}, /expected u32/],
+      ["a fractional keyset_limit", {state_collections: [map.merge(keyset_limit: 128.5)]}, /expected usize/],
+      ["a negative keyset_limit", {state_collections: [map.merge(keyset_limit: -1)]}, /expected usize/],
+      ["an infinite keyset_limit", {state_collections: [map.merge(keyset_limit: Float::INFINITY)]}, /expected usize/],
+      ["keyset_limit on a value", {state_collections: [value.merge(keyset_limit: 128)]}, /keyset_limit.*only valid for map and set/],
+      ["a set with a json payload", {state_collections: [{name: "s", kind: "set", payload: "json"}]}, /state_collections\[0\]\.payload/],
+      ["a set with a presence payload", {state_collections: [{name: "s", kind: "set", payload: "presence"}]}, /state_collections\[0\]\.payload/],
+      ["a map without a payload", {state_collections: [{name: "m", kind: "map"}]}, /state_collections\[0\]\.payload: required/],
+      ["capacity on a map", {state_collections: [map.merge(capacity: 100)]}, /capacity.*only valid for deque/],
+      ["a zero capacity", {state_collections: [deque.merge(capacity: 0)]}, /expected a nonzero usize/],
+      ["a negative capacity", {state_collections: [deque.merge(capacity: -1)]}, /expected a nonzero usize/],
+      ["a fractional capacity", {state_collections: [deque.merge(capacity: 1.5)]}, /expected a nonzero usize/],
+      ["a NaN capacity", {state_collections: [deque.merge(capacity: Float::NAN)]}, /expected a nonzero usize/],
+      ["an infinite capacity", {state_collections: [deque.merge(capacity: Float::INFINITY)]}, /expected a nonzero usize/],
+      ["an unknown kind token", {state_collections: [value.merge(kind: "tree")]}, /state_collections\[0\]\.kind.*expected/],
+      ["an unknown payload token", {state_collections: [value.merge(payload: "proto")]}, /state_collections\[0\]\.payload.*expected/],
+      ["a zero in-memory block-cache size", {state_owned_cache_size: "0"}, /state_owned_cache_size/],
+      ["a zero memtable size", {state_memtable_size: "0"}, /state_memtable_size/],
+      ["a zero published-read cache size", {state_read_cache_size: "0"}, /state_read_cache_size/]
+    ].each do |label, options, expected|
+      it "#{expected ? "rejects" : "accepts"} #{label}" do
+        error = client_error(**options)
+        expect(error&.message).to(expected ? match(expected) : be_nil)
       end
-    end
-
-    it "rejects a negative TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: -5}])
-      expect(error.message).to match(/expected u32/)
-    end
-
-    it "rejects a NaN TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: Float::NAN}])
-      expect(error.message).to match(/expected u32/)
-    end
-
-    it "rejects an infinite TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: Float::INFINITY}])
-      expect(error.message).to match(/expected u32/)
-    end
-
-    it "rejects a TTL above the u32 ceiling" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 2**32}])
-      expect(error.message).to match(/expected u32/)
-    end
-
-    it "rejects a fractional keyset_limit on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 128.5}])
-      expect(error.message).to match(/expected usize/)
-    end
-
-    it "rejects a negative keyset_limit on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: -1}])
-      expect(error.message).to match(/expected usize/)
-    end
-
-    it "rejects an infinite keyset_limit on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: Float::INFINITY}])
-      expect(error.message).to match(/expected usize/)
-    end
-
-    it "rejects keyset_limit on a collection that is not a map or a set" do
-      error = client_error(state_collections: [{name: "v", kind: "value", payload: "json", keyset_limit: 128}])
-      expect(error.message).to match(/keyset_limit.*only valid for map and set/)
-    end
-
-    it "accepts a set with a TTL and a keyset limit" do
-      error = client_error(state_collections: [Prosody.set("s", ttl: 60, keyset_limit: 16)])
-      expect(error).to be_nil
-    end
-
-    it "rejects a set with a payload" do
-      %w[json presence].each do |payload|
-        error = client_error(state_collections: [{name: "s", kind: "set", payload: payload}])
-        expect(error&.message).to match(/state_collections\[0\]\.payload/), payload
-      end
-    end
-
-    it "rejects a map without a payload" do
-      error = client_error(state_collections: [{name: "m", kind: "map"}])
-      expect(error.message).to match(/state_collections\[0\]\.payload: required/)
-    end
-
-    it "accepts keyset_limit 0 on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 0}])
-      expect(error).to be_nil
-    end
-
-    it "accepts a positive capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 100}])
-      expect(error).to be_nil
-    end
-
-    it "rejects capacity on a non-deque collection" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", capacity: 100}])
-      expect(error.message).to match(/capacity.*only valid for deque/)
-    end
-
-    it "rejects a zero capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 0}])
-      expect(error.message).to match(/expected a nonzero usize/)
-    end
-
-    it "rejects a negative capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: -1}])
-      expect(error.message).to match(/expected a nonzero usize/)
-    end
-
-    it "rejects a fractional capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 1.5}])
-      expect(error.message).to match(/expected a nonzero usize/)
-    end
-
-    it "rejects a NaN capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::NAN}])
-      expect(error.message).to match(/expected a nonzero usize/)
-    end
-
-    it "rejects an infinite capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::INFINITY}])
-      expect(error.message).to match(/expected a nonzero usize/)
-    end
-
-    it "rejects an unknown kind token" do
-      error = client_error(state_collections: [{name: "c", kind: "tree", payload: "json"}])
-      expect(error.message).to match(/state_collections\[0\]\.kind.*expected/)
-    end
-
-    it "rejects an unknown payload token" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "proto"}])
-      expect(error.message).to match(/state_collections\[0\]\.payload.*expected/)
-    end
-
-    it "rejects a zero in-memory block-cache size" do
-      error = client_error(state_owned_cache_size: "0")
-      expect(error.message).to match(/state_owned_cache_size/)
-    end
-
-    it "rejects a zero memtable size" do
-      error = client_error(state_memtable_size: "0")
-      expect(error.message).to match(/state_memtable_size/)
-    end
-
-    it "rejects a zero published-read cache size" do
-      error = client_error(state_read_cache_size: "0")
-      expect(error.message).to match(/state_read_cache_size/)
     end
 
     it "rejects an ambiguous published-read cache policy" do
