@@ -43,7 +43,9 @@ module Prosody
     def mock: () -> bool?
     def mock=: (untyped) -> bool
 
-    # Maximum time to wait for a send operation (seconds)
+    # Maximum time to wait for a send operation (seconds). Pipeline mode
+    # ignores it and retries a send until it succeeds. Low-latency and
+    # best-effort modes use it, with a default of 1 second.
     def send_timeout: () -> Float?
     def send_timeout=: (Numeric) -> Float
 

@@ -356,7 +356,7 @@ Each response error has one message.
 
 ### Pipeline Mode
 
-Pipeline mode is the default mode. Ensures ordered processing, retrying failed operations indefinitely:
+Pipeline mode is the default mode. Ensures ordered processing, retrying failed operations indefinitely. It ignores `send_timeout` and retries a send until it succeeds. Low-latency and best-effort modes use `send_timeout`, with a default of 1 second.
 
 ```ruby
 # Initialize client in pipeline mode

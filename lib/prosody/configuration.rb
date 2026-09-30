@@ -110,6 +110,8 @@ module Prosody
     config_param :mock, converter: ->(v) { v.nil? ? nil : !!v }
 
     # Maximum time to wait for a send operation to complete (in seconds).
+    # Pipeline mode ignores this option and retries a send until it
+    # succeeds. Low-latency and best-effort modes use it. Default: 1 second.
     config_param :send_timeout, converter: ->(v) { duration_converter(v) }
 
     # Threshold in seconds after which a stalled consumer is detected.
