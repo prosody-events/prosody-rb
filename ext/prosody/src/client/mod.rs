@@ -14,7 +14,7 @@ use crate::bridge::Bridge;
 use crate::client::config::NativeConfiguration;
 use crate::handler::RubyHandler;
 use crate::tracing_util::extract_opentelemetry_context;
-use crate::util::ensure_runtime_context;
+use crate::util::{ForkGuard, ensure_runtime_context};
 use crate::{BRIDGE, ROOT_MOD, id};
 use educe::Educe;
 use futures::FutureExt;
@@ -73,8 +73,8 @@ pub struct Client {
     bridge: Bridge,
     /// OpenTelemetry propagator for distributed tracing
     propagator: Arc<TextMapCompositePropagator>,
-    /// PID at construction time, used to detect post-fork usage
-    pid: u32,
+    /// Refuses use in a forked child process
+    fork: ForkGuard,
 }
 
 impl Client {
@@ -154,19 +154,8 @@ impl Client {
             inner: client,
             bridge,
             propagator: Arc::new(new_propagator()),
-            pid: std::process::id(),
+            fork: ForkGuard::new("Prosody::Client"),
         })
-    }
-
-    fn check_fork(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        if std::process::id() != this.pid {
-            return Err(Error::new(
-                ruby.exception_runtime_error(),
-                "Prosody::Client cannot be used after fork. Create a new client in the child \
-                 process.",
-            ));
-        }
-        Ok(())
     }
 
     /// Returns the current state of the consumer.
@@ -192,7 +181,7 @@ impl Client {
     /// build, with the full error message from the underlying
     /// `ModeConfigurationError`.
     pub fn consumer_state(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let inner = this.inner.clone();
         let state: Result<&'static str, String> = this.bridge.wait_for(
             ruby,
@@ -238,7 +227,7 @@ impl Client {
         key: String,
         payload: Value,
     ) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
         let value = deserialize(ruby, payload)?;
@@ -262,7 +251,7 @@ impl Client {
 
     /// Sends an excise record for a key.
     fn excise(ruby: &Ruby, this: &Self, topic: String, key: String) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
         let context = extract_opentelemetry_context(ruby, &this.propagator)?;
@@ -285,7 +274,7 @@ impl Client {
     ///
     /// Returns an error if the handler is incomplete or subscription fails.
     fn subscribe(ruby: &Ruby, this: &Self, handler: Value) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         validate_handler(ruby, handler)?;
         let _guard = ensure_runtime_context(ruby);
         let wrapper = RubyHandler::new(this.bridge.clone(), ruby, handler)?;
@@ -316,7 +305,7 @@ impl Client {
     ///
     /// The number of assigned partitions as a u32.
     pub fn assigned_partitions(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let inner = this.inner.clone();
         this.bridge.wait_for(
             ruby,
@@ -339,7 +328,7 @@ impl Client {
     ///
     /// `true` if the consumer is stalled, `false` otherwise.
     pub fn is_stalled(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let inner = this.inner.clone();
         this.bridge.wait_for(
             ruby,
@@ -362,7 +351,7 @@ impl Client {
     ///
     /// Returns an error if the unsubscribe operation fails.
     fn unsubscribe(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let _guard = ensure_runtime_context(ruby);
         let client = this.inner.clone();
 
@@ -382,7 +371,7 @@ impl Client {
     ///
     /// Returns an error if shutdown fails.
     fn shutdown(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let _guard = ensure_runtime_context(ruby);
         let shutdown = this.shutdown.clone();
 

@@ -5,7 +5,7 @@
 
 use super::{Client, RubyHandler, read_cache};
 use crate::published::{
-    NativePublishedDeque, NativePublishedMap, NativePublishedSet, NativePublishedValue,
+    NativePublishedDeque, NativePublishedMap, NativePublishedSet, NativePublishedValue, Reads,
 };
 use magnus::{Error, Ruby};
 use prosody::high_level::erased::{ErasedReadCache, SharedHighLevelClient};
@@ -28,11 +28,20 @@ where
     R: Send,
     E: Display + Send,
 {
-    Client::check_fork(ruby, this)?;
+    this.fork.check(ruby)?;
     let cache = read_cache(ruby, cache_seconds, cache_disabled)?;
     this.bridge
         .wait_for(ruby, open(this.inner.clone(), cache), Span::current())?
         .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
+}
+
+/// Shares the client's bridge, propagator, and fork guard with a reader.
+fn reads(client: &Client) -> Reads {
+    Reads::new(
+        client.bridge.clone(),
+        Arc::clone(&client.propagator),
+        client.fork,
+    )
 }
 
 pub(super) fn published_value(
@@ -52,7 +61,7 @@ pub(super) fn published_value(
     )?;
     Ok(NativePublishedValue {
         inner,
-        bridge: this.bridge.clone(),
+        reads: reads(this),
     })
 }
 
@@ -73,8 +82,7 @@ pub(super) fn published_map(
     )?;
     Ok(NativePublishedMap {
         inner,
-        bridge: this.bridge.clone(),
-        propagator: Arc::clone(&this.propagator),
+        reads: reads(this),
     })
 }
 
@@ -95,8 +103,7 @@ pub(super) fn published_set(
     )?;
     Ok(NativePublishedSet {
         inner,
-        bridge: this.bridge.clone(),
-        propagator: Arc::clone(&this.propagator),
+        reads: reads(this),
     })
 }
 
@@ -117,7 +124,6 @@ pub(super) fn published_deque(
     )?;
     Ok(NativePublishedDeque {
         inner,
-        bridge: this.bridge.clone(),
-        propagator: Arc::clone(&this.propagator),
+        reads: reads(this),
     })
 }

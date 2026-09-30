@@ -14,6 +14,7 @@ use prosody::tracing::{
     shutdown_telemetry as core_shutdown_telemetry,
 };
 use std::mem::{ManuallyDrop, forget};
+use std::process;
 use tokio::runtime::{EnterGuard, Handle};
 use tracing::{error, warn};
 
@@ -176,6 +177,46 @@ impl Drop for RubyDrop {
              indicates a value outlived its expected scope"
         );
         forget(inner);
+    }
+}
+
+/// Detects the use of a native object in a forked child process.
+///
+/// The Tokio runtime and the bridge thread do not survive `fork`. A native
+/// object that waits on them in a child waits forever, so it raises instead.
+#[derive(Clone, Copy, Debug)]
+pub struct ForkGuard {
+    /// The process that created the object.
+    pid: u32,
+    /// The Ruby class name that the error message shows.
+    class: &'static str,
+}
+
+impl ForkGuard {
+    /// Records the current process for an object of the Ruby `class`.
+    pub fn new(class: &'static str) -> Self {
+        Self {
+            pid: process::id(),
+            class,
+        }
+    }
+
+    /// Checks that the current process created the object.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `RuntimeError` in a forked child process.
+    pub fn check(self, ruby: &Ruby) -> Result<(), Error> {
+        if process::id() == self.pid {
+            return Ok(());
+        }
+        Err(Error::new(
+            ruby.exception_runtime_error(),
+            format!(
+                "{} cannot be used after fork. Create a new client in the child process.",
+                self.class
+            ),
+        ))
     }
 }
 

@@ -22,7 +22,7 @@ struct NativeExciseRequest {
 }
 
 pub(super) fn request(ruby: &Ruby, this: &Client, request: Value) -> Result<Value, Error> {
-    Client::check_fork(ruby, this)?;
+    this.fork.check(ruby)?;
     let _guard = ensure_runtime_context(ruby);
     let request: NativeRequest = deserialize(ruby, request)?;
     let (subsystems, timeout) = request_parameters(ruby, request.subsystems, request.timeout)?;
@@ -57,7 +57,7 @@ pub(super) fn request(ruby: &Ruby, this: &Client, request: Value) -> Result<Valu
 }
 
 pub(super) fn request_excise(ruby: &Ruby, this: &Client, request: Value) -> Result<Value, Error> {
-    Client::check_fork(ruby, this)?;
+    this.fork.check(ruby)?;
     let _guard = ensure_runtime_context(ruby);
     let request: NativeExciseRequest = deserialize(ruby, request)?;
     let (subsystems, timeout) = request_parameters(ruby, request.subsystems, request.timeout)?;

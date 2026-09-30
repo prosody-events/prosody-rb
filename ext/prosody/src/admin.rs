@@ -4,7 +4,7 @@
 //! This module implements Ruby bindings for creating and deleting Kafka topics.
 
 use crate::bridge::Bridge;
-use crate::util::ensure_runtime_context;
+use crate::util::{ForkGuard, ensure_runtime_context};
 use crate::{ROOT_MOD, id};
 use magnus::{Error, Module, Object, Ruby, function, method};
 use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
@@ -22,8 +22,8 @@ pub struct AdminClient {
     client: Arc<ProsodyAdminClient>,
     /// Bridge for executing asynchronous operations from Ruby
     bridge: Bridge,
-    /// PID at construction time, used to detect post-fork usage
-    pid: u32,
+    /// Refuses use in a forked child process
+    fork: ForkGuard,
 }
 
 impl AdminClient {
@@ -61,19 +61,8 @@ impl AdminClient {
         Ok(Self {
             client,
             bridge,
-            pid: std::process::id(),
+            fork: ForkGuard::new("Prosody::AdminClient"),
         })
-    }
-
-    fn check_fork(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        if std::process::id() != this.pid {
-            return Err(Error::new(
-                ruby.exception_runtime_error(),
-                "Prosody::AdminClient cannot be used after fork. Create a new client in the child \
-                 process.",
-            ));
-        }
-        Ok(())
     }
 
     /// Creates a new Kafka topic.
@@ -98,7 +87,7 @@ impl AdminClient {
         partition_count: u16,
         replication_factor: u16,
     ) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let topic_config = TopicConfiguration::builder()
             .name(name)
             .partition_count(partition_count)
@@ -128,7 +117,7 @@ impl AdminClient {
     /// - The topic deletion fails
     /// - There's an issue with the asynchronous execution
     pub fn delete_topic(ruby: &Ruby, this: &Self, name: String) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let client = this.client.clone();
         let future = async move { client.delete_topic(&name).await };
 
