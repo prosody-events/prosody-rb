@@ -4,9 +4,10 @@
 //! This module implements Ruby bindings for creating and deleting Kafka topics.
 
 use crate::bridge::Bridge;
-use crate::util::{ForkGuard, ensure_runtime_context};
+use crate::util::{ForkGuard, ensure_runtime_context, seconds};
 use crate::{ROOT_MOD, id};
-use magnus::{Error, Module, Object, Ruby, function, method};
+use magnus::scan_args::{get_kwargs, scan_args};
+use magnus::{Error, Module, Object, RHash, Ruby, Value, function, method};
 use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
 use std::sync::Arc;
 use tracing::Span;
@@ -67,31 +68,42 @@ impl AdminClient {
 
     /// Creates a new Kafka topic.
     ///
-    /// # Arguments
-    ///
-    /// * `ruby` - Reference to the Ruby VM
-    /// * `this` - The admin client instance
-    /// * `name` - Name of the topic to create
-    /// * `partition_count` - Number of partitions for the topic
-    /// * `replication_factor` - Replication factor for the topic
+    /// Ruby calls it as `create_topic(name, partition_count,
+    /// replication_factor, cleanup_policy: nil, retention: nil)`. A `nil`
+    /// keyword uses the cluster default. `retention` is in seconds.
     ///
     /// # Errors
     ///
     /// Returns a `Magnus::Error` if:
+    /// - An argument has the wrong type, or `retention` has no `Duration` form
     /// - The topic creation fails
     /// - There's an issue with the asynchronous execution
-    pub fn create_topic(
-        ruby: &Ruby,
-        this: &Self,
-        name: String,
-        partition_count: u16,
-        replication_factor: u16,
-    ) -> Result<(), Error> {
+    pub fn create_topic(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<(), Error> {
         this.fork.check(ruby)?;
-        let topic_config = TopicConfiguration::builder()
+        let args = scan_args::<(String, u16, u16), (), (), (), RHash, ()>(args)?;
+        let (name, partition_count, replication_factor) = args.required;
+        let keywords = get_kwargs::<_, (), (Option<Option<String>>, Option<Option<f64>>), ()>(
+            args.keywords,
+            &[],
+            &["cleanup_policy", "retention"],
+        )?;
+        let (cleanup_policy, retention) = keywords.optional;
+
+        let mut builder = TopicConfiguration::builder();
+        builder
             .name(name)
             .partition_count(partition_count)
-            .replication_factor(replication_factor)
+            .replication_factor(replication_factor);
+        if let Some(cleanup_policy) = cleanup_policy.flatten() {
+            builder.cleanup_policy(cleanup_policy);
+        }
+        if let Some(retention) = retention.flatten() {
+            builder.retention(
+                seconds("retention", retention)
+                    .map_err(|error| Error::new(ruby.exception_arg_error(), error))?,
+            );
+        }
+        let topic_config = builder
             .build()
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
@@ -145,7 +157,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_singleton_method("new", function!(AdminClient::new, 1))?;
     class.define_method(
         id!(ruby, "create_topic"),
-        method!(AdminClient::create_topic, 3),
+        method!(AdminClient::create_topic, -1),
     )?;
     class.define_method(
         id!(ruby, "delete_topic"),

@@ -23,8 +23,9 @@ module Prosody
     # Creates an admin client for the specified Kafka bootstrap servers.
     def self.new: (Array[String]) -> AdminClient
 
-    # Creates a topic.
-    def create_topic: (String, Integer, Integer) -> void
+    # Creates a topic. A nil cleanup_policy or retention uses the cluster
+    # default. retention is in seconds.
+    def create_topic: (String name, Integer partition_count, Integer replication_factor, ?cleanup_policy: String?, ?retention: Numeric?) -> void
 
     # Deletes a topic.
     def delete_topic: (String) -> void

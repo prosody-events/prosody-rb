@@ -2,7 +2,8 @@
 //! scheduler, monopolization, defer, timeout, and deduplication middleware
 //! builders.
 
-use super::{NativeConfiguration, seconds};
+use super::NativeConfiguration;
+use crate::util::seconds;
 use prosody::consumer::middleware::deduplication::DeduplicationConfigurationBuilder;
 use prosody::consumer::middleware::defer::DeferConfigurationBuilder;
 use prosody::consumer::middleware::monopolization::MonopolizationConfigurationBuilder;

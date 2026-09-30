@@ -15,6 +15,7 @@ use prosody::tracing::{
 };
 use std::mem::{ManuallyDrop, forget};
 use std::process;
+use std::time::Duration;
 use tokio::runtime::{EnterGuard, Handle};
 use tracing::{error, warn};
 
@@ -178,6 +179,17 @@ impl Drop for RubyDrop {
         );
         forget(inner);
     }
+}
+
+/// Converts a Ruby number of seconds into a [`Duration`].
+///
+/// # Errors
+///
+/// Returns an error that names `option` if the value is negative, not
+/// finite, or too large for a [`Duration`].
+pub(crate) fn seconds(option: &str, value: f64) -> Result<Duration, String> {
+    Duration::try_from_secs_f64(value)
+        .map_err(|_| format!("{option}: must be a finite, non-negative number of seconds"))
 }
 
 /// Detects the use of a native object in a forked child process.

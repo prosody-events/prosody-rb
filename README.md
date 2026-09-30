@@ -1135,7 +1135,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 ### Prosody::AdminClient
 
 - `new(bootstrap_servers)`: Create an admin client for the specified Kafka servers.
-- `create_topic(name, partitions, replication_factor)`: Create a Kafka topic.
+- `create_topic(name, partitions, replication_factor, cleanup_policy: nil, retention: nil)`: Create a Kafka topic. `cleanup_policy` is a Kafka cleanup policy such as `"delete"`, `"compact"`, or `"delete,compact"`. `retention` is the message retention in seconds. A `nil` keyword uses the cluster default.
 - `delete_topic(name)`: Delete a Kafka topic.
 
 ### Prosody::EventHandler

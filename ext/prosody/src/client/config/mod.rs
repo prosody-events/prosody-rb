@@ -6,6 +6,7 @@
 //! Cassandra, and telemetry builders, `middleware` for the middleware
 //! builders, and `state` for keyed state.
 
+use crate::util::seconds;
 use magnus::{Error, Ruby, Value};
 use prosody::PeerConfiguration;
 use prosody::PeerEndpoint;
@@ -19,7 +20,6 @@ use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
 use state::{ReadCacheConfig, StateCollectionConfig, build_keyed_state_config};
 use std::net::SocketAddr;
-use std::time::Duration;
 
 mod connections;
 mod middleware;
@@ -460,15 +460,4 @@ fn build_peer_config(config: &NativeConfiguration) -> Result<PeerConfiguration, 
         builder.registration_ttl(seconds("peer_registration_ttl", value)?);
     }
     builder.build().map_err(|error| error.to_string())
-}
-
-/// Converts a Ruby number of seconds into a [`Duration`].
-///
-/// # Errors
-///
-/// Returns an error that names `option` if the value is negative, not
-/// finite, or too large for a [`Duration`].
-fn seconds(option: &str, value: f64) -> Result<Duration, String> {
-    Duration::try_from_secs_f64(value)
-        .map_err(|_| format!("{option}: must be a finite, non-negative number of seconds"))
 }

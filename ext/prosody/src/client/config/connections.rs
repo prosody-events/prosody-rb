@@ -1,7 +1,8 @@
 //! Conversion of [`NativeConfiguration`] into the Kafka producer, Kafka
 //! consumer, Cassandra, and telemetry emitter builders.
 
-use super::{NativeConfiguration, ProbePort, seconds};
+use super::{NativeConfiguration, ProbePort};
+use crate::util::seconds;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::producer::ProducerConfigurationBuilder;
