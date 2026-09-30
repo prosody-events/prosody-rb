@@ -68,9 +68,9 @@ RSpec.describe Prosody::Client, integration: true do
         permanent :on_message, StandardError
 
         def on_message(_context, message)
-          @message_count[0] += 1
-          @error_event.emit("error-event", message)
+          return @error_event.emit("drained", message) if message.payload["drain"]
 
+          @message_count[0] += 1
           raise StandardError, "Permanent error occurred"
         end
       end
@@ -79,14 +79,11 @@ RSpec.describe Prosody::Client, integration: true do
       handler = handler_class.new(error_event, message_count)
       client.subscribe(handler)
 
-      # Send message to trigger error
+      # A later message on the same key runs only after every attempt of the
+      # first message, so its arrival proves that no retry is pending.
       client.send_message(topic, "test-key", {content: "Trigger permanent error"})
-
-      # Wait for error to occur
-      error_event.once("error-event", TestConfig::MESSAGE_TIMEOUT)
-
-      # Wait a bit to ensure no retries happen
-      sleep 2
+      client.send_message(topic, "test-key", {drain: true})
+      expect(error_event.once("drained", TestConfig::MESSAGE_TIMEOUT)).not_to be_nil
 
       # Expect message_count to be exactly 1 (no retries)
       expect(message_count[0]).to eq(1)
