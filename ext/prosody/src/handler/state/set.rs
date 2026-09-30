@@ -3,10 +3,10 @@
 //! A set stores membership only. Member traversal reuses the map key cursor,
 //! since both yield bare `String` keys.
 
-use super::{NativeMapKeyScan, key_query, outcome_symbol, scan_arguments, state_error};
+use super::{NativeMapKeyScan, key_query, outcome_symbol, state_error};
 use crate::bridge::Bridge;
 use crate::tracing_util::extract_opentelemetry_context;
-use magnus::{Error, Ruby, StaticSymbol, Value};
+use magnus::{Error, RHash, Ruby, StaticSymbol};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::DynSetState;
@@ -65,9 +65,9 @@ impl NativeSetState {
     pub(super) fn keys(
         ruby: &Ruby,
         this: &Self,
-        args: &[Value],
+        direction: StaticSymbol,
+        options: RHash,
     ) -> Result<NativeMapKeyScan, Error> {
-        let (direction, options) = scan_arguments(args)?;
         let query = key_query(ruby, direction, options)?;
         NativeMapKeyScan::new(
             ruby,

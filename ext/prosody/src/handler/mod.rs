@@ -44,7 +44,7 @@ mod trigger;
 
 pub(crate) use state::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
-    published_deque_scan, published_map_key_scan, published_map_scan, published_scan_arguments,
+    published_deque_scan, published_map_key_scan, published_map_scan,
 };
 
 /// A handler that bridges between Kafka messages and Ruby message processing

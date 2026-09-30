@@ -15,7 +15,9 @@ use crate::bridge::Bridge;
 use crate::handler::message::Message;
 use crate::tracing_util::extract_opentelemetry_context;
 use magnus::value::ReprValue;
-use magnus::{Error, ExceptionClass, IntoValue, Module, Ruby, StaticSymbol, TryConvert, Value};
+use magnus::{
+    Error, ExceptionClass, IntoValue, Module, RHash, Ruby, StaticSymbol, TryConvert, Value,
+};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::{
@@ -258,8 +260,12 @@ macro_rules! map_state {
                 run_op!(ruby, this, &this.state, clear())
             }
 
-            fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
-                let (direction, options) = scan_arguments(args)?;
+            fn scan(
+                ruby: &Ruby,
+                this: &Self,
+                direction: StaticSymbol,
+                options: RHash,
+            ) -> Result<$scan, Error> {
                 let query = key_query(ruby, direction, options)?;
                 $scan::new(
                     ruby,
@@ -269,8 +275,12 @@ macro_rules! map_state {
                 )
             }
 
-            fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
-                let (direction, options) = scan_arguments(args)?;
+            fn keys(
+                ruby: &Ruby,
+                this: &Self,
+                direction: StaticSymbol,
+                options: RHash,
+            ) -> Result<NativeMapKeyScan, Error> {
                 let query = key_query(ruby, direction, options)?;
                 NativeMapKeyScan::new(
                     ruby,
@@ -378,8 +388,12 @@ macro_rules! deque_state {
                 run_op!(ruby, this, &this.state, clear())
             }
 
-            fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
-                let (direction, options) = scan_arguments(args)?;
+            fn scan(
+                ruby: &Ruby,
+                this: &Self,
+                direction: StaticSymbol,
+                options: RHash,
+            ) -> Result<$scan, Error> {
                 let query = position_query(ruby, direction, options)?;
                 $scan::new(
                     ruby,
@@ -422,7 +436,7 @@ mod query;
 mod scan;
 mod set;
 
-pub(crate) use query::{key_query, position_query, published_scan_arguments, scan_arguments};
+pub(crate) use query::{key_query, position_query};
 pub(crate) use scan::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, NativeMessageDequeScan,
     NativeMessageMapScan, published_deque_scan, published_map_key_scan, published_map_scan,

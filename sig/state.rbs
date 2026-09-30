@@ -271,8 +271,8 @@ module Prosody
     def set: (String key, V value) -> void
     def remove: (String key) -> void
     def clear: () -> void
-    def scan: (Symbol direction, ?query_options query) -> S
-    def keys: (Symbol direction, ?query_options query) -> NativeMapKeyScan
+    def scan: (Symbol direction, query_options query) -> S
+    def keys: (Symbol direction, query_options query) -> NativeMapKeyScan
     def commit: () -> store_outcome
     def rollback: () -> store_outcome
   end
@@ -292,7 +292,7 @@ module Prosody
     def insert: (String member) -> void
     def remove: (String member) -> void
     def clear: () -> void
-    def keys: (Symbol direction, ?query_options query) -> NativeMapKeyScan
+    def keys: (Symbol direction, query_options query) -> NativeMapKeyScan
     def commit: () -> store_outcome
     def rollback: () -> store_outcome
   end
@@ -308,7 +308,7 @@ module Prosody
     def pop_front: () -> T?
     def pop_back: () -> T?
     def clear: () -> void
-    def scan: (Symbol direction, ?query_options query) -> S
+    def scan: (Symbol direction, query_options query) -> S
     def commit: () -> store_outcome
     def rollback: () -> store_outcome
   end

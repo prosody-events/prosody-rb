@@ -36,8 +36,8 @@ macro_rules! register_map {
         class.define_method(id!($ruby, "set"), method!(<$type>::set, 2))?;
         class.define_method(id!($ruby, "remove"), method!(<$type>::remove, 1))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
-        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, -1))?;
-        class.define_method(id!($ruby, "keys"), method!(<$type>::keys, -1))?;
+        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, 2))?;
+        class.define_method(id!($ruby, "keys"), method!(<$type>::keys, 2))?;
         class.define_method(id!($ruby, "commit"), method!(<$type>::commit, 0))?;
         class.define_method(id!($ruby, "rollback"), method!(<$type>::rollback, 0))?;
     }};
@@ -55,7 +55,7 @@ fn register_set(ruby: &Ruby, module: RModule) -> Result<(), Error> {
     class.define_method(id!(ruby, "insert"), method!(NativeSetState::insert, 1))?;
     class.define_method(id!(ruby, "remove"), method!(NativeSetState::remove, 1))?;
     class.define_method(id!(ruby, "clear"), method!(NativeSetState::clear, 0))?;
-    class.define_method(id!(ruby, "keys"), method!(NativeSetState::keys, -1))?;
+    class.define_method(id!(ruby, "keys"), method!(NativeSetState::keys, 2))?;
     class.define_method(id!(ruby, "commit"), method!(NativeSetState::commit, 0))?;
     class.define_method(id!(ruby, "rollback"), method!(NativeSetState::rollback, 0))?;
     Ok(())
@@ -74,7 +74,7 @@ macro_rules! register_deque {
         class.define_method(id!($ruby, "pop_front"), method!(<$type>::pop_front, 0))?;
         class.define_method(id!($ruby, "pop_back"), method!(<$type>::pop_back, 0))?;
         class.define_method(id!($ruby, "clear"), method!(<$type>::clear, 0))?;
-        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, -1))?;
+        class.define_method(id!($ruby, "scan"), method!(<$type>::scan, 2))?;
         class.define_method(id!($ruby, "commit"), method!(<$type>::commit, 0))?;
         class.define_method(id!($ruby, "rollback"), method!(<$type>::rollback, 0))?;
     }};

@@ -10,15 +10,15 @@ module Prosody
     def contains_key: (String key, String map_key) -> bool
     def contains_many: (String key, Array[String] map_keys) -> Array[bool]
     def is_empty: (String key) -> bool
-    def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonMapScan
-    def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
+    def scan: (String key, Symbol direction, query_options query) -> NativeJsonMapScan
+    def keys: (String key, Symbol direction, query_options query) -> NativeMapKeyScan
   end
 
   class NativePublishedSet
     def contains: (String key, String member) -> bool
     def contains_many: (String key, Array[String] members) -> Array[bool]
     def is_empty: (String key) -> bool
-    def keys: (String key, Symbol direction, ?query_options query) -> NativeMapKeyScan
+    def keys: (String key, Symbol direction, query_options query) -> NativeMapKeyScan
   end
 
   class NativePublishedDeque
@@ -27,7 +27,7 @@ module Prosody
     def is_empty: (String key) -> bool
     def peek_front: (String key) -> json_value?
     def peek_back: (String key) -> json_value?
-    def scan: (String key, Symbol direction, ?query_options query) -> NativeJsonDequeScan
+    def scan: (String key, Symbol direction, query_options query) -> NativeJsonDequeScan
   end
 
   class PublishedValue[T = json_value]

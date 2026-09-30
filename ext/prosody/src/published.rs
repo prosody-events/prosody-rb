@@ -7,12 +7,12 @@
 use crate::bridge::Bridge;
 use crate::handler::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
-    published_deque_scan, published_map_key_scan, published_map_scan, published_scan_arguments,
+    published_deque_scan, published_map_key_scan, published_map_scan,
 };
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ForkGuard;
 use crate::{ROOT_MOD, id};
-use magnus::{Error, Module, Ruby, Value, method};
+use magnus::{Error, Module, RHash, Ruby, StaticSymbol, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::high_level::erased::{
@@ -152,16 +152,26 @@ impl NativePublishedMap {
             .read(ruby, async move { inner.contains_key(key, map_key).await })
     }
 
-    fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeJsonMapScan, Error> {
-        let (key, direction, options) = published_scan_arguments(args)?;
+    fn scan(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        direction: StaticSymbol,
+        options: RHash,
+    ) -> Result<NativeJsonMapScan, Error> {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let entries = this.inner.entries(key).with_query(query).stream();
         published_map_scan(ruby, entries, bridge, propagator)
     }
 
-    fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
-        let (key, direction, options) = published_scan_arguments(args)?;
+    fn keys(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        direction: StaticSymbol,
+        options: RHash,
+    ) -> Result<NativeMapKeyScan, Error> {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let keys = this.inner.keys(key).with_query(query).stream();
@@ -201,8 +211,13 @@ impl NativePublishedSet {
 
     /// Opens a member cursor. Members are bare `String` keys, so the map key
     /// cursor carries them.
-    fn keys(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeMapKeyScan, Error> {
-        let (key, direction, options) = published_scan_arguments(args)?;
+    fn keys(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        direction: StaticSymbol,
+        options: RHash,
+    ) -> Result<NativeMapKeyScan, Error> {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let members = this.inner.keys(key).with_query(query).stream();
@@ -246,8 +261,13 @@ impl NativePublishedDeque {
             .read_json(ruby, async move { inner.peek_back(key).await })
     }
 
-    fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<NativeJsonDequeScan, Error> {
-        let (key, direction, options) = published_scan_arguments(args)?;
+    fn scan(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        direction: StaticSymbol,
+        options: RHash,
+    ) -> Result<NativeJsonDequeScan, Error> {
         let query = position_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let values = this.inner.values(key).with_query(query).stream();
@@ -269,8 +289,8 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(NativePublishedMap::contains_many, 2),
     )?;
     map.define_method("is_empty", method!(NativePublishedMap::is_empty, 1))?;
-    map.define_method("scan", method!(NativePublishedMap::scan, -1))?;
-    map.define_method("keys", method!(NativePublishedMap::keys, -1))?;
+    map.define_method("scan", method!(NativePublishedMap::scan, 3))?;
+    map.define_method("keys", method!(NativePublishedMap::keys, 3))?;
 
     let set = module.define_class(id!(ruby, "NativePublishedSet"), ruby.class_object())?;
     set.define_method("contains", method!(NativePublishedSet::contains, 2))?;
@@ -279,7 +299,7 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(NativePublishedSet::contains_many, 2),
     )?;
     set.define_method("is_empty", method!(NativePublishedSet::is_empty, 1))?;
-    set.define_method("keys", method!(NativePublishedSet::keys, -1))?;
+    set.define_method("keys", method!(NativePublishedSet::keys, 3))?;
 
     let deque = module.define_class(id!(ruby, "NativePublishedDeque"), ruby.class_object())?;
     deque.define_method("get", method!(NativePublishedDeque::get, 2))?;
@@ -287,6 +307,6 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     deque.define_method("is_empty", method!(NativePublishedDeque::is_empty, 1))?;
     deque.define_method("peek_front", method!(NativePublishedDeque::peek_front, 1))?;
     deque.define_method("peek_back", method!(NativePublishedDeque::peek_back, 1))?;
-    deque.define_method("scan", method!(NativePublishedDeque::scan, -1))?;
+    deque.define_method("scan", method!(NativePublishedDeque::scan, 3))?;
     Ok(())
 }

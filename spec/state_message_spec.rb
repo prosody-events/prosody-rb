@@ -70,7 +70,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
             scanned = []
             deque.each { |item| scanned << item.offset }
             native = deque.instance_variable_get(:@native)
-            cursor = native.scan(:forward)
+            cursor = native.scan(:forward, {})
             cursor_class = cursor.class.name
             cursor.close
             @sink.push({
@@ -123,10 +123,10 @@ RSpec.describe "Prosody message state (integration)", integration: true do
             scanned = []
             map.each_pair { |key, value| scanned << [key, value.offset] }
             native = map.instance_variable_get(:@native)
-            value_cursor = native.scan(:forward)
+            value_cursor = native.scan(:forward, {})
             value_cursor_class = value_cursor.class.name
             value_cursor.close
-            key_cursor = native.keys(:forward)
+            key_cursor = native.keys(:forward, {})
             key_cursor_class = key_cursor.class.name
             key_cursor.close
             @sink.push({

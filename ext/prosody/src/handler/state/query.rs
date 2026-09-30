@@ -11,7 +11,6 @@
 
 use super::transient_state_error;
 use magnus::r_hash::ForEach;
-use magnus::scan_args::scan_args;
 use magnus::value::ReprValue;
 use magnus::{Error, Integer, RHash, Range, Ruby, StaticSymbol, Symbol, TryConvert, Value};
 use prosody::state::{DequeQuery, Direction, ErasedKeyQuery};
@@ -69,14 +68,11 @@ impl Keywords {
     {
         let start = edge(ruby, ("from", self.from), ("after", self.after), &convert)?;
         let end = edge(ruby, ("to", self.to), ("before", self.before), &convert)?;
-        let range = match self.range {
-            Some(value) => Some(range(ruby, value, &convert)?),
-            None => None,
-        };
-        let limit = match self.limit {
-            Some(value) => Some(limit(ruby, value)?),
-            None => None,
-        };
+        let range = self
+            .range
+            .map(|value| range(ruby, value, &convert))
+            .transpose()?;
+        let limit = self.limit.map(|value| limit(ruby, value)).transpose()?;
         Ok(Bounds {
             start,
             end,
@@ -86,7 +82,7 @@ impl Keywords {
     }
 }
 
-/// Builds a map or set query from a direction token and optional keywords.
+/// Builds a map or set query from a direction token and keywords.
 ///
 /// # Errors
 ///
@@ -97,13 +93,9 @@ impl Keywords {
 pub(crate) fn key_query(
     ruby: &Ruby,
     direction: StaticSymbol,
-    options: Option<RHash>,
+    options: RHash,
 ) -> Result<ErasedKeyQuery, Error> {
     let query = ErasedKeyQuery::new().direction(parse_direction(ruby, direction)?);
-    let Some(options) = options else {
-        return Ok(query);
-    };
-
     let keywords = Keywords::collect(ruby, options, true)?;
     let prefix = keywords.prefix.map(String::try_convert).transpose()?;
     let bounds = keywords.bounds(ruby, |_, value| String::try_convert(value))?;
@@ -130,7 +122,7 @@ pub(crate) fn key_query(
     Ok(query)
 }
 
-/// Builds a deque query from a direction token and optional keywords.
+/// Builds a deque query from a direction token and keywords.
 ///
 /// Positions count from the front and must be non-negative. Use a reverse
 /// traversal to read from the back.
@@ -144,13 +136,9 @@ pub(crate) fn key_query(
 pub(crate) fn position_query(
     ruby: &Ruby,
     direction: StaticSymbol,
-    options: Option<RHash>,
+    options: RHash,
 ) -> Result<DequeQuery, Error> {
     let query = DequeQuery::new().direction(parse_direction(ruby, direction)?);
-    let Some(options) = options else {
-        return Ok(query);
-    };
-
     let bounds = Keywords::collect(ruby, options, false)?
         .bounds(ruby, |keyword, value| position(ruby, keyword, value))?;
 
@@ -171,31 +159,6 @@ pub(crate) fn position_query(
         query = query.limit(limit);
     }
     Ok(query)
-}
-
-/// Splits handle scan arguments: `(direction, options = nil)`.
-///
-/// # Errors
-///
-/// Raises `ArgumentError` for a wrong argument count, or `TypeError` for a
-/// wrong argument type.
-pub(crate) fn scan_arguments(args: &[Value]) -> Result<(StaticSymbol, Option<RHash>), Error> {
-    let args = scan_args::<(StaticSymbol,), (Option<RHash>,), (), (), (), ()>(args)?;
-    Ok((args.required.0, args.optional.0))
-}
-
-/// Splits published reader scan arguments: `(key, direction, options = nil)`.
-///
-/// # Errors
-///
-/// Raises `ArgumentError` for a wrong argument count, or `TypeError` for a
-/// wrong argument type.
-pub(crate) fn published_scan_arguments(
-    args: &[Value],
-) -> Result<(String, StaticSymbol, Option<RHash>), Error> {
-    let args = scan_args::<(String, StaticSymbol), (Option<RHash>,), (), (), (), ()>(args)?;
-    let (key, direction) = args.required;
-    Ok((key, direction, args.optional.0))
 }
 
 /// Parses a traversal direction token into the core [`Direction`].
