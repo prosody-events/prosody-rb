@@ -6,7 +6,6 @@
 use super::{NativeMapKeyScan, key_query, outcome_symbol, scan_arguments, state_error};
 use crate::bridge::Bridge;
 use crate::tracing_util::extract_opentelemetry_context;
-use magnus::value::ReprValue;
 use magnus::{Error, Ruby, StaticSymbol, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
@@ -51,19 +50,16 @@ impl NativeSetState {
         run_op!(ruby, this, &this.state, is_empty())
     }
 
-    pub(super) fn insert(ruby: &Ruby, this: &Self, member: String) -> Result<Value, Error> {
-        run_op!(ruby, this, &this.state, insert(member))?;
-        Ok(ruby.qnil().as_value())
+    pub(super) fn insert(ruby: &Ruby, this: &Self, member: String) -> Result<(), Error> {
+        run_op!(ruby, this, &this.state, insert(member))
     }
 
-    pub(super) fn remove(ruby: &Ruby, this: &Self, member: String) -> Result<Value, Error> {
-        run_op!(ruby, this, &this.state, remove(member))?;
-        Ok(ruby.qnil().as_value())
+    pub(super) fn remove(ruby: &Ruby, this: &Self, member: String) -> Result<(), Error> {
+        run_op!(ruby, this, &this.state, remove(member))
     }
 
-    pub(super) fn clear(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-        run_op!(ruby, this, &this.state, clear())?;
-        Ok(ruby.qnil().as_value())
+    pub(super) fn clear(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+        run_op!(ruby, this, &this.state, clear())
     }
 
     pub(super) fn keys(

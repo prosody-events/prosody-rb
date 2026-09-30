@@ -12,7 +12,6 @@ use crate::handler::{
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ForkGuard;
 use crate::{ROOT_MOD, id};
-use magnus::value::ReprValue;
 use magnus::{Error, Module, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
@@ -74,10 +73,7 @@ impl Reads {
         F: Future<Output = Result<Option<JsonValue>, E>> + Send + 'static,
         E: Display + Send + 'static,
     {
-        match self.read(ruby, read)? {
-            Some(value) => serialize(ruby, &value),
-            None => Ok(ruby.qnil().as_value()),
-        }
+        serialize(ruby, &self.read(ruby, read)?)
     }
 
     /// Returns the bridge and propagator for a new scan.

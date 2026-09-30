@@ -62,20 +62,9 @@ fn transient_state_error(ruby: &Ruby, message: String) -> Error {
     ruby_error(ruby, "TransientStateError", message)
 }
 
-/// Converts an optional JSON item into a Ruby value or `nil`.
-fn json_or_nil(ruby: &Ruby, item: Option<JsonValue>) -> Result<Value, Error> {
-    match item {
-        Some(value) => serialize(ruby, &value),
-        None => Ok(ruby.qnil().as_value()),
-    }
-}
-
 /// Converts an optional message item into a `Prosody::Message` or `nil`.
 fn message_or_nil(ruby: &Ruby, item: Option<ConsumerMessage<JsonValue>>) -> Value {
-    match item {
-        Some(message) => Message::from(message).into_value_with(ruby),
-        None => ruby.qnil().as_value(),
-    }
+    item.map(Message::from).into_value_with(ruby)
 }
 
 /// Converts a Ruby argument into a JSON item.
@@ -115,36 +104,27 @@ fn outcome_symbol(ruby: &Ruby, outcome: StoreOutcome) -> StaticSymbol {
     }
 }
 
-/// Drives an erased async op that returns `Result<_, ErasedStateError>` through
-/// [`Bridge::wait_for`] with the extracted carrier active, yielding the op's
-/// `Ok` value (state error mapped to the matching Ruby class).
-macro_rules! run_op {
-    ($ruby:expr, $this:expr, $handle:expr, $call:ident ( $($arg:expr),* )) => {{
-        let handle = Arc::clone($handle);
-        let context = extract_opentelemetry_context($ruby, &$this.propagator)?;
-        $this
-            .bridge
-            .wait_for(
-                $ruby,
-                async move { handle.$call($($arg),*).with_context(context).await },
-                Span::current(),
-            )?
-            .map_err(|error| state_error($ruby, &error))
-    }};
-}
-
 /// Drives an infallible erased async op through [`Bridge::wait_for`] with the
 /// extracted carrier active, yielding the op's value.
 macro_rules! run_infallible {
-    ($ruby:expr, $this:expr, $handle:expr, $call:ident ()) => {{
+    ($ruby:expr, $this:expr, $handle:expr, $call:ident ( $($arg:expr),* )) => {{
         let handle = Arc::clone($handle);
         let context = extract_opentelemetry_context($ruby, &$this.propagator)?;
         $this.bridge.wait_for(
             $ruby,
-            async move { handle.$call().with_context(context).await },
+            async move { handle.$call($($arg),*).with_context(context).await },
             Span::current(),
         )?
     }};
+}
+
+/// Drives an erased async op like `run_infallible!`, and maps its
+/// [`ErasedStateError`] to the matching Ruby class.
+macro_rules! run_op {
+    ($ruby:expr, $this:expr, $handle:expr, $call:ident ( $($arg:expr),* )) => {
+        run_infallible!($ruby, $this, $handle, $call($($arg),*))
+            .map_err(|error| state_error($ruby, &error))
+    };
 }
 
 macro_rules! value_state {
@@ -174,15 +154,13 @@ macro_rules! value_state {
                 ($restore)(ruby, run_op!(ruby, this, &this.state, get())?)
             }
 
-            fn set(ruby: &Ruby, this: &Self, value: Value) -> Result<Value, Error> {
+            fn set(ruby: &Ruby, this: &Self, value: Value) -> Result<(), Error> {
                 let item = ($prepare)(ruby, value)?;
-                run_op!(ruby, this, &this.state, set(item))?;
-                Ok(ruby.qnil().as_value())
+                run_op!(ruby, this, &this.state, set(item))
             }
 
-            fn clear(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, clear())?;
-                Ok(ruby.qnil().as_value())
+            fn clear(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+                run_op!(ruby, this, &this.state, clear())
             }
 
             fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
@@ -203,7 +181,7 @@ value_state!(
     "Prosody::NativeJsonValueState",
     JsonValue,
     json_write_item,
-    json_or_nil
+    |ruby, item| serialize::<_, Value>(ruby, &item)
 );
 value_state!(
     NativeMessageValueState,
@@ -244,8 +222,8 @@ macro_rules! map_state {
                 ($restore)(ruby, run_op!(ruby, this, &this.state, get(key))?)
             }
 
-            fn contains_key(ruby: &Ruby, this: &Self, key: String) -> Result<Value, Error> {
-                Ok(run_op!(ruby, this, &this.state, contains_key(key))?.into_value_with(ruby))
+            fn contains_key(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
+                run_op!(ruby, this, &this.state, contains_key(key))
             }
 
             fn is_empty(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
@@ -267,20 +245,17 @@ macro_rules! map_state {
                 run_op!(ruby, this, &this.state, contains_many(keys))
             }
 
-            fn set(ruby: &Ruby, this: &Self, key: String, value: Value) -> Result<Value, Error> {
+            fn set(ruby: &Ruby, this: &Self, key: String, value: Value) -> Result<(), Error> {
                 let item = ($prepare)(ruby, value)?;
-                run_op!(ruby, this, &this.state, set(key, item))?;
-                Ok(ruby.qnil().as_value())
+                run_op!(ruby, this, &this.state, set(key, item))
             }
 
-            fn remove(ruby: &Ruby, this: &Self, key: String) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, remove(key))?;
-                Ok(ruby.qnil().as_value())
+            fn remove(ruby: &Ruby, this: &Self, key: String) -> Result<(), Error> {
+                run_op!(ruby, this, &this.state, remove(key))
             }
 
-            fn clear(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, clear())?;
-                Ok(ruby.qnil().as_value())
+            fn clear(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+                run_op!(ruby, this, &this.state, clear())
             }
 
             fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
@@ -324,7 +299,7 @@ map_state!(
     JsonValue,
     NativeJsonMapScan,
     json_write_item,
-    json_or_nil
+    |ruby, item| serialize::<_, Value>(ruby, &item)
 );
 map_state!(
     NativeMessageMapState,
@@ -361,12 +336,12 @@ macro_rules! deque_state {
                 }
             }
 
-            fn len(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                Ok(run_op!(ruby, this, &this.state, len())?.into_value_with(ruby))
+            fn len(ruby: &Ruby, this: &Self) -> Result<usize, Error> {
+                run_op!(ruby, this, &this.state, len())
             }
 
-            fn is_empty(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                Ok(run_op!(ruby, this, &this.state, is_empty())?.into_value_with(ruby))
+            fn is_empty(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+                run_op!(ruby, this, &this.state, is_empty())
             }
 
             fn get(ruby: &Ruby, this: &Self, index: usize) -> Result<Value, Error> {
@@ -381,16 +356,14 @@ macro_rules! deque_state {
                 ($restore)(ruby, run_op!(ruby, this, &this.state, peek_back())?)
             }
 
-            fn push_back(ruby: &Ruby, this: &Self, value: Value) -> Result<Value, Error> {
+            fn push_back(ruby: &Ruby, this: &Self, value: Value) -> Result<(), Error> {
                 let item = ($prepare)(ruby, value)?;
-                run_op!(ruby, this, &this.state, push_back(item))?;
-                Ok(ruby.qnil().as_value())
+                run_op!(ruby, this, &this.state, push_back(item))
             }
 
-            fn push_front(ruby: &Ruby, this: &Self, value: Value) -> Result<Value, Error> {
+            fn push_front(ruby: &Ruby, this: &Self, value: Value) -> Result<(), Error> {
                 let item = ($prepare)(ruby, value)?;
-                run_op!(ruby, this, &this.state, push_front(item))?;
-                Ok(ruby.qnil().as_value())
+                run_op!(ruby, this, &this.state, push_front(item))
             }
 
             fn pop_front(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
@@ -401,9 +374,8 @@ macro_rules! deque_state {
                 ($restore)(ruby, run_op!(ruby, this, &this.state, pop_back())?)
             }
 
-            fn clear(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                run_op!(ruby, this, &this.state, clear())?;
-                Ok(ruby.qnil().as_value())
+            fn clear(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+                run_op!(ruby, this, &this.state, clear())
             }
 
             fn scan(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<$scan, Error> {
@@ -436,7 +408,7 @@ deque_state!(
     JsonValue,
     NativeJsonDequeScan,
     json_write_item,
-    json_or_nil
+    |ruby, item| serialize::<_, Value>(ruby, &item)
 );
 deque_state!(
     NativeMessageDequeState,
