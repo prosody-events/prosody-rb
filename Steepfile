@@ -12,6 +12,7 @@ target :lib do
   ignore "lib/prosody/state/map.rb"
   ignore "lib/prosody/state/deque.rb"
   ignore "lib/prosody/native_stubs.rb"
+  ignore "lib/prosody/native_stubs"
   signature "sig"
   signature "sig-private"
 
