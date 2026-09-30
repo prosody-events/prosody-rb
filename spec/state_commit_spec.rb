@@ -6,7 +6,7 @@ require "spec_helper"
 RSpec.describe "Prosody state commit and rollback (integration)", integration: true do
   include_context "keyed state integration"
 
-  describe "item 5: commit / rollback" do
+  describe "commit and rollback" do
     it "keeps a committed value visible on the retry of a later-failed attempt" do
       definition = Prosody.value(random_state_name("val"))
       committed = {"v" => "committed-#{SecureRandom.hex(4)}"}

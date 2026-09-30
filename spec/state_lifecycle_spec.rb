@@ -7,7 +7,7 @@ require "spec_helper"
 RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true do
   include_context "keyed state integration"
 
-  describe "item 8: unregistered name" do
+  describe "unregistered name" do
     it "raises a PermanentStateError when vending a name that is not registered" do
       registered = Prosody.value(random_state_name("val"))
       handler_class = Class.new(StateHandler) do
@@ -29,7 +29,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
     end
   end
 
-  describe "item 8: rethrow classification through the existing bridge" do
+  describe "rethrow classification through the existing bridge" do
     it "retries when a handler rethrows a transient state error" do
       handler_class = Class.new(CompleteHandler) do
         def initialize(sink)
@@ -77,7 +77,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
     end
   end
 
-  describe "item 8: identity mismatch across runs" do
+  describe "identity mismatch across runs" do
     # A cross-run identity mismatch (a name re-registered with a different kind)
     # IS enforced by core as permanent, but not at a handler-visible layer: the
     # mismatch is detected during partition keyed-state-manager acquisition
@@ -94,7 +94,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
     end
   end
 
-  describe "item 6: attempt-fenced leaks" do
+  describe "attempt-fenced leaks" do
     it "raises the terminated (transient) error for a handle leaked across a failed attempt" do
       definition = Prosody.value(random_state_name("val"))
       handler_class = Class.new(CompleteHandler) do
@@ -201,7 +201,7 @@ RSpec.describe "Prosody keyed state lifecycle (integration)", integration: true 
     end
   end
 
-  describe "item 7: iterator lifecycle" do
+  describe "iterator lifecycle" do
     it "closes the scan on early break, leaving the collection usable" do
       definition = Prosody.map(random_state_name("map"))
       handler_class = Class.new(StateHandler) do

@@ -8,7 +8,7 @@ require "spec_helper"
 RSpec.describe "Prosody keyed state (integration)", integration: true do
   include_context "keyed state integration"
 
-  describe "item 1: value" do
+  describe "value" do
     it "persists a value written in one event and read in the next" do
       definition = Prosody.value(random_state_name("val"))
       token = "tok-#{SecureRandom.hex(4)}"
@@ -78,7 +78,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
-  describe "item 2: map" do
+  describe "map" do
     it "sets, deletes, scans both directions in key order, and round-trips unicode" do
       definition = Prosody.map(random_state_name("map"))
       handler_class = Class.new(StateHandler) do
@@ -187,7 +187,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
-  describe "item 3: deque" do
+  describe "deque" do
     it "pushes, unshifts, scans, and pops from both ends" do
       definition = Prosody.deque(random_state_name("deq"))
       handler_class = Class.new(StateHandler) do
@@ -247,7 +247,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
-  describe "item 9: null-write rejection" do
+  describe "null-write rejection" do
     it "surfaces core's permanent rejection of a JSON-null write and leaves the store untouched" do
       value_def = Prosody.value(random_state_name("val"))
       deque_def = Prosody.deque(random_state_name("deq"))
@@ -318,7 +318,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     end
   end
 
-  describe "item 13: async bridging" do
+  describe "async bridging" do
     it "lets a handler for a different key make progress while one handler is blocked" do
       definition = Prosody.value(random_state_name("val"))
 

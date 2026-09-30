@@ -9,8 +9,7 @@ require "tmpdir"
 require "opentelemetry/sdk"
 require "opentelemetry-exporter-otlp"
 
-# Full LGTM trace-topology audit for keyed state (Appendix 1 item 12), per
-# docs/keyed-state/clients/02-lgtm-trace-audit.md. Runs a focused state group
+# Full LGTM trace-topology audit for keyed state. Runs a focused state group
 # under a unique OTEL_SERVICE_NAME, exports to the live collector, then queries
 # Tempo and audits the complete span graph: exactly one core semantic span per
 # state op parented directly to the Ruby handler span, no binding/Magnus wrapper
