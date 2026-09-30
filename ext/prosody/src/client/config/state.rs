@@ -7,10 +7,7 @@ use super::NativeConfiguration;
 use prosody::consumer::KeyedStateConfiguration;
 use prosody::consumer::kafka_state::{message_deque_state, message_map_state, message_state};
 use prosody::loader::KafkaLoader;
-use prosody::state::descriptor::{
-    DequeDescriptor, MapDescriptor, SetDescriptor, StateDescriptor, deque_state, map_state,
-    set_state, value_state,
-};
+use prosody::state::descriptor::{StateDescriptor, deque_state, map_state, set_state, value_state};
 use prosody::state::order_codec::Utf8KeyCodec;
 use prosody::subsystem::SubsystemName;
 use prosody::timers::duration::CompactDuration;
@@ -112,57 +109,20 @@ fn parse_payload(index: usize, payload: &str) -> Result<CollectionPayload, Strin
     }
 }
 
-/// Applies the shared descriptor options (TTL, commit mode) fluently.
-fn with_def<D: StateDescriptor>(
-    descriptor: D,
-    ttl_seconds: Option<u32>,
-    read_uncommitted: Option<bool>,
-    published: Option<bool>,
-) -> D {
+/// Applies the options that every collection kind takes: TTL, commit mode,
+/// and publication.
+fn with_def<D: StateDescriptor>(descriptor: D, collection: &StateCollectionConfig) -> D {
     let mut descriptor = descriptor;
-    if let Some(ttl) = ttl_seconds {
+    if let Some(ttl) = collection.ttl_seconds {
         descriptor = descriptor.ttl(CompactDuration::new(ttl));
     }
-    if read_uncommitted == Some(true) {
+    if collection.read_uncommitted == Some(true) {
         descriptor = descriptor.read_uncommitted();
     }
-    if let Some(published) = published {
+    if let Some(published) = collection.published {
         descriptor = descriptor.published(published);
     }
     descriptor
-}
-
-/// Applies the map keyset bound when configured.
-fn with_keyset<KC, V>(
-    descriptor: MapDescriptor<KC, V>,
-    keyset_limit: Option<usize>,
-) -> MapDescriptor<KC, V> {
-    match keyset_limit {
-        Some(limit) => descriptor.keyset_limit(limit),
-        None => descriptor,
-    }
-}
-
-/// Applies the set keyset bound when configured.
-fn with_set_keyset<KC>(
-    descriptor: SetDescriptor<KC>,
-    keyset_limit: Option<usize>,
-) -> SetDescriptor<KC> {
-    match keyset_limit {
-        Some(limit) => descriptor.keyset_limit(limit),
-        None => descriptor,
-    }
-}
-
-/// Applies the deque-only window capacity when configured.
-fn with_capacity<T>(
-    descriptor: DequeDescriptor<T>,
-    capacity: Option<NonZeroUsize>,
-) -> DequeDescriptor<T> {
-    match capacity {
-        Some(cap) => descriptor.capacity(cap),
-        None => descriptor,
-    }
 }
 
 /// Maps one collection into its descriptor. Values, maps, and deques hold
@@ -178,78 +138,59 @@ fn register_state_collection(
     collection: &StateCollectionConfig,
 ) -> Result<(), String> {
     let kind = parse_kind(index, &collection.kind)?;
-    let payload = match &collection.payload {
-        Some(payload) => Some(parse_payload(index, payload)?),
-        None => None,
-    };
-
-    let ttl_seconds = collection.ttl_seconds;
+    let payload = collection
+        .payload
+        .as_deref()
+        .map(|payload| parse_payload(index, payload))
+        .transpose()?;
     let keyset_limit = keyset_limit(collection.keyset_limit, &kind, index)?;
     let capacity = capacity(collection.capacity, &kind, index)?;
 
-    let read_uncommitted = collection.read_uncommitted;
     let name = collection.name.as_str();
     match (kind, payload) {
         (CollectionKind::Value, Some(CollectionPayload::Json)) => {
-            let _ = keyed.register(with_def(
-                value_state::<JsonCodec>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            ));
+            let _ = keyed.register(with_def(value_state::<JsonCodec>(name), collection));
         }
         (CollectionKind::Map, Some(CollectionPayload::Json)) => {
-            let descriptor = with_def(
-                map_state::<Utf8KeyCodec, JsonCodec>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            );
-            let _ = keyed.register(with_keyset(descriptor, keyset_limit));
+            let mut descriptor = with_def(map_state::<Utf8KeyCodec, JsonCodec>(name), collection);
+            if let Some(limit) = keyset_limit {
+                descriptor = descriptor.keyset_limit(limit);
+            }
+            let _ = keyed.register(descriptor);
         }
         (CollectionKind::Deque, Some(CollectionPayload::Json)) => {
-            let descriptor = with_def(
-                deque_state::<JsonCodec>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            );
-            let _ = keyed.register(with_capacity(descriptor, capacity));
+            let mut descriptor = with_def(deque_state::<JsonCodec>(name), collection);
+            if let Some(capacity) = capacity {
+                descriptor = descriptor.capacity(capacity);
+            }
+            let _ = keyed.register(descriptor);
         }
         (CollectionKind::Value, Some(CollectionPayload::Message)) => {
-            let _ = keyed.register(with_def(
-                message_state::<KafkaLoader<JsonCodec>>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            ));
+            let descriptor = message_state::<KafkaLoader<JsonCodec>>(name);
+            let _ = keyed.register(with_def(descriptor, collection));
         }
         (CollectionKind::Map, Some(CollectionPayload::Message)) => {
-            let descriptor = with_def(
-                message_map_state::<Utf8KeyCodec, KafkaLoader<JsonCodec>>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            );
-            let _ = keyed.register(with_keyset(descriptor, keyset_limit));
+            let descriptor = message_map_state::<Utf8KeyCodec, KafkaLoader<JsonCodec>>(name);
+            let mut descriptor = with_def(descriptor, collection);
+            if let Some(limit) = keyset_limit {
+                descriptor = descriptor.keyset_limit(limit);
+            }
+            let _ = keyed.register(descriptor);
         }
         (CollectionKind::Deque, Some(CollectionPayload::Message)) => {
-            let descriptor = with_def(
-                message_deque_state::<KafkaLoader<JsonCodec>>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            );
-            let _ = keyed.register(with_capacity(descriptor, capacity));
+            let descriptor = message_deque_state::<KafkaLoader<JsonCodec>>(name);
+            let mut descriptor = with_def(descriptor, collection);
+            if let Some(capacity) = capacity {
+                descriptor = descriptor.capacity(capacity);
+            }
+            let _ = keyed.register(descriptor);
         }
         (CollectionKind::Set, None) => {
-            let descriptor = with_def(
-                set_state::<Utf8KeyCodec>(name),
-                ttl_seconds,
-                read_uncommitted,
-                collection.published,
-            );
-            let _ = keyed.register(with_set_keyset(descriptor, keyset_limit));
+            let mut descriptor = with_def(set_state::<Utf8KeyCodec>(name), collection);
+            if let Some(limit) = keyset_limit {
+                descriptor = descriptor.keyset_limit(limit);
+            }
+            let _ = keyed.register(descriptor);
         }
         (CollectionKind::Set, Some(_)) => {
             return Err(format!(
