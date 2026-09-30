@@ -47,3 +47,4 @@ end
 # already exist.
 require_relative "prosody/state"
 require_relative "prosody/request"
+require_relative "prosody/client"

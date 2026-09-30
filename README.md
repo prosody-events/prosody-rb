@@ -950,6 +950,16 @@ Call `shutdown` when the application terminates. It stops all client services an
 client.shutdown
 ```
 
+To scope a client to a block, use `Prosody::Client.open`. It yields the client and calls `shutdown` when the block exits, also when the block raises. It returns the value of the block.
+
+```ruby
+Prosody::Client.open(bootstrap_servers: "localhost:9092") do |client|
+  client.send_message("my-topic", "key", {"hello" => "world"})
+end
+```
+
+Repeated `shutdown` calls wait for the same operation, so the block can also call `shutdown`.
+
 Handle application shutdown with signal handlers:
 
 ```ruby
@@ -1119,6 +1129,7 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 ### Prosody::Client
 
 - `new(config)` or `new(**options)`: Create a client from a `Configuration`, hash, or keyword options.
+- `open(config) { |client| ... }`: Create a client, yield it, and shut it down when the block exits. It returns the value of the block.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `excise(String topic, String key)`: Send an excise record for a key.
 - `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.

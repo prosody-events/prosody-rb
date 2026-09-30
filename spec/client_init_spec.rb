@@ -25,6 +25,23 @@ RSpec.describe Prosody::Client, integration: true do
     @client.shutdown
   end
 
+  # Client.open yields a live client and shuts it down when the block exits,
+  # on a normal return and on a raise.
+  it "shuts down the client that Client.open yields" do
+    config = {
+      bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS, source_system: "init-test-system",
+      group_id: TestConfig.unique_group_id, subscribed_topics: []
+    }
+    yielded = nil
+    expect(Prosody::Client.open(config) { |client| (yielded = client).consumer_state }).not_to eq(:shut_down)
+    expect(yielded.consumer_state).to eq(:shut_down)
+
+    expect { Prosody::Client.open(config) { |client| (yielded = client) && raise("boom") } }.to raise_error("boom")
+    expect(yielded.consumer_state).to eq(:shut_down)
+
+    expect { Prosody::Client.open(config) }.to raise_error(ArgumentError, /requires a block/)
+  end
+
   it "initializes a client when given a Configuration object" do
     # Build a Configuration object explicitly
     config = Prosody::Configuration.new(

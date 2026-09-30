@@ -180,6 +180,9 @@ module Prosody
     def self.new: (Hash[Symbol, untyped] | Configuration config) -> Client
                 | (**untyped options) -> Client
 
+    # Creates a client, yields it, and shuts it down when the block exits.
+    def self.open: [T] (Hash[Symbol, untyped] | Configuration config) { (Client client) -> T } -> T
+
     # Returns the current state of the consumer.
     #
     # @return [Symbol] The consumer state: :shut_down, :unconfigured, :configured, or :running
