@@ -299,7 +299,7 @@ Send a request from a handler or other application code. The Prosody client does
 
 Do not rely on hash order. The hash contains one entry for each selected subsystem. A missing response becomes a timeout `Failure`; Prosody does not omit the subsystem. The request raises an error for request-level failures, such as invalid input, a Kafka send failure, or shutdown. Do not wait for a request if the current consumer group must process it for the same key. That group cannot process it until the handler returns.
 
-Message and excise handler return values become successful outcomes. Each return value must have a JSON representation.
+Message and excise handler return values become successful outcomes. Each return value must have a JSON representation. A return value without one is a transient handler error, so Prosody retries the message.
 
 Set `subsystem` to `inventory` on the client that subscribes this handler.
 

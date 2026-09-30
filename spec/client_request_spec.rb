@@ -48,24 +48,30 @@ RSpec.describe Prosody::Client, integration: true do
     )
   end
 
-  it "returns a handler failure when a result cannot encode" do
-    handler_class = Class.new(CompleteHandler) do
-      def on_message(_context, _message)
-        Object.new
+  # A result with no JSON form is a handler mistake, so it classifies as
+  # transient. Best-effort mode does not retry, so the requester receives it.
+  context "when a result cannot encode" do
+    let(:config) { TestConfig.create_configuration(topic, subsystem: "inventory", mode: :best_effort) }
+
+    it "returns a transient handler failure" do
+      handler_class = Class.new(CompleteHandler) do
+        def on_message(_context, _message)
+          Object.new
+        end
       end
+
+      client.subscribe(handler_class.new)
+      outcome = client.request(
+        topic: topic,
+        key: "order-1",
+        payload: {"type" => "order.created"},
+        subsystems: ["inventory"],
+        timeout: TestConfig::MESSAGE_TIMEOUT
+      ).fetch("inventory")
+
+      expect(outcome).to be_a(Prosody::Failure)
+      expect(outcome.error).to be_a(Prosody::HandlerError)
+      expect(outcome.error.message).to start_with("transient error:")
     end
-
-    client.subscribe(handler_class.new)
-    outcome = client.request(
-      topic: topic,
-      key: "order-1",
-      payload: {"type" => "order.created"},
-      subsystems: ["inventory"],
-      timeout: TestConfig::MESSAGE_TIMEOUT
-    ).fetch("inventory")
-
-    expect(outcome).to be_a(Prosody::Failure)
-    expect(outcome.error).to be_a(Prosody::HandlerError)
-    expect(outcome.error.message).not_to be_empty
   end
 end
