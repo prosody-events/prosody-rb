@@ -43,7 +43,7 @@ RSpec.describe Prosody::Client, integration: true do
 
   describe "duration options" do
     options = %i[
-      send_timeout stall_threshold shutdown_timeout poll_interval commit_interval
+      send_timeout stall_threshold shutdown_timeout poll_interval commit_interval statistics_interval
       retry_base max_retry_delay idempotence_ttl peer_registration_ttl
       cassandra_retention slab_size scheduler_max_wait monopolization_window
       defer_base defer_max_delay defer_failure_window loader_seek_timeout timeout
@@ -56,6 +56,20 @@ RSpec.describe Prosody::Client, integration: true do
         config = {mock: true, bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS}.merge(option => value)
         expect { Prosody::Client.new(config) }.to raise_error(ArgumentError, /#{option}: must be a finite, non-negative number of seconds/)
       end
+    end
+  end
+
+  describe "options that reach core" do
+    def mock_client(**options)
+      @client = Prosody::Client.new(mock: true, bootstrap_servers: TestConfig::BOOTSTRAP_SERVERS,
+        source_system: TestConfig::SOURCE_NAME, group_id: TestConfig.unique_group_id, **options)
+    end
+
+    # Core validates the interval when the consumer starts. A zero interval
+    # fails only when the option reaches the consumer configuration.
+    it "passes statistics_interval to the consumer" do
+      client = mock_client(statistics_interval: 0, subscribed_topics: "statistics")
+      expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /statistics_interval/)
     end
   end
 end

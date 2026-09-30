@@ -115,6 +115,10 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
             builder.commit_interval(seconds("commit_interval", *commit_interval)?);
         }
 
+        if let Some(statistics_interval) = &config.statistics_interval {
+            builder.statistics_interval(seconds("statistics_interval", *statistics_interval)?);
+        }
+
         if let Some(mock) = &config.mock {
             builder.mock(*mock);
         }

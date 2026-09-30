@@ -82,6 +82,9 @@ pub struct NativeConfiguration {
     /// Interval between offset commit operations (in seconds)
     commit_interval: Option<f64>,
 
+    /// Interval between librdkafka statistics reports (in seconds)
+    statistics_interval: Option<f64>,
+
     /// Operation mode of the client (`pipeline`, `low_latency`, `best_effort`)
     mode: Option<String>,
 

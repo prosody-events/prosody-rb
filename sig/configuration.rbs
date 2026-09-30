@@ -63,6 +63,10 @@ module Prosody
     def commit_interval: () -> Float?
     def commit_interval=: (Numeric) -> Float
 
+    # Interval between librdkafka statistics reports (seconds)
+    def statistics_interval: () -> Float?
+    def statistics_interval=: (Numeric) -> Float
+
     # Base delay for retry operations (seconds)
     def retry_base: () -> Float?
     def retry_base=: (Numeric) -> Float

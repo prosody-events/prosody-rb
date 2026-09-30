@@ -124,6 +124,10 @@ module Prosody
     # Interval between offset commit operations (in seconds).
     config_param :commit_interval, converter: ->(v) { duration_converter(v) }
 
+    # Interval between librdkafka statistics reports (in seconds).
+    # Env: PROSODY_STATISTICS_INTERVAL. Default: 5 seconds.
+    config_param :statistics_interval, converter: ->(v) { duration_converter(v) }
+
     # Base delay for retry operations (in seconds).
     config_param :retry_base, converter: ->(v) { duration_converter(v) }
 
