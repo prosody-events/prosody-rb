@@ -73,6 +73,8 @@ RSpec.describe Prosody::Client, integration: true do
 
       # Verify subscription state
       expect(client.consumer_state).to eq(:running)
+      expect(client.assigned_partition_count).to be_a(Integer)
+      expect(client.stalled?).to be(false)
 
       # Unsubscribe
       client.unsubscribe

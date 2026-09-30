@@ -188,7 +188,7 @@ module Prosody
     # Returns the number of Kafka partitions currently assigned to this consumer.
     #
     # @return [Integer] The number of assigned partitions
-    def assigned_partitions: () -> Integer
+    def assigned_partition_count: () -> Integer
 
     # Checks if the consumer is stalled.
     #
@@ -196,7 +196,7 @@ module Prosody
     # errors or reaching processing limits.
     #
     # @return [Boolean] true if the consumer is stalled, false otherwise
-    def is_stalled?: () -> bool
+    def stalled?: () -> bool
 
     # Sends a message to the specified Kafka topic.
     #

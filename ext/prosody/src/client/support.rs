@@ -77,10 +77,10 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(id!(ruby, "subscribe"), method!(Client::subscribe, 1))?;
     class.define_method(
-        id!(ruby, "assigned_partitions"),
-        method!(Client::assigned_partitions, 0),
+        id!(ruby, "assigned_partition_count"),
+        method!(Client::assigned_partition_count, 0),
     )?;
-    class.define_method(id!(ruby, "is_stalled?"), method!(Client::is_stalled, 0))?;
+    class.define_method(id!(ruby, "stalled?"), method!(Client::is_stalled, 0))?;
     class.define_method(id!(ruby, "unsubscribe"), method!(Client::unsubscribe, 0))?;
     class.define_method(id!(ruby, "shutdown"), method!(Client::shutdown, 0))?;
     class.define_method(

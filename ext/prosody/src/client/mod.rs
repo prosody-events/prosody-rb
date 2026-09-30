@@ -304,7 +304,7 @@ impl Client {
     /// # Returns
     ///
     /// The number of assigned partitions as a u32.
-    pub fn assigned_partitions(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
+    pub fn assigned_partition_count(ruby: &Ruby, this: &Self) -> Result<u32, Error> {
         this.fork.check(ruby)?;
         let inner = this.inner.clone();
         this.bridge.wait_for(

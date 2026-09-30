@@ -55,7 +55,7 @@ module Prosody
     # proper load balancing across multiple consumer instances.
     #
     # @return [Integer] The number of assigned partitions
-    def assigned_partitions
+    def assigned_partition_count
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
@@ -66,7 +66,7 @@ module Prosody
     # consumers that need attention.
     #
     # @return [Boolean] true if the consumer is stalled, false otherwise
-    def is_stalled?
+    def stalled?
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 

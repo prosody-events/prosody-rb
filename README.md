@@ -277,10 +277,10 @@ You can monitor the stall state programmatically using the client's methods:
 
 ```ruby
 # Get the number of partitions currently assigned to this consumer
-partition_count = client.assigned_partitions
+partition_count = client.assigned_partition_count
 
 # Check if the consumer has stalled partitions
-if client.is_stalled?
+if client.stalled?
   warn 'Consumer has stalled partitions'
 end
 ```
@@ -1129,8 +1129,8 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 - `subscribe(handler)`: Start event processing with the specified handler.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
-- `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
-- `is_stalled?`: Check if the consumer has stalled partitions.
+- `assigned_partition_count`: Get the number of partitions currently assigned to this consumer.
+- `stalled?`: Check if the consumer has stalled partitions.
 
 ### Prosody::AdminClient
 
