@@ -31,7 +31,7 @@ module Prosody
   end
 
   class PublishedValue[T = json_value]
-    def get: (_ToS key) -> T?
+    def get: (String key) -> T?
 
     private
     def initialize: (NativePublishedValue native) -> void
@@ -40,26 +40,26 @@ module Prosody
   class PublishedMap[V = json_value]
     include State::Scanning
 
-    def get: (_ToS key, _ToS map_key) -> V?
-    def get_many: (_ToS key, Array[_ToS] map_keys) -> Array[V?]
-    def key?: (_ToS key, _ToS map_key) -> bool
+    def get: (String key, String map_key) -> V?
+    def get_many: (String key, Array[String] map_keys) -> Array[V?]
+    def key?: (String key, String map_key) -> bool
     alias has_key? key?
     alias include? key?
     alias member? key?
-    def contains_many: (_ToS key, Array[_ToS] map_keys) -> Array[bool]
-    def empty?: (_ToS key) -> bool
-    def each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
-                 | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
-    def reverse_each_pair: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
-                         | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
-    def each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
-                | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
-    def reverse_each_key: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
-                        | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
-    def each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
-                  | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
-    def reverse_each_value: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
-                          | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
+    def contains_many: (String key, Array[String] map_keys) -> Array[bool]
+    def empty?: (String key) -> bool
+    def each_pair: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
+                 | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
+    def reverse_each_pair: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
+                         | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[String, V], void]
+    def each_key: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each_key: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                        | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def each_value: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                  | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
+    def reverse_each_value: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (V) -> void } -> void
+                          | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[V, void]
     alias each each_pair
 
     private
@@ -69,14 +69,14 @@ module Prosody
   class PublishedSet
     include State::Scanning
 
-    def include?: (_ToS key, _ToS member) -> bool
+    def include?: (String key, String member) -> bool
     alias member? include?
-    def contains_many: (_ToS key, Array[_ToS] members) -> Array[bool]
-    def empty?: (_ToS key) -> bool
-    def each: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
-            | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
-    def reverse_each: (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
-                    | (_ToS key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def contains_many: (String key, Array[String] members) -> Array[bool]
+    def empty?: (String key) -> bool
+    def each: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+            | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
+    def reverse_each: (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
+                    | (String key, ?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
 
     private
     def initialize: (NativePublishedSet native) -> void
@@ -85,16 +85,16 @@ module Prosody
   class PublishedDeque[T = json_value]
     include State::Scanning
 
-    def get: (_ToS key, Integer index) -> T?
-    def length: (_ToS key) -> Integer
+    def get: (String key, Integer index) -> T?
+    def length: (String key) -> Integer
     alias size length
-    def empty?: (_ToS key) -> bool
-    def first: (_ToS key) -> T?
-    def last: (_ToS key) -> T?
-    def each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
-            | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
-    def reverse_each: (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
-                    | (_ToS key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+    def empty?: (String key) -> bool
+    def first: (String key) -> T?
+    def last: (String key) -> T?
+    def each: (String key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+            | (String key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
+    def reverse_each: (String key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
+                    | (String key, ?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) -> Enumerator[T, void]
 
     private
     def initialize: (NativePublishedDeque native) -> void

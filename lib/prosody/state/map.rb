@@ -271,17 +271,17 @@ module Prosody
     # Reads the committed entry for +map_key+ in the map for +key+.
     #
     # @return [Object, nil] the value, or +nil+ when the entry is absent
-    def get(key, map_key) = @native.get(key.to_s, map_key.to_s)
+    def get(key, map_key) = @native.get(key, map_key)
 
     # Reads several entries of the map for +key+ in one batch.
     #
     # @return [Array<Object, nil>] one result per map key; +nil+ for an absent entry
-    def get_many(key, map_keys) = @native.get_many(key.to_s, map_keys.map(&:to_s))
+    def get_many(key, map_keys) = @native.get_many(key, map_keys)
 
     # Whether the map for +key+ has a committed entry for +map_key+.
     #
     # @return [Boolean]
-    def key?(key, map_key) = @native.contains_key(key.to_s, map_key.to_s)
+    def key?(key, map_key) = @native.contains_key(key, map_key)
     alias_method :has_key?, :key?
     alias_method :include?, :key?
     alias_method :member?, :key?
@@ -289,44 +289,44 @@ module Prosody
     # Tests several entries of the map for +key+ in one batch.
     #
     # @return [Array<Boolean>] one result per map key
-    def contains_many(key, map_keys) = @native.contains_many(key.to_s, map_keys.map(&:to_s))
+    def contains_many(key, map_keys) = @native.contains_many(key, map_keys)
 
     # Whether the map for +key+ has no committed entries.
     #
     # @return [Boolean]
-    def empty?(key) = @native.is_empty(key.to_s)
+    def empty?(key) = @native.is_empty(key)
 
     # Traverses the committed entries for +key+ in key order, yielding one
     # +[map_key, value]+ pair for each entry. Each traversal accepts the query
     # keywords documented on {State::Scanning}.
     #
     # @return [Enumerator, void]
-    def each_pair(key, **query, &block) = traverse(:scan, key.to_s, :forward, query, &block)
+    def each_pair(key, **query, &block) = traverse(:scan, key, :forward, query, &block)
 
     # Traverses the committed entries for +key+ in reverse key order.
     #
     # @return [Enumerator, void]
-    def reverse_each_pair(key, **query, &block) = traverse(:scan, key.to_s, :backward, query, &block)
+    def reverse_each_pair(key, **query, &block) = traverse(:scan, key, :backward, query, &block)
 
     # Traverses the committed map keys for +key+ in key order.
     #
     # @return [Enumerator, void]
-    def each_key(key, **query, &block) = traverse(:keys, key.to_s, :forward, query, &block)
+    def each_key(key, **query, &block) = traverse(:keys, key, :forward, query, &block)
 
     # Traverses the committed map keys for +key+ in reverse key order.
     #
     # @return [Enumerator, void]
-    def reverse_each_key(key, **query, &block) = traverse(:keys, key.to_s, :backward, query, &block)
+    def reverse_each_key(key, **query, &block) = traverse(:keys, key, :backward, query, &block)
 
     # Traverses the committed values for +key+ in key order.
     #
     # @return [Enumerator, void]
-    def each_value(key, **query, &block) = traverse_values(key.to_s, :forward, query, &block)
+    def each_value(key, **query, &block) = traverse_values(key, :forward, query, &block)
 
     # Traverses the committed values for +key+ in reverse key order.
     #
     # @return [Enumerator, void]
-    def reverse_each_value(key, **query, &block) = traverse_values(key.to_s, :backward, query, &block)
+    def reverse_each_value(key, **query, &block) = traverse_values(key, :backward, query, &block)
     alias_method :each, :each_pair
   end
 end

@@ -68,8 +68,8 @@ module Prosody
 
     # Reads the committed value for +key+.
     #
-    # @param key [#to_s] the user key
+    # @param key [String] the user key
     # @return [Object, nil] the value, or +nil+ when it is absent
-    def get(key) = @native.get(key.to_s)
+    def get(key) = @native.get(key)
   end
 end

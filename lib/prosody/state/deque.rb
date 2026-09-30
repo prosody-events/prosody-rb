@@ -234,43 +234,43 @@ module Prosody
         raise TransientStateError, "get: index must be an Integer, got #{index.inspect}"
       end
 
-      return @native.get(key.to_s, index) unless index.negative?
+      return @native.get(key, index) unless index.negative?
       return last(key) if index == -1
 
       resolved = length(key) + index
-      resolved.negative? ? nil : @native.get(key.to_s, resolved)
+      resolved.negative? ? nil : @native.get(key, resolved)
     end
 
     # The number of committed elements in the deque for +key+.
     #
     # @return [Integer]
-    def length(key) = @native.length(key.to_s)
+    def length(key) = @native.length(key)
     alias_method :size, :length
 
     # Whether the deque for +key+ has no committed elements.
     #
     # @return [Boolean]
-    def empty?(key) = @native.is_empty(key.to_s)
+    def empty?(key) = @native.is_empty(key)
 
     # The front element of the deque for +key+.
     #
     # @return [Object, nil] the element, or +nil+ when the deque is empty
-    def first(key) = @native.peek_front(key.to_s)
+    def first(key) = @native.peek_front(key)
 
     # The back element of the deque for +key+.
     #
     # @return [Object, nil] the element, or +nil+ when the deque is empty
-    def last(key) = @native.peek_back(key.to_s)
+    def last(key) = @native.peek_back(key)
 
     # Traverses the committed elements for +key+ from front to back. Each
     # traversal accepts the position keywords documented on {State::Scanning}.
     #
     # @return [Enumerator, void]
-    def each(key, **query, &block) = traverse(:scan, key.to_s, :forward, query, &block)
+    def each(key, **query, &block) = traverse(:scan, key, :forward, query, &block)
 
     # Traverses the committed elements for +key+ from back to front.
     #
     # @return [Enumerator, void]
-    def reverse_each(key, **query, &block) = traverse(:scan, key.to_s, :backward, query, &block)
+    def reverse_each(key, **query, &block) = traverse(:scan, key, :backward, query, &block)
   end
 end

@@ -110,29 +110,29 @@ module Prosody
     # Whether +member+ belongs to the committed set for +key+.
     #
     # @return [Boolean]
-    def include?(key, member) = @native.contains(key.to_s, member.to_s)
+    def include?(key, member) = @native.contains(key, member)
 
     alias_method :member?, :include?
 
     # Tests several members of the committed set for +key+ in one batch.
     #
     # @return [Array<Boolean>] one result per input member
-    def contains_many(key, members) = @native.contains_many(key.to_s, members.map(&:to_s))
+    def contains_many(key, members) = @native.contains_many(key, members)
 
     # Whether the committed set for +key+ has no members.
     #
     # @return [Boolean]
-    def empty?(key) = @native.is_empty(key.to_s)
+    def empty?(key) = @native.is_empty(key)
 
     # Traverses the committed members for +key+ in ascending order. Accepts
     # the query keywords documented on {State::Scanning}.
     #
     # @return [Enumerator, void]
-    def each(key, **query, &block) = traverse(:keys, key.to_s, :forward, query, &block)
+    def each(key, **query, &block) = traverse(:keys, key, :forward, query, &block)
 
     # Traverses the committed members for +key+ in descending order.
     #
     # @return [Enumerator, void]
-    def reverse_each(key, **query, &block) = traverse(:keys, key.to_s, :backward, query, &block)
+    def reverse_each(key, **query, &block) = traverse(:keys, key, :backward, query, &block)
   end
 end

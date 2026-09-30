@@ -175,7 +175,9 @@ RSpec.describe "Prosody published state (integration)", integration: true do
         subscribed_topics: [],
         probe_port: false
       ))
-      expect(reader.state(subsystem, definition).get("k1")).to eq({"v" => 1})
+      published = reader.state(subsystem, definition)
+      expect(published.get("k1")).to eq({"v" => 1})
+      expect { published.get(:k1) }.to raise_error(TypeError)
     end
   end
 end
