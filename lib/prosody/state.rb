@@ -208,7 +208,6 @@ module Prosody
       #
       # @param definition [StateDefinition] a frozen collection definition
       # @return [ValueState, MapState, SetState, DequeState] the typed handle
-      # @raise [TransientStateError] if the definition's kind/payload is unknown
       # @raise [PermanentStateError] if the collection name is unregistered or
       #   its registered identity mismatches
       def state(definition)
