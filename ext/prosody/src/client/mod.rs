@@ -109,16 +109,12 @@ impl Client {
         };
 
         let config_hash: Value = config_obj.funcall(id!(ruby, "to_hash"), ())?;
-        let native_config = NativeConfiguration::from_value(ruby, config_hash)?;
+        let native_config: NativeConfiguration = deserialize(ruby, config_hash)?;
         let config_ref = &native_config;
+        let arg_error = |error: String| Error::new(ruby.exception_arg_error(), error);
 
-        let mode: Mode = config_ref
-            .try_into()
-            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
-
-        let consumer_builders: ConsumerBuilders = config_ref
-            .try_into()
-            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
+        let mode: Mode = config_ref.try_into().map_err(arg_error)?;
+        let consumer_builders: ConsumerBuilders = config_ref.try_into().map_err(arg_error)?;
 
         let bridge = BRIDGE
             .get()
@@ -127,12 +123,9 @@ impl Client {
                 "Bridge not initialized",
             ))?
             .clone();
-        let cassandra: CassandraConfigurationBuilder = config_ref
-            .try_into()
-            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
-        let mut producer: ProducerConfigurationBuilder = config_ref
-            .try_into()
-            .map_err(|error: String| Error::new(ruby.exception_arg_error(), error))?;
+        let cassandra: CassandraConfigurationBuilder = config_ref.try_into().map_err(arg_error)?;
+        let mut producer: ProducerConfigurationBuilder =
+            config_ref.try_into().map_err(arg_error)?;
         let client = bridge
             .wait_for(
                 ruby,

@@ -7,7 +7,6 @@
 //! builders, and `state` for keyed state.
 
 use crate::util::seconds;
-use magnus::{Error, Ruby, Value};
 use prosody::PeerConfiguration;
 use prosody::PeerEndpoint;
 use prosody::consumer::ConsumerConfigurationBuilder;
@@ -16,7 +15,6 @@ use prosody::high_level::ConsumerBuilders;
 use prosody::high_level::mode::Mode;
 use prosody::loader::KafkaLoaderConfiguration;
 use serde::{Deserialize, Deserializer};
-use serde_magnus::deserialize;
 use serde_untagged::UntaggedEnumVisitor;
 use state::{ReadCacheConfig, StateCollectionConfig, build_keyed_state_config};
 use std::net::SocketAddr;
@@ -267,20 +265,8 @@ pub enum ProbePort {
 }
 
 impl<'de> Deserialize<'de> for ProbePort {
-    /// Deserializes a probe port configuration from various possible input
-    /// formats.
-    ///
-    /// # Arguments
-    ///
-    /// * `deserializer` - The deserializer to use
-    ///
-    /// # Returns
-    ///
-    /// A `ProbePort` enum variant based on the input:
-    /// - If a u16 is provided, it returns `ProbePort::Configured(port)`
-    /// - If a boolean `true` is provided, it returns `ProbePort::Unconfigured`
-    /// - If a boolean `false` is provided, it returns `ProbePort::Disabled`
-    /// - If nothing is provided, it returns `ProbePort::Unconfigured`
+    /// Reads a port number as `Configured`, `false` as `Disabled`, and `true`
+    /// or `nil` as `Unconfigured`.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -299,46 +285,10 @@ impl<'de> Deserialize<'de> for ProbePort {
     }
 }
 
-impl NativeConfiguration {
-    /// Converts a Ruby value into a `NativeConfiguration`.
-    ///
-    /// # Arguments
-    ///
-    /// * `ruby` - Reference to the Ruby VM
-    /// * `val` - The Ruby value to convert
-    ///
-    /// # Returns
-    ///
-    /// The converted `NativeConfiguration` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a Magnus error if deserialization fails
-    pub fn from_value(ruby: &Ruby, val: Value) -> Result<Self, Error> {
-        deserialize(ruby, val)
-    }
-}
-
 impl<'a> TryFrom<&'a NativeConfiguration> for Mode {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a Prosody
-    /// Mode.
-    ///
-    /// This extracts the mode setting from the configuration and converts it
-    /// to a Prosody Mode enum value.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// The corresponding `Mode` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a String error if the mode is unrecognized
+    /// Reads the processing mode. An unrecognized mode fails.
     fn try_from(value: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let Some(mode_str) = value.mode.as_deref() else {
             return Ok(Mode::default());
@@ -356,30 +306,12 @@ impl<'a> TryFrom<&'a NativeConfiguration> for Mode {
 impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerBuilders {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `ConsumerBuilders`.
-    ///
-    /// This creates all the consumer-related configuration builders from
-    /// the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A `ConsumerBuilders` containing all consumer-related configuration
-    /// builders if successful
+    /// Builds every consumer builder from the configuration.
     ///
     /// # Errors
     ///
-    /// Returns a `String` error if:
-    /// - The telemetry emitter configuration cannot be built (e.g. an
-    ///   environment variable contains an unparseable value).
-    /// - `message_spans` or `timer_spans` contains an unrecognized value
-    ///   (expected `"child"` or `"follows_from"`).
-    /// - The Kafka loader configuration cannot be built (e.g. a tuning value
-    ///   fails validation).
+    /// Fails on a bad setting, for example an unrecognized `message_spans` or
+    /// `timer_spans` value, a bad loader value, or a bad peer address.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut consumer: ConsumerConfigurationBuilder = config.try_into()?;
 

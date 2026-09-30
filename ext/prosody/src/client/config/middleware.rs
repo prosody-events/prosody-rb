@@ -16,24 +16,7 @@ use std::num::NonZeroUsize;
 impl<'a> TryFrom<&'a NativeConfiguration> for RetryConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `RetryConfigurationBuilder`.
-    ///
-    /// This takes the relevant retry settings from the configuration and
-    /// sets them on a new `RetryConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `RetryConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the retry settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -54,19 +37,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for RetryConfigurationBuilder {
 }
 
 impl<'a> From<&'a NativeConfiguration> for FailureTopicConfigurationBuilder {
-    /// Converts a `NativeConfiguration` reference into a
-    /// `FailureTopicConfigurationBuilder`.
-    ///
-    /// This takes the relevant failure topic settings from the configuration
-    /// and sets them on a new `FailureTopicConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `FailureTopicConfigurationBuilder`
+    /// Reads the failure topic setting.
     fn from(config: &'a NativeConfiguration) -> Self {
         let mut builder = Self::default();
 
@@ -81,24 +52,7 @@ impl<'a> From<&'a NativeConfiguration> for FailureTopicConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `SchedulerConfigurationBuilder`.
-    ///
-    /// This takes the relevant scheduler settings from the configuration and
-    /// sets them on a new `SchedulerConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `SchedulerConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the scheduler settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -129,24 +83,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for SchedulerConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for MonopolizationConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `MonopolizationConfigurationBuilder`.
-    ///
-    /// This takes the relevant monopolization settings from the configuration
-    /// and sets them on a new `MonopolizationConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `MonopolizationConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the monopolization settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -173,24 +110,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for MonopolizationConfigurationBuilder
 impl<'a> TryFrom<&'a NativeConfiguration> for DeferConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `DeferConfigurationBuilder`.
-    ///
-    /// This takes the relevant defer settings from the configuration and
-    /// sets them on a new `DeferConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `DeferConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the defer settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -225,24 +145,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for DeferConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `TimeoutConfigurationBuilder`.
-    ///
-    /// This takes the relevant timeout settings from the configuration and
-    /// sets them on a new `TimeoutConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `TimeoutConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the handler timeout setting.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -257,28 +160,8 @@ impl<'a> TryFrom<&'a NativeConfiguration> for TimeoutConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for DeduplicationConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `DeduplicationConfigurationBuilder`.
-    ///
-    /// This takes the relevant deduplication settings from the configuration
-    /// and sets them on a new `DeduplicationConfigurationBuilder` instance.
-    ///
-    /// Core deduplication is mandatory, so its cache capacity is a
-    /// `NonZeroUsize`. An `idempotence_cache_size` of `0` cannot convert to
-    /// that type, so the conversion fails.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `DeduplicationConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if `idempotence_cache_size` is `0`, or if
-    /// `idempotence_ttl` is negative, not finite, or too large.
+    /// Reads the deduplication settings. Core deduplication is mandatory, so an
+    /// `idempotence_cache_size` of `0` fails.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 

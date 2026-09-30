@@ -11,24 +11,7 @@ use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
 impl<'a> TryFrom<&'a NativeConfiguration> for ProducerConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `ProducerConfigurationBuilder`.
-    ///
-    /// This takes the relevant producer settings from the configuration and
-    /// sets them on a new `ProducerConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `ProducerConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the Kafka producer settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -59,24 +42,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ProducerConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `ConsumerConfigurationBuilder`.
-    ///
-    /// This takes the relevant consumer settings from the configuration and
-    /// sets them on a new `ConsumerConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `ConsumerConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the Kafka consumer settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -147,24 +113,7 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for CassandraConfigurationBuilder {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `CassandraConfigurationBuilder`.
-    ///
-    /// This takes the relevant Cassandra settings from the configuration and
-    /// sets them on a new `CassandraConfigurationBuilder` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `CassandraConfigurationBuilder` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a duration is negative, not finite, or too
-    /// large.
+    /// Reads the Cassandra settings.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::default();
 
@@ -203,26 +152,8 @@ impl<'a> TryFrom<&'a NativeConfiguration> for CassandraConfigurationBuilder {
 impl<'a> TryFrom<&'a NativeConfiguration> for TelemetryEmitterConfiguration {
     type Error = String;
 
-    /// Attempts to convert a `NativeConfiguration` reference into a
-    /// `TelemetryEmitterConfiguration`.
-    ///
-    /// This takes the relevant telemetry emitter settings from the
-    /// configuration and constructs a `TelemetryEmitterConfiguration`,
-    /// falling back to environment-variable-aware defaults for any unset
+    /// Reads the telemetry emitter settings. Environment variables fill unset
     /// fields.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The configuration to convert
-    ///
-    /// # Returns
-    ///
-    /// A configured `TelemetryEmitterConfiguration` if successful
-    ///
-    /// # Errors
-    ///
-    /// Returns a `String` error if a related environment variable contains an
-    /// unparseable value.
     fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
         let mut builder = Self::builder();
 
