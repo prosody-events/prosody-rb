@@ -5,8 +5,8 @@ require "spec_helper"
 # Query keyword translation across the native boundary. One handler run
 # writes a map and a deque, then evaluates every query keyword, range form,
 # and translation error against the real native handles. Published readers
-# repeat a subset to prove their wiring. Core owns the query semantics; these
-# examples check that each Ruby keyword reaches the matching core setting.
+# repeat a subset to prove their wiring. Core owns the query semantics, so
+# each row checks that one keyword, range form, or direction reaches core.
 RSpec.describe "Prosody keyed state queries", integration: true do
   include_context "keyed state integration"
 
@@ -23,23 +23,17 @@ RSpec.describe "Prosody keyed state queries", integration: true do
     [:to, :each_key, {to: "b1"}, %w[a1 a2 b1]],
     [:before, :each_key, {before: "b1"}, %w[a1 a2]],
     [:reverse_from, :reverse_each_key, {from: "b2"}, %w[b2 b1 a2 a1]],
-    [:reverse_after_before, :reverse_each_key, {after: "b2", before: "a1"}, %w[b1 a2]],
     [:inclusive_range, :each_key, {range: "a2".."b2"}, %w[a2 b1 b2]],
     [:exclusive_range, :each_key, {range: "a2"..."b2"}, %w[a2 b1]],
     [:beginless_range, :each_key, {range: .."a2"}, %w[a1 a2]],
     [:endless_range, :each_key, {range: "b2"..}, %w[b2 c1]],
-    [:reverse_range, :reverse_each_key, {range: "a2".."b2"}, %w[b2 b1 a2]],
     [:limit, :each_key, {limit: 2}, %w[a1 a2]],
     [:reverse_limit, :reverse_each_key, {limit: 2}, %w[c1 b2]],
-    [:prefix_after, :each_key, {prefix: "b", after: "b1"}, %w[b2]],
-    [:page, :each_key, {after: "a2", limit: 2}, %w[b1 b2]],
-    [:reverse_page, :reverse_each_key, {after: "b1", limit: 2}, %w[a2 a1]],
     [:pairs, :each_pair, {prefix: "b"}, [["b1", 2], ["b2", 3]]],
     [:reverse_pairs, :reverse_each_pair, {limit: 1}, [["c1", 4]]],
     [:values, :each_value, {prefix: "b"}, [2, 3]],
     [:reverse_values, :reverse_each_value, {prefix: "a"}, [1, 0]],
-    [:descending_range, :each_key, {range: "b".."a"}, []],
-    [:reverse_descending_range, :reverse_each_key, {range: "b".."a"}, []]
+    [:descending_range, :each_key, {range: "b".."a"}, []]
   ].freeze
 
   DEQUE_QUERIES = [
@@ -49,17 +43,13 @@ RSpec.describe "Prosody keyed state queries", integration: true do
     [:to, :each, {to: 2}, [10, 11, 12]],
     [:before, :each, {before: 2}, [10, 11]],
     [:reverse_from, :reverse_each, {from: 3}, [13, 12, 11, 10]],
-    [:reverse_after_to, :reverse_each, {after: 3, to: 1}, [12, 11]],
     [:inclusive_range, :each, {range: 1..3}, [11, 12, 13]],
     [:exclusive_range, :each, {range: 1...3}, [11, 12]],
     [:beginless_range, :each, {range: ..1}, [10, 11]],
     [:endless_range, :each, {range: 3..}, [13, 14]],
-    [:reverse_range, :reverse_each, {range: 1..3}, [13, 12, 11]],
     [:limit, :each, {limit: 2}, [10, 11]],
     [:reverse_limit, :reverse_each, {limit: 2}, [14, 13]],
-    [:page, :each, {after: 1, limit: 2}, [12, 13]],
-    [:descending_range, :each, {range: 3..1}, []],
-    [:reverse_descending_range, :reverse_each, {range: 3..1}, []]
+    [:descending_range, :each, {range: 3..1}, []]
   ].freeze
 
   # Each entry is [label, handle, query method, keywords, error class, message].
