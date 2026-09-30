@@ -182,6 +182,9 @@ module Prosody
   module State
     module Reading
       # Opens a read-only view of a published JSON or set collection.
+      #
+      # @raise [TransientStateError, PermanentStateError] if Prosody cannot
+      #   open the reader, for example for a zero +read_cache+
       def state(subsystem, definition)
         access = definition.access
         if access.published_vend_method.nil? || access.published_wrapper.nil?

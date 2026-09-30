@@ -5,11 +5,13 @@
 
 use super::config::read_cache_policy;
 use super::{Client, RubyHandler};
+use crate::handler::state_error;
 use crate::published::{
     NativePublishedDeque, NativePublishedMap, NativePublishedSet, NativePublishedValue, Reads,
 };
 use magnus::{Error, Ruby, Value};
-use prosody::high_level::erased::{ErasedReadCache, SharedHighLevelClient};
+use prosody::high_level::HighLevelClientError;
+use prosody::high_level::erased::{ErasedReadCache, ErasedReaderBuildError, SharedHighLevelClient};
 use serde_magnus::deserialize;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -17,7 +19,8 @@ use tracing::Span;
 
 /// Opens one published-state reader, and returns it with the client's
 /// bridge, propagator, and fork guard. `open` receives the shared client and
-/// the resolved cache policy.
+/// the resolved cache policy. A state reader error raises the matching typed
+/// state error. Any other open failure raises `RuntimeError`.
 fn open_reader<F, Fut, R, E>(
     ruby: &Ruby,
     this: &Client,
@@ -26,7 +29,7 @@ fn open_reader<F, Fut, R, E>(
 ) -> Result<(R, Reads), Error>
 where
     F: FnOnce(SharedHighLevelClient<RubyHandler>, ErasedReadCache) -> Fut,
-    Fut: Future<Output = Result<R, E>> + Send + 'static,
+    Fut: Future<Output = Result<R, ErasedReaderBuildError<E>>> + Send + 'static,
     R: Send,
     E: Display + Send,
 {
@@ -36,7 +39,12 @@ where
     let reader = this
         .bridge
         .wait_for(ruby, open(this.inner.clone(), cache), Span::current())?
-        .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
+        .map_err(|error| match error {
+            ErasedReaderBuildError::Client(HighLevelClientError::StateReader(error)) => {
+                state_error(ruby, &error.into())
+            }
+            error => Error::new(ruby.exception_runtime_error(), error.to_string()),
+        })?;
     let reads = Reads {
         bridge: this.bridge.clone(),
         propagator: Arc::clone(&this.propagator),

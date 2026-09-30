@@ -65,13 +65,15 @@ RSpec.describe "Prosody keyed state" do
       end
     end
 
-    it "rejects an ambiguous published-read cache policy" do
+    it "maps a published-read cache policy when the reader opens" do
       error = client_error(state_read_cache: true)
       expect(error.message).to match(/state_read_cache.*ambiguous/)
 
       client = Prosody::Client.new(mock: true, group_id: "state-spec", bootstrap_servers: "localhost:9094")
       expect { client.state(:accounts, Prosody.value("v", read_cache: true)) }
         .to raise_error(ArgumentError, /read_cache.*ambiguous/)
+      expect { client.state(:accounts, Prosody.value("v", read_cache: 0)) }
+        .to raise_error(Prosody::PermanentStateError, /cache ttl is zero/)
       expect(client.state(:accounts, Prosody.value("v", read_cache: Rational(1, 2)))).to be_a(Prosody::PublishedValue)
     ensure
       client&.shutdown
