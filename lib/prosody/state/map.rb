@@ -95,7 +95,7 @@ module Prosody
     # @yieldparam value [Object]
     # @return [Enumerator, void]
     # @raise [ArgumentError, TypeError] if a query keyword is invalid
-    def each_pair(**query, &block) = traverse(:forward, query, &block)
+    def each_pair(**query, &block) = traverse(:scan, :forward, query, &block)
 
     # Traverses the live entries in reverse key order, yielding `key, value`.
     #
@@ -103,7 +103,7 @@ module Prosody
     # @yieldparam key [String]
     # @yieldparam value [Object]
     # @return [Enumerator, void]
-    def reverse_each_pair(**query, &block) = traverse(:backward, query, &block)
+    def reverse_each_pair(**query, &block) = traverse(:scan, :backward, query, &block)
 
     # Traverses the live keys in key order, yielding each key (mirrors
     # +Hash#each_key+). The key scan skips value decode and the resolver — a
@@ -116,14 +116,14 @@ module Prosody
     # @param query [Hash] optional query keywords, as on {#each_pair}
     # @yieldparam key [String]
     # @return [Enumerator, void]
-    def each_key(**query, &block) = traverse_keys(:forward, query, &block)
+    def each_key(**query, &block) = traverse(:keys, :forward, query, &block)
 
     # Traverses the live keys in reverse key order, yielding each key.
     #
     # @param query [Hash] optional query keywords, as on {#each_pair}
     # @yieldparam key [String]
     # @return [Enumerator, void]
-    def reverse_each_key(**query, &block) = traverse_keys(:backward, query, &block)
+    def reverse_each_key(**query, &block) = traverse(:keys, :backward, query, &block)
 
     # Traverses the live values in key order (mirrors +Hash#each_value+).
     #
@@ -256,29 +256,6 @@ module Prosody
         end
       end
     end
-
-    private
-
-    def traverse(direction, query)
-      return enum_for(:traverse, direction, query) unless block_given?
-
-      # Yield the [key, value] pair as a single Array, matching Hash#each_pair:
-      # a two-parameter block auto-splats it (|k, v|), a one-parameter block
-      # receives the pair (|pair|), and the no-block Enumerator yields pairs.
-      scan_each(direction, query) { |pair| yield pair }
-    end
-
-    def traverse_keys(direction, query)
-      return enum_for(:traverse_keys, direction, query) unless block_given?
-
-      scan_each(direction, query, :keys) { |key| yield key }
-    end
-
-    def traverse_values(direction, query)
-      return enum_for(:traverse_values, direction, query) unless block_given?
-
-      scan_each(direction, query) { |entry| yield entry[1] }
-    end
   end
 
   # A read-only view of a published map, opened by
@@ -324,52 +301,32 @@ module Prosody
     # keywords documented on {State::Scanning}.
     #
     # @return [Enumerator, void]
-    def each_pair(key, **query, &block) = traverse(key, :forward, query, &block)
+    def each_pair(key, **query, &block) = traverse(:scan, key.to_s, :forward, query, &block)
 
     # Traverses the committed entries for +key+ in reverse key order.
     #
     # @return [Enumerator, void]
-    def reverse_each_pair(key, **query, &block) = traverse(key, :backward, query, &block)
+    def reverse_each_pair(key, **query, &block) = traverse(:scan, key.to_s, :backward, query, &block)
 
     # Traverses the committed map keys for +key+ in key order.
     #
     # @return [Enumerator, void]
-    def each_key(key, **query, &block) = traverse_keys(key, :forward, query, &block)
+    def each_key(key, **query, &block) = traverse(:keys, key.to_s, :forward, query, &block)
 
     # Traverses the committed map keys for +key+ in reverse key order.
     #
     # @return [Enumerator, void]
-    def reverse_each_key(key, **query, &block) = traverse_keys(key, :backward, query, &block)
+    def reverse_each_key(key, **query, &block) = traverse(:keys, key.to_s, :backward, query, &block)
 
     # Traverses the committed values for +key+ in key order.
     #
     # @return [Enumerator, void]
-    def each_value(key, **query, &block) = traverse_values(key, :forward, query, &block)
+    def each_value(key, **query, &block) = traverse_values(key.to_s, :forward, query, &block)
 
     # Traverses the committed values for +key+ in reverse key order.
     #
     # @return [Enumerator, void]
-    def reverse_each_value(key, **query, &block) = traverse_values(key, :backward, query, &block)
+    def reverse_each_value(key, **query, &block) = traverse_values(key.to_s, :backward, query, &block)
     alias_method :each, :each_pair
-
-    private
-
-    def traverse(key, direction, query)
-      return enum_for(:traverse, key, direction, query) unless block_given?
-
-      scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield entry }
-    end
-
-    def traverse_keys(key, direction, query)
-      return enum_for(:traverse_keys, key, direction, query) unless block_given?
-
-      scan_items(@native.keys(key.to_s, direction, query)) { |map_key| yield map_key }
-    end
-
-    def traverse_values(key, direction, query)
-      return enum_for(:traverse_values, key, direction, query) unless block_given?
-
-      scan_items(@native.scan(key.to_s, direction, query)) { |entry| yield entry[1] }
-    end
   end
 end

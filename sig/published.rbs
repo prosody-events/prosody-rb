@@ -64,12 +64,6 @@ module Prosody
 
     private
     def initialize: (NativePublishedMap native) -> void
-    def traverse: (_ToS key, Symbol direction, query_options query) { ([String, V]) -> void } -> void
-                | (_ToS key, Symbol direction, query_options query) -> Enumerator[[String, V], void]
-    def traverse_keys: (_ToS key, Symbol direction, query_options query) { (String) -> void } -> void
-                     | (_ToS key, Symbol direction, query_options query) -> Enumerator[String, void]
-    def traverse_values: (_ToS key, Symbol direction, query_options query) { (V) -> void } -> void
-                       | (_ToS key, Symbol direction, query_options query) -> Enumerator[V, void]
   end
 
   class PublishedSet
@@ -86,8 +80,6 @@ module Prosody
 
     private
     def initialize: (NativePublishedSet native) -> void
-    def traverse: (_ToS key, Symbol direction, query_options query) { (String) -> void } -> void
-                | (_ToS key, Symbol direction, query_options query) -> Enumerator[String, void]
   end
 
   class PublishedDeque[T = json_value]
@@ -106,7 +98,5 @@ module Prosody
 
     private
     def initialize: (NativePublishedDeque native) -> void
-    def traverse: (_ToS key, Symbol direction, query_options query) { (T) -> void } -> void
-                | (_ToS key, Symbol direction, query_options query) -> Enumerator[T, void]
   end
 end

@@ -85,22 +85,14 @@ module Prosody
     # @yieldparam member [String]
     # @return [Enumerator, void]
     # @raise [ArgumentError, TypeError] if a query keyword is invalid
-    def each(**query, &block) = traverse(:forward, query, &block)
+    def each(**query, &block) = traverse(:keys, :forward, query, &block)
 
     # Traverses the live members in descending order.
     #
     # @param query [Hash] optional query keywords, as on {#each}
     # @yieldparam member [String]
     # @return [Enumerator, void]
-    def reverse_each(**query, &block) = traverse(:backward, query, &block)
-
-    private
-
-    def traverse(direction, query)
-      return enum_for(:traverse, direction, query) unless block_given?
-
-      scan_each(direction, query, :keys) { |member| yield member }
-    end
+    def reverse_each(**query, &block) = traverse(:keys, :backward, query, &block)
   end
 
   # A read-only view of a published set, opened by
@@ -136,19 +128,11 @@ module Prosody
     # the query keywords documented on {State::Scanning}.
     #
     # @return [Enumerator, void]
-    def each(key, **query, &block) = traverse(key, :forward, query, &block)
+    def each(key, **query, &block) = traverse(:keys, key.to_s, :forward, query, &block)
 
     # Traverses the committed members for +key+ in descending order.
     #
     # @return [Enumerator, void]
-    def reverse_each(key, **query, &block) = traverse(key, :backward, query, &block)
-
-    private
-
-    def traverse(key, direction, query)
-      return enum_for(:traverse, key, direction, query) unless block_given?
-
-      scan_items(@native.keys(key.to_s, direction, query)) { |member| yield member }
-    end
+    def reverse_each(key, **query, &block) = traverse(:keys, key.to_s, :backward, query, &block)
   end
 end

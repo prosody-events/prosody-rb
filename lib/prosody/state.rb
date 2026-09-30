@@ -246,16 +246,14 @@ module Prosody
     module Scanning
       private
 
-      # Opens a native scan in `direction` with the `query` keywords, yields
-      # each item, and closes the scan via `ensure` on stop or exception. The
-      # public traversal methods only pass `:forward`/`:backward`. `opener`
-      # selects the native cursor seam — the default `:scan` yields values (or
-      # `[key, value]` pairs), `:keys` yields bare keys.
-      def scan_each(direction, query, opener = :scan)
-        scan_items(@native.public_send(opener, direction, query)) { |item| yield item }
-      end
+      # Opens the native cursor `opener` (`:scan` or `:keys`) with `args`,
+      # yields each item, and closes the cursor via `ensure` on stop or
+      # exception. Without a block, returns an Enumerator. A map scan yields
+      # each `[key, value]` pair as one Array, as `Hash#each_pair` does.
+      def traverse(opener, *args)
+        return enum_for(:traverse, opener, *args) unless block_given?
 
-      def scan_items(scan)
+        scan = @native.public_send(opener, *args)
         # `nil` is the exhaustion sentinel (unambiguous under the null ban);
         # terminate on it explicitly rather than on falsiness, so a legal
         # stored `false` (or a `[key, false]` pair, always a truthy Array)
@@ -264,7 +262,14 @@ module Prosody
           yield item
         end
       ensure
-        scan.close
+        scan&.close
+      end
+
+      # Traverses a map scan like {#traverse} and yields only each value.
+      def traverse_values(*args)
+        return enum_for(:traverse_values, *args) unless block_given?
+
+        traverse(:scan, *args) { |entry| yield entry[1] }
       end
     end
   end

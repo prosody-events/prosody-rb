@@ -101,14 +101,14 @@ module Prosody
     # @yieldparam element [Object]
     # @return [Enumerator, void]
     # @raise [ArgumentError, TypeError] if a query keyword is invalid
-    def each(**query, &block) = traverse(:forward, query, &block)
+    def each(**query, &block) = traverse(:scan, :forward, query, &block)
 
     # Traverses the live elements in reverse index order.
     #
     # @param query [Hash] optional position keywords, as on {#each}
     # @yieldparam element [Object]
     # @return [Enumerator, void]
-    def reverse_each(**query, &block) = traverse(:backward, query, &block)
+    def reverse_each(**query, &block) = traverse(:scan, :backward, query, &block)
 
     # --- idiomatic Array-style conveniences -----------------------------
     # Composed from the canonical ops above; bounded reads only (no +to_a+,
@@ -211,12 +211,6 @@ module Prosody
       resolved = @native.len + index
       resolved.negative? ? nil : @native.get(resolved)
     end
-
-    def traverse(direction, query)
-      return enum_for(:traverse, direction, query) unless block_given?
-
-      scan_each(direction, query) { |item| yield item }
-    end
   end
 
   # A read-only view of a published deque, opened by
@@ -272,19 +266,11 @@ module Prosody
     # traversal accepts the position keywords documented on {State::Scanning}.
     #
     # @return [Enumerator, void]
-    def each(key, **query, &block) = traverse(key, :forward, query, &block)
+    def each(key, **query, &block) = traverse(:scan, key.to_s, :forward, query, &block)
 
     # Traverses the committed elements for +key+ from back to front.
     #
     # @return [Enumerator, void]
-    def reverse_each(key, **query, &block) = traverse(key, :backward, query, &block)
-
-    private
-
-    def traverse(key, direction, query)
-      return enum_for(:traverse, key, direction, query) unless block_given?
-
-      scan_items(@native.scan(key.to_s, direction, query)) { |item| yield item }
-    end
+    def reverse_each(key, **query, &block) = traverse(:scan, key.to_s, :backward, query, &block)
   end
 end
