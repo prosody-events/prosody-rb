@@ -3,16 +3,13 @@
 require "securerandom"
 require "timeout"
 
-# Shared harness for the keyed-state specs.
-#
-# Reuses the same Queue + Timeout observation idiom as
-# `client_spec.rb`'s `MessageStream`, giving the state specs a single home for
-# the sink and the per-example topic/collection naming helpers. Auto-loaded by
+# Shared harness for the integration specs: the observation sink and the
+# per-example topic and collection naming helpers. Auto-loaded by
 # `spec_helper.rb`'s `support/*.rb` glob and mixed into every example group via
 # `config.include KeyedStateSupport`.
 module KeyedStateSupport
-  # A thread-safe observation sink. Handlers push observation hashes and the
-  # example drains them under `Timeout.timeout`, exactly like `MessageStream`.
+  # A thread-safe observation sink. Handlers push observations, and the example
+  # drains them under `Timeout.timeout`.
   class StateSink
     def initialize
       @queue = Queue.new
@@ -64,8 +61,7 @@ end
 
 # Shared setup for the keyed-state integration specs: a fresh per-example topic
 # (4 partitions), an admin client, a sink, per-example client tracking, and
-# `after` teardown. Mirrors client_spec.rb's topic lifecycle; kept in one place
-# so the scenario/lifecycle/scan specs do not each re-declare it.
+# `after` teardown.
 RSpec.shared_context "keyed state integration" do
   let(:topic) { random_state_topic }
   let(:sink) { new_sink }

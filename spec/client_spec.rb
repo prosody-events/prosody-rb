@@ -68,7 +68,7 @@ RSpec.describe Prosody::Client, integration: true do
       end
 
       # Subscribe with a handler
-      handler = handler_class.new(message_stream)
+      handler = handler_class.new(sink)
       client.subscribe(handler)
 
       # Verify subscription state
@@ -99,7 +99,7 @@ RSpec.describe Prosody::Client, integration: true do
       end
 
       # Subscribe with handler
-      handler = handler_class.new(message_stream)
+      handler = handler_class.new(sink)
       client.subscribe(handler)
 
       # Send a test message
@@ -111,7 +111,7 @@ RSpec.describe Prosody::Client, integration: true do
       client.send_message(topic, test_message[:key], test_message[:payload])
 
       # Wait for the message
-      received_messages = message_stream.wait_for_messages(1, TestConfig::MESSAGE_TIMEOUT)
+      received_messages = sink.wait(1)
       received_message = received_messages.first
 
       # Verify the message
@@ -136,9 +136,9 @@ RSpec.describe Prosody::Client, integration: true do
       end
     end
 
-    client.subscribe(handler_class.new(message_stream))
+    client.subscribe(handler_class.new(sink))
     client.excise(topic, "obsolete-key")
-    message = message_stream.wait_for_messages(1, TestConfig::MESSAGE_TIMEOUT).first
+    message = sink.wait(1).first
 
     expect(message.key).to eq("obsolete-key")
     expect(message).to be_a(Prosody::ExciseMessage)
@@ -162,7 +162,7 @@ RSpec.describe Prosody::Client, integration: true do
       end
 
       # Subscribe with handler
-      handler = handler_class.new(message_stream)
+      handler = handler_class.new(sink)
       client.subscribe(handler)
 
       # Prepare messages to send
@@ -180,7 +180,7 @@ RSpec.describe Prosody::Client, integration: true do
       end
 
       # Wait for all messages
-      received_messages = message_stream.wait_for_messages(messages_to_send.length, TestConfig::MESSAGE_TIMEOUT)
+      received_messages = sink.wait(messages_to_send.length)
 
       # Check message count
       expect(received_messages.length).to eq(messages_to_send.length)

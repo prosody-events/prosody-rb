@@ -182,13 +182,13 @@ RSpec.describe Prosody::Client, integration: true do
 
   # Test comprehensive timer functionality
   it "provides comprehensive timer scheduling operations" do
-    timer_stream = TimerEventStream.new
+    timer_stream = new_sink
     handler = create_timer_test_handler(timer_stream)
 
     client.subscribe(handler.new(timer_stream))
     send_timer_test_messages(client, topic)
 
-    timer_operations_data = timer_stream.wait_for_events(5, TestConfig::MESSAGE_TIMEOUT)
+    timer_operations_data = timer_stream.wait(5)
     verify_timer_operations(timer_operations_data)
   end
 
@@ -291,16 +291,16 @@ RSpec.describe Prosody::Client, integration: true do
 
   # Test that timers actually fire at the correct time
   it "fires timers at the correct time with proper Ruby Time objects" do
-    timer_stream = TimerEventStream.new
+    timer_stream = new_sink
     handler = create_timer_firing_test_handler(timer_stream)
 
     client.subscribe(handler.new(timer_stream))
     client.send_message(topic, "timer-fire-test", {action: "test_timer_firing"})
 
-    scheduling_events = timer_stream.wait_for_events(1, TestConfig::MESSAGE_TIMEOUT)
+    scheduling_events = timer_stream.wait(1)
     scheduled_event = verify_timer_scheduling_event(scheduling_events)
 
-    fired_events = timer_stream.wait_for_events(2, 5)
+    fired_events = timer_stream.wait(2, 5)
     verify_timer_firing_events(fired_events, scheduled_event)
   end
 end
