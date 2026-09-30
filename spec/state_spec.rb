@@ -174,13 +174,6 @@ RSpec.describe "Prosody keyed state" do
       expect(error).to be_a(Prosody::TransientError)
       expect(error.permanent?).to be(false)
     end
-
-    it "classifies NullValueError as a transient state error" do
-      error = Prosody::NullValueError.new("boom")
-      expect(error).to be_a(Prosody::TransientStateError)
-      expect(error).to be_a(Prosody::TransientError)
-      expect(error.permanent?).to be(false)
-    end
   end
 
   describe "definition constructors" do

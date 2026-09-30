@@ -47,7 +47,7 @@ module Prosody
     # @param key [String] the map key
     # @param value [Object] the value to store (JSON, or a message)
     # @return [void]
-    # @raise [NullValueError] if `value` is `nil` (use {#delete} to remove)
+    # @raise [PermanentStateError] if `value` is `nil` (use {#delete} to remove)
     def set(key, value) = @native.set(key, value)
 
     # Removes `key`.

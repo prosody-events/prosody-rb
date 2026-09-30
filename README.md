@@ -632,7 +632,7 @@ State operations look synchronous. They yield the current fiber while Prosody pe
 
 Map, set, and deque scans return enumerators when called without a block. Map keys and set members are strings. A set stores membership only, so it has no payload type.
 
-A value, map, or deque read returns `nil` when no value is present. Do not store `nil` as a value. Use `clear` or `delete` to remove a value.
+A value, map, or deque read returns `nil` when no value is present. Do not store `nil` as a value. A `nil` write fails with a `PermanentStateError`. Use `clear` (value, deque) or `delete` (map) to remove a value.
 
 A set handle mirrors Ruby's `Set`:
 
@@ -1301,8 +1301,7 @@ Traversal methods return an `Enumerator` without a block. Every traversal accept
 Errors:
 
 - `Prosody::TransientStateError < Prosody::TransientError`: Reports a keyed-state error that Prosody can retry.
-- `Prosody::PermanentStateError < Prosody::PermanentError`: Reports a keyed-state error that another attempt cannot resolve.
-- `Prosody::NullValueError < Prosody::TransientStateError`: raised when a `nil` is written; use `clear`/`delete` instead.
+- `Prosody::PermanentStateError < Prosody::PermanentError`: Reports a keyed-state error that another attempt cannot resolve, such as a `nil` write.
 
 Handler error types:
 

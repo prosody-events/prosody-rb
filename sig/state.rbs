@@ -10,20 +10,16 @@ module Prosody
 
   # --- error taxonomy -----------------------------------------------------
   # Raised for keyed-state failures a retry cannot resolve (unregistered
-  # collection, identity mismatch, duplicate registration, bad TTL). Never
+  # collection, identity mismatch, duplicate registration, bad TTL, JSON null
+  # write; use clear/delete to remove a value). Never
   # Terminal: core folds Terminal into Transient.
   class PermanentStateError < PermanentError
   end
 
   # Raised for keyed-state failures that may succeed on retry, plus every
-  # caller mistake (null write, wrong item shape, invalid index, invalid
-  # direction). Never Terminal.
+  # caller mistake the client detects (wrong item shape, invalid index,
+  # invalid direction). Never Terminal.
   class TransientStateError < TransientError
-  end
-
-  # Raised when a JSON null is written to a collection. Null is not storable
-  # (indistinguishable from absence); use clear/delete instead.
-  class NullValueError < TransientStateError
   end
 
   # Concrete immutable definition object returned by the constructor helpers.

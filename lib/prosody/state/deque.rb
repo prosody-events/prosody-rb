@@ -21,14 +21,14 @@ module Prosody
     #
     # @param value [Object] the element (JSON, or a message)
     # @return [void]
-    # @raise [NullValueError] if `value` is `nil`
+    # @raise [PermanentStateError] if `value` is `nil` (use {#clear} to delete)
     def push(value) = @native.push_back(value)
 
     # Prepends an element at the front.
     #
     # @param value [Object] the element (JSON, or a message)
     # @return [void]
-    # @raise [NullValueError] if `value` is `nil`
+    # @raise [PermanentStateError] if `value` is `nil` (use {#clear} to delete)
     def unshift(value) = @native.push_front(value)
 
     # Removes and returns the back element.

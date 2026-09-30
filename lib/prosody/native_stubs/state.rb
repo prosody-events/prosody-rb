@@ -26,7 +26,7 @@ module Prosody
     #
     # @param value [Object] the value to store
     # @return [void]
-    # @raise [NullValueError] if value is nil
+    # @raise [PermanentStateError] if value is nil
     # @raise [TransientStateError] if value cannot be represented
     def set(value)
       raise NotImplementedError, "This method is implemented natively in Rust"
@@ -120,7 +120,7 @@ module Prosody
     # @param key [String] the map key
     # @param value [Object] the value to store
     # @return [void]
-    # @raise [NullValueError] if value is nil
+    # @raise [PermanentStateError] if value is nil
     # @raise [TransientStateError] if value cannot be represented
     def set(key, value)
       raise NotImplementedError, "This method is implemented natively in Rust"
@@ -327,7 +327,7 @@ module Prosody
     #
     # @param value [Object] the element
     # @return [void]
-    # @raise [NullValueError] if value is nil
+    # @raise [PermanentStateError] if value is nil
     # @raise [TransientStateError] if value cannot be represented
     def push_back(value)
       raise NotImplementedError, "This method is implemented natively in Rust"
@@ -337,7 +337,7 @@ module Prosody
     #
     # @param value [Object] the element
     # @return [void]
-    # @raise [NullValueError] if value is nil
+    # @raise [PermanentStateError] if value is nil
     # @raise [TransientStateError] if value cannot be represented
     def push_front(value)
       raise NotImplementedError, "This method is implemented natively in Rust"

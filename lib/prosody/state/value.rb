@@ -25,7 +25,7 @@ module Prosody
     #
     # @param value [Object] the value to store (JSON, or a message)
     # @return [void]
-    # @raise [NullValueError] if `value` is `nil` (use {#clear} to delete)
+    # @raise [PermanentStateError] if `value` is `nil` (use {#clear} to delete)
     def set(value) = @native.set(value)
 
     # Buffers a clear of the value.

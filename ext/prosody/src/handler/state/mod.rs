@@ -62,11 +62,6 @@ fn transient_state_error(ruby: &Ruby, message: String) -> Error {
     ruby_error(ruby, "TransientStateError", message)
 }
 
-/// Builds a null-value error for a rejected JSON-null write.
-fn null_value_error(ruby: &Ruby, message: String) -> Error {
-    ruby_error(ruby, "NullValueError", message)
-}
-
 /// Converts an optional JSON item into a Ruby value or `nil`.
 fn json_or_nil(ruby: &Ruby, item: Option<JsonValue>) -> Result<Value, Error> {
     match item {
@@ -83,22 +78,14 @@ fn message_or_nil(ruby: &Ruby, item: Option<ConsumerMessage<JsonValue>>) -> Valu
     }
 }
 
-/// Converts a Ruby argument into a storable JSON item.
+/// Converts a Ruby argument into a JSON item.
 ///
 /// A value with no JSON representation is a caller mistake and rejects
-/// transient. JSON `null` is rejected with a [`crate::NullValueError`] naming
-/// the deletion verb via `null_advice`.
-fn json_write_item(ruby: &Ruby, value: Value, null_advice: &str) -> Result<JsonValue, Error> {
-    let value: JsonValue = deserialize(ruby, value).map_err(|error| {
+/// transient. Core rejects a JSON `null` write as permanent.
+fn json_write_item(ruby: &Ruby, value: Value) -> Result<JsonValue, Error> {
+    deserialize(ruby, value).map_err(|error| {
         transient_state_error(ruby, format!("value is not representable as JSON: {error}"))
-    })?;
-    if value.is_null() {
-        return Err(null_value_error(
-            ruby,
-            format!("JSON null is not a storable value{null_advice}"),
-        ));
-    }
-    Ok(value)
+    })
 }
 
 /// Converts a Ruby argument into a storable message item.
@@ -215,7 +202,7 @@ value_state!(
     NativeJsonValueState,
     "Prosody::NativeJsonValueState",
     JsonValue,
-    |ruby, value| json_write_item(ruby, value, "; use clear to remove the value"),
+    json_write_item,
     json_or_nil
 );
 value_state!(
@@ -336,7 +323,7 @@ map_state!(
     "Prosody::NativeJsonMapState",
     JsonValue,
     NativeJsonMapScan,
-    |ruby, value| json_write_item(ruby, value, "; use delete(key) to remove the entry"),
+    json_write_item,
     json_or_nil
 );
 map_state!(
@@ -448,7 +435,7 @@ deque_state!(
     "Prosody::NativeJsonDequeState",
     JsonValue,
     NativeJsonDequeScan,
-    |ruby, value| json_write_item(ruby, value, " in a deque"),
+    json_write_item,
     json_or_nil
 );
 deque_state!(

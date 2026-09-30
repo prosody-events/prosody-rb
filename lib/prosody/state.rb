@@ -3,7 +3,9 @@
 module Prosody
   # Base class for errors raised by keyed-state operations that will not
   # succeed on retry (an unregistered collection name, an identity mismatch, a
-  # duplicate registration, an invalid TTL).
+  # duplicate registration, an invalid TTL, a JSON `null` write). A `null` is
+  # not a storable value. Use `clear` (value, deque) or `delete` (map) to
+  # remove one.
   #
   # It subclasses {PermanentError} so a rethrown state error is classified as
   # permanent by the result bridge's `#permanent?` path with no bridge change.
@@ -12,26 +14,16 @@ module Prosody
   class PermanentStateError < PermanentError; end
 
   # Base class for errors raised by keyed-state operations that may succeed on
-  # retry. Every caller/input mistake (a null write, a wrong item shape, an
-  # invalid index, an invalid direction token, an unrepresentable value) is
-  # transient so the message retries and stays visible rather than being
-  # discarded.
+  # retry. Every caller/input mistake that the client detects (a wrong item
+  # shape, an invalid index, an invalid direction token, an unrepresentable
+  # value) is transient so the message retries and stays visible rather than
+  # being discarded.
   #
   # It subclasses {TransientError} so a rethrown state error is classified as
   # transient by the result bridge's `#permanent?` path with no bridge change.
   #
   # @see TransientError
   class TransientStateError < TransientError; end
-
-  # Raised when a JSON `null` is written to a collection. `null` is not a
-  # storable value (it is indistinguishable from absence), so the write is
-  # rejected and the stored value is left untouched. Use `clear`/`delete` to
-  # express deletion instead.
-  #
-  # It is transient (a caller mistake), so it retries and stays visible.
-  #
-  # @see TransientStateError
-  class NullValueError < TransientStateError; end
 
   # How a definition opens its handle and its published reader.
   StateAccess = Data.define(:vend_method, :wrapper, :published_vend_method, :published_wrapper)

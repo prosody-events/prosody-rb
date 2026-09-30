@@ -273,7 +273,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
   end
 
   describe "item 9: null-write rejection" do
-    it "rejects a JSON-null write with a transient NullValueError and leaves the store untouched" do
+    it "surfaces core's permanent rejection of a JSON-null write and leaves the store untouched" do
       value_def = Prosody.value(random_state_name("val"))
       deque_def = Prosody.deque(random_state_name("deq"))
       seeded = "seed-#{SecureRandom.hex(4)}"
@@ -305,9 +305,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
         rescue => e
           {
             threw: true,
-            transient: e.is_a?(Prosody::TransientStateError),
-            null_err: e.is_a?(Prosody::NullValueError),
-            msg: e.message
+            permanent: e.is_a?(Prosody::PermanentStateError)
           }
         end
       end
@@ -317,10 +315,8 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
       client.send_message(topic, "k1", {go: true})
       observation = sink.wait(1).first
-      expect(observation[:value]).to include(threw: true, transient: true, null_err: true)
-      expect(observation[:value][:msg]).to match(/clear/)
-      expect(observation[:deque]).to include(threw: true, transient: true)
-      expect(observation[:deque][:msg]).to match(/null/)
+      expect(observation[:value]).to eq(threw: true, permanent: true)
+      expect(observation[:deque]).to eq(threw: true, permanent: true)
       expect(observation[:after]).to eq(seeded)
     end
 
