@@ -38,7 +38,7 @@ jobs:
       release_created: ${{ inputs.mode == 'validate' || inputs.mode == 'retry' || steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Release Please Action
         if: inputs.mode == '' || inputs.mode == 'release-please'
         id: release
@@ -80,7 +80,7 @@ jobs:
     name: Build ${{ matrix.target.id }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Ruby & Rust
         uses: oxidize-rb/actions/setup-ruby-and-rust@v1
@@ -125,7 +125,7 @@ jobs:
             export CFLAGS_x86_64_pc_windows_gnu="-DERROR_COMMITMENT_MINIMUM=635"; fi
 
       - name: Upload cross-compiled gem
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target.id }}-gem
           path: ${{ steps.cross-gem.outputs.gem-path }}
@@ -137,7 +137,7 @@ jobs:
     name: Build source gem
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Ruby & Rust
         uses: oxidize-rb/actions/setup-ruby-and-rust@v1
@@ -158,7 +158,7 @@ jobs:
         run: bundle exec rake build
 
       - name: Upload source gem
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: source-gem
           path: pkg/*.gem
@@ -169,14 +169,14 @@ jobs:
       - build-cross-compiled-gems
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
           bundler-cache: true
       - name: Download gem artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-x86_64-gem
           path: ./gems
@@ -243,9 +243,9 @@ jobs:
       - build-cross-compiled-gems
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download gem artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-musl-x86_64-gem
           path: ./gems
@@ -311,9 +311,9 @@ jobs:
       - build-cross-compiled-gems
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download gem artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-aarch64-gem
           path: ./gems
@@ -380,9 +380,9 @@ jobs:
       - build-cross-compiled-gems
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download gem artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-musl-aarch64-gem
           path: ./gems
@@ -459,7 +459,7 @@ jobs:
       id-token: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./gems
           merge-multiple: true
@@ -470,7 +470,7 @@ jobs:
           ruby-version: '3.4'
 
       - name: Configure RubyGems credentials
-        uses: rubygems/configure-rubygems-credentials@v1.0.0
+        uses: rubygems/configure-rubygems-credentials@v2.1.0
 
       - name: Publish gems to RubyGems.org
         run: |
