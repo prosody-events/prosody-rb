@@ -413,5 +413,13 @@ RSpec.describe Prosody::Configuration do
     it "returns an empty hash when all values are nil" do
       expect(config.to_hash).to eq({})
     end
+
+    # An explicit send_timeout of nil turns the timeout off, so it stays in the
+    # hash. Another explicit nil means the option is not set.
+    it "keeps an explicit nil send_timeout" do
+      config.send_timeout = nil
+      config.group_id = nil
+      expect(config.to_hash).to eq({send_timeout: nil})
+    end
   end
 end

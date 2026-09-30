@@ -60,7 +60,7 @@ Set `subsystem` to make this client answer requests. Without it, the client cons
 
 | Option / Environment Variable           | Description                     | Default |
 |-----------------------------------------|---------------------------------|---------|
-| `send_timeout` / `PROSODY_SEND_TIMEOUT` | Give up sending after this long | 1s      |
+| `send_timeout` / `PROSODY_SEND_TIMEOUT` | Give up sending after this long. Pass `send_timeout: nil`, or set the environment value `none`, to retry a send until it succeeds. An omitted option uses the environment value or the default | 1s |
 
 ## Retry
 

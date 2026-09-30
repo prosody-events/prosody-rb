@@ -89,6 +89,17 @@ RSpec.describe Prosody::Client, integration: true do
       expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /statistics_interval/)
     end
 
+    # Core reads PROSODY_SEND_TIMEOUT only when send_timeout is not set. An
+    # unparseable environment value therefore fails only for an omitted option.
+    it "passes an explicit nil send_timeout to the producer as no timeout" do
+      previous = ENV["PROSODY_SEND_TIMEOUT"]
+      ENV["PROSODY_SEND_TIMEOUT"] = "not-a-duration"
+      expect { mock_client }.to raise_error(RuntimeError, /PROSODY_SEND_TIMEOUT/)
+      expect(mock_client(send_timeout: nil)).to be_a(Prosody::Client)
+    ensure
+      ENV["PROSODY_SEND_TIMEOUT"] = previous
+    end
+
     it "accepts a max_uncommitted above 65535" do
       expect(mock_client(max_uncommitted: 100_000)).to be_a(Prosody::Client)
     end

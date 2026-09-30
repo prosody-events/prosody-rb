@@ -109,7 +109,9 @@ module Prosody
     # When enabled, creates a mock Kafka implementation instead of connecting to real servers.
     config_param :mock, converter: ->(v) { v.nil? ? nil : !!v }
 
-    # Maximum time to wait for a send operation to complete (in seconds).
+    # Maximum time to wait for a send operation to complete (in seconds). An
+    # explicit nil turns the timeout off, so a send retries until it succeeds.
+    # When the option is absent, PROSODY_SEND_TIMEOUT or the default applies.
     config_param :send_timeout, converter: ->(v) { duration_converter(v) }
 
     # Threshold in seconds after which a stalled consumer is detected.
@@ -394,11 +396,13 @@ module Prosody
         end
       }
 
-    # Returns a Ruby hash with only non-nil values, suitable for Rust deserialization.
+    # Returns a Ruby hash of the set options, suitable for Rust
+    # deserialization. It removes nil values, except for an explicit
+    # send_timeout of nil, which turns the send timeout off.
     #
-    # @return [Hash] Configuration hash with all nil values removed
+    # @return [Hash] Configuration hash of the set options
     def to_hash
-      @config.dup.compact
+      @config.reject { |name, value| value.nil? && name != :send_timeout }
     end
   end
 end

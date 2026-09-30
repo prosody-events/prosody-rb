@@ -1,7 +1,7 @@
 //! Conversion of [`NativeConfiguration`] into the Kafka producer, Kafka
 //! consumer, Cassandra, and telemetry emitter builders.
 
-use super::{NativeConfiguration, ProbePort};
+use super::{NativeConfiguration, ProbePort, SendTimeout};
 use crate::util::seconds;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
@@ -36,8 +36,14 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ProducerConfigurationBuilder {
             builder.bootstrap_servers(bootstrap_servers.clone());
         }
 
-        if let Some(send_timeout) = &config.send_timeout {
-            builder.send_timeout(seconds("send_timeout", *send_timeout)?);
+        match config.send_timeout {
+            SendTimeout::Unset => {}
+            SendTimeout::Never => {
+                builder.send_timeout(None);
+            }
+            SendTimeout::Seconds(send_timeout) => {
+                builder.send_timeout(seconds("send_timeout", send_timeout)?);
+            }
         }
 
         if let Some(idempotence_cache_size) = &config.idempotence_cache_size {
