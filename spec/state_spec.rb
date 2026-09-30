@@ -335,7 +335,7 @@ RSpec.describe "Prosody keyed state" do
       end
     end
 
-    it "caches vended handles per kind/payload/name" do
+    it "caches vended handles per definition" do
       calls = []
       fake = build_fake_context(calls)
       first = fake.state(Prosody.value("cart"))

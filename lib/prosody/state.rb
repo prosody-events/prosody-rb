@@ -55,20 +55,21 @@ module Prosody
   # {Prosody::Client#state} uses it to open a published reader.
   StateDefinition = Data.define(:name, :kind, :payload, :ttl_seconds, :read_uncommitted,
     :published, :read_cache, :keyset_limit, :capacity, :access) do
+    # Every option defaults to +nil+, so a constructor passes only the
+    # options its kind takes.
+    def initialize(name:, kind:, access:, payload: nil, ttl_seconds: nil, read_uncommitted: nil,
+      published: nil, read_cache: nil, keyset_limit: nil, capacity: nil)
+      super
+    end
+
     # Serializes this definition into the native-registration hash, omitting
     # unset optionals so they fall back to the core defaults. A set has no
     # payload, so its hash has no payload key.
     #
     # @return [Hash] the registration hash for the native layer
     def to_state_config
-      config = {name: name, kind: kind}
-      config[:payload] = payload unless payload.nil?
-      config[:ttl_seconds] = ttl_seconds unless ttl_seconds.nil?
-      config[:read_uncommitted] = read_uncommitted unless read_uncommitted.nil?
-      config[:published] = published unless published.nil?
-      config[:keyset_limit] = keyset_limit unless keyset_limit.nil?
-      config[:capacity] = capacity unless capacity.nil?
-      config
+      to_h.slice(:name, :kind, :payload, :ttl_seconds, :read_uncommitted, :published, :keyset_limit,
+        :capacity).compact
     end
   end
 
@@ -83,10 +84,8 @@ module Prosody
   #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)
-    StateDefinition.new(name: name.to_s, kind: "value", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: nil, capacity: nil,
-      access: VALUE_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "value", payload: "json", ttl_seconds: ttl,
+      read_uncommitted: read_uncommitted, published: published, read_cache: read_cache, access: VALUE_ACCESS)
   end
 
   # Defines a `String`-keyed ordered map JSON collection.
@@ -101,10 +100,9 @@ module Prosody
   #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
-    StateDefinition.new(name: name.to_s, kind: "map", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
-      access: MAP_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "map", payload: "json", ttl_seconds: ttl,
+      keyset_limit: keyset_limit, read_uncommitted: read_uncommitted, published: published,
+      read_cache: read_cache, access: MAP_ACCESS)
   end
 
   # Defines an ordered set of String members. A set stores membership only,
@@ -120,10 +118,8 @@ module Prosody
   #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.set(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)
-    StateDefinition.new(name: name.to_s, kind: "set", payload: nil,
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: keyset_limit, capacity: nil,
-      access: SET_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "set", ttl_seconds: ttl, keyset_limit: keyset_limit,
+      read_uncommitted: read_uncommitted, published: published, read_cache: read_cache, access: SET_ACCESS)
   end
 
   # Defines a deque JSON collection.
@@ -140,10 +136,9 @@ module Prosody
   #   inherit the client default
   # @return [StateDefinition] a frozen definition
   def self.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)
-    StateDefinition.new(name: name.to_s, kind: "deque", payload: "json",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: published,
-      read_cache: read_cache, keyset_limit: nil, capacity: capacity,
-      access: DEQUE_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "deque", payload: "json", ttl_seconds: ttl,
+      capacity: capacity, read_uncommitted: read_uncommitted, published: published,
+      read_cache: read_cache, access: DEQUE_ACCESS)
   end
 
   # Defines a single-value Kafka-message collection (items are full messages).
@@ -153,10 +148,8 @@ module Prosody
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
   def self.message_value(name, ttl: nil, read_uncommitted: nil)
-    StateDefinition.new(name: name.to_s, kind: "value", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
-      read_cache: nil, keyset_limit: nil, capacity: nil,
-      access: MESSAGE_VALUE_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "value", payload: "message", ttl_seconds: ttl,
+      read_uncommitted: read_uncommitted, access: MESSAGE_VALUE_ACCESS)
   end
 
   # Defines a `String`-keyed ordered map Kafka-message collection.
@@ -167,10 +160,8 @@ module Prosody
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
   def self.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)
-    StateDefinition.new(name: name.to_s, kind: "map", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
-      read_cache: nil, keyset_limit: keyset_limit, capacity: nil,
-      access: MESSAGE_MAP_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "map", payload: "message", ttl_seconds: ttl,
+      keyset_limit: keyset_limit, read_uncommitted: read_uncommitted, access: MESSAGE_MAP_ACCESS)
   end
 
   # Defines a deque Kafka-message collection.
@@ -183,10 +174,8 @@ module Prosody
   # @param read_uncommitted [Boolean, nil] optional opt-out of transactional staging
   # @return [StateDefinition] a frozen definition
   def self.message_deque(name, ttl: nil, capacity: nil, read_uncommitted: nil)
-    StateDefinition.new(name: name.to_s, kind: "deque", payload: "message",
-      ttl_seconds: ttl, read_uncommitted: read_uncommitted, published: nil,
-      read_cache: nil, keyset_limit: nil, capacity: capacity,
-      access: MESSAGE_DEQUE_ACCESS)
+    StateDefinition.new(name: name.to_s, kind: "deque", payload: "message", ttl_seconds: ttl,
+      capacity: capacity, read_uncommitted: read_uncommitted, access: MESSAGE_DEQUE_ACCESS)
   end
 
   # Shared state wrapper behavior.
@@ -209,8 +198,8 @@ module Prosody
     module Vending
       # Vends the typed keyed-state handle for `definition`.
       #
-      # Handles are cached per context by kind, payload, and name, so repeated
-      # vends within one handler invocation return the same wrapper.
+      # Handles are cached per context by definition, so repeated vends within
+      # one handler invocation return the same wrapper.
       #
       # @param definition [StateDefinition] a frozen collection definition
       # @return [ValueState, MapState, SetState, DequeState] the typed handle
@@ -218,12 +207,8 @@ module Prosody
       # @raise [PermanentStateError] if the collection name is unregistered or
       #   its registered identity mismatches
       def state(definition)
-        cache = (@state_handles ||= {})
-        cache_key = "#{definition.kind}:#{definition.payload}:#{definition.name}"
-        return cache[cache_key] if cache.key?(cache_key)
-
-        native = send(definition.access.vend_method, definition.name)
-        cache[cache_key] = Prosody.const_get(definition.access.wrapper).new(native)
+        (@state_handles ||= {})[definition] ||=
+          Prosody.const_get(definition.access.wrapper).new(send(definition.access.vend_method, definition.name))
       end
     end
 
