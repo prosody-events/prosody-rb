@@ -10,12 +10,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
   describe "item 4: message collections" do
     it "round-trips a stored message through a message value collection" do
       definition = Prosody.message_value(random_state_name("mval"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, message)
           value = context.state(@def)
           case message.payload["step"]
@@ -53,12 +48,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
 
     it "round-trips a stored message through a message deque collection" do
       definition = Prosody.message_deque(random_state_name("mdeq"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, message)
           deque = context.state(@def)
           case message.payload["step"]
@@ -103,12 +93,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
 
     it "round-trips messages through a message map collection with unicode keys and get_many" do
       definition = Prosody.message_map(random_state_name("mmap"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, message)
           map = context.state(@def)
           case message.payload["step"]

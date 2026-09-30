@@ -57,13 +57,9 @@ RSpec.describe Prosody::Client, integration: true do
   it "subscribes and unsubscribes" do
     tracer.in_span("test.subscribe_unsubscribe") do |span|
       # Create handler class that pushes messages to our stream
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(stream)
-          @stream = stream
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(_context, message)
-          @stream.push(message)
+          @sink.push(message)
         end
       end
 
@@ -88,13 +84,9 @@ RSpec.describe Prosody::Client, integration: true do
   it "sends and receives a message" do
     tracer.in_span("test.send_receive") do |span|
       # Create handler class that forwards messages to our stream
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(stream)
-          @stream = stream
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(_context, message)
-          @stream.push(message)
+          @sink.push(message)
         end
       end
 
@@ -126,13 +118,9 @@ RSpec.describe Prosody::Client, integration: true do
   end
 
   it "sends and receives an excise record" do
-    handler_class = Class.new(CompleteHandler) do
-      def initialize(stream)
-        @stream = stream
-      end
-
+    handler_class = Class.new(StateHandler) do
       def on_excise(_context, message)
-        @stream.push(message)
+        @sink.push(message)
       end
     end
 
@@ -151,13 +139,9 @@ RSpec.describe Prosody::Client, integration: true do
   it "handles multiple messages with correct ordering" do
     tracer.in_span("test.multiple_messages") do |span|
       # Create handler class that forwards messages to our stream
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(stream)
-          @stream = stream
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(_context, message)
-          @stream.push(message)
+          @sink.push(message)
         end
       end
 

@@ -42,12 +42,7 @@ RSpec.describe "Prosody state commit and rollback (integration)", integration: t
 
     it "discards uncommitted value writes on rollback, back to the committed floor" do
       definition = Prosody.value(random_state_name("val"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           value = context.state(@def)
           value.set({"v" => "A"})
@@ -71,12 +66,7 @@ RSpec.describe "Prosody state commit and rollback (integration)", integration: t
 
     it "keeps a committed map entry through rollback of later writes" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           map = context.state(@def)
           map.set("kept", 1)

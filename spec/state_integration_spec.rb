@@ -81,12 +81,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
   describe "item 2: map" do
     it "sets, deletes, scans both directions in key order, and round-trips unicode" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           map = context.state(@def)
           map.set("a", 1)
@@ -118,12 +113,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     it "reports emptiness and batch presence for owned and published maps" do
       subsystem = "presence-#{SecureRandom.hex(4)}"
       definition = Prosody.map(random_state_name("map"), published: true, read_cache: false)
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           map = context.state(@def)
           empty_before = map.empty?
@@ -154,12 +144,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
     it "wires every set method for owned and published sets", :aggregate_failures do
       subsystem = "set-#{SecureRandom.hex(4)}"
       definition = Prosody.set(random_state_name("set"), published: true, read_cache: false)
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           set = context.state(@def)
           observation = {empty_before: set.empty?}
@@ -205,12 +190,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
   describe "item 3: deque" do
     it "pushes, unshifts, scans, and pops from both ends" do
       definition = Prosody.deque(random_state_name("deq"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           deque = context.state(@def)
           deque.push("a")
@@ -245,12 +225,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "reports empty-deque behavior" do
       definition = Prosody.deque(random_state_name("deq"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           deque = context.state(@def)
           @sink.push({
@@ -322,12 +297,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
     it "rejects a non-message item written to a message collection as transient" do
       definition = Prosody.message_value(random_state_name("mval"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           value = context.state(@def)
           value.set({"not" => "a message"})
@@ -357,11 +327,7 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
       # cross-key concurrency. Partition assignment is deterministic per key, so
       # the same two keys share a partition on the fresh phase-2 topic too.
       probe_sink = new_sink
-      probe_handler = Class.new(CompleteHandler) do
-        def initialize(sink)
-          @sink = sink
-        end
-
+      probe_handler = Class.new(StateHandler) do
         def on_message(_context, message)
           @sink.push({key: message.key, partition: message.partition})
         end

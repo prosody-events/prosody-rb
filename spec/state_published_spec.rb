@@ -12,12 +12,7 @@ RSpec.describe "Prosody published state (integration)", integration: true do
       subsystem = "errors-#{SecureRandom.hex(4)}"
       name = random_state_name("val")
       definition = Prosody.value(name, published: true, read_cache: false)
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           context.state(@def).set({"v" => 1})
           @sink.push(:written)
@@ -149,12 +144,7 @@ RSpec.describe "Prosody published state (integration)", integration: true do
     it "reads published state without subscribed topics" do
       subsystem = "reader-#{SecureRandom.hex(4)}"
       definition = Prosody.value(random_state_name("val"), published: true, read_cache: false)
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
           value = context.state(@def)
           value.set({"v" => 1})

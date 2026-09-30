@@ -59,6 +59,15 @@ module KeyedStateSupport
   end
 end
 
+# A handler that pushes observations to `@sink`. `@def` holds the collection
+# definition that the handler uses, if any.
+class StateHandler < CompleteHandler
+  def initialize(sink, definition = nil)
+    @sink = sink
+    @def = definition
+  end
+end
+
 # Shared setup for the keyed-state integration specs: a fresh per-example topic
 # (4 partitions), an admin client, a sink, per-example client tracking, and
 # `after` teardown.

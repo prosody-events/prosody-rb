@@ -166,12 +166,7 @@ RSpec.describe "Prosody keyed state scans" do
 
     it "raises the terminated (transient) error for an enumerator leaked past the handler" do
       definition = Prosody.map(random_state_name("map"))
-      handler_class = Class.new(CompleteHandler) do
-        def initialize(sink, definition)
-          @sink = sink
-          @def = definition
-        end
-
+      handler_class = Class.new(StateHandler) do
         def on_message(context, message)
           case message.payload["step"]
           when 1
