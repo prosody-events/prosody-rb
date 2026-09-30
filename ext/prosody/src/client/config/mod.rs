@@ -16,7 +16,8 @@ use prosody::high_level::mode::Mode;
 use prosody::loader::KafkaLoaderConfiguration;
 use serde::{Deserialize, Deserializer};
 use serde_untagged::UntaggedEnumVisitor;
-use state::{ReadCacheConfig, StateCollectionConfig, build_keyed_state_config};
+pub(crate) use state::{ReadCacheConfig, read_cache_policy};
+use state::{StateCollectionConfig, build_keyed_state_config};
 use std::net::SocketAddr;
 
 mod connections;

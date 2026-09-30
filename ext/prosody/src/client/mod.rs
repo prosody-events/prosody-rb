@@ -27,9 +27,7 @@ use magnus::{
 use opentelemetry::propagation::TextMapCompositePropagator;
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::high_level::ConsumerBuilders;
-use prosody::high_level::erased::{
-    ErasedConsumerState, ErasedReadCache, SharedHighLevelClient, new_erased,
-};
+use prosody::high_level::erased::{ErasedConsumerState, SharedHighLevelClient, new_erased};
 use prosody::high_level::mode::Mode;
 use prosody::producer::ProducerConfigurationBuilder;
 use prosody::propagator::new_propagator;
@@ -50,7 +48,7 @@ mod request;
 mod support;
 
 pub use support::init;
-use support::{read_cache, response_error, shutdown, validate_handler};
+use support::{response_error, shutdown, validate_handler};
 
 type Shutdown = Shared<BoxFuture<'static, Result<(), Arc<str>>>>;
 

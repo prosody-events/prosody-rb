@@ -4,9 +4,11 @@
 //! descriptor. It also maps the cache, read cache, and subsystem options.
 
 use super::NativeConfiguration;
+use crate::util::seconds;
 use prosody::consumer::KeyedStateConfiguration;
 use prosody::consumer::kafka_state::{message_deque_state, message_map_state, message_state};
 use prosody::loader::KafkaLoader;
+use prosody::state::ReadCachePolicy;
 use prosody::state::descriptor::{StateDescriptor, deque_state, map_state, set_state, value_state};
 use prosody::state::order_codec::Utf8KeyCodec;
 use prosody::subsystem::SubsystemName;
@@ -15,7 +17,6 @@ use prosody::{ByteSize, JsonCodec};
 use serde::Deserialize;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::time::Duration;
 
 /// Declares one keyed-state collection to register before subscribe.
 #[derive(Clone, Debug, Deserialize)]
@@ -47,9 +48,11 @@ pub(super) struct StateCollectionConfig {
     capacity: Option<NonZeroUsize>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+/// A read cache option: `false` disables the cache, and a number sets the
+/// TTL in seconds.
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(untagged)]
-pub(super) enum ReadCacheConfig {
+pub(crate) enum ReadCacheConfig {
     Disabled(bool),
     Ttl(f64),
 }
@@ -236,6 +239,26 @@ fn capacity(
     Ok(value)
 }
 
+/// Converts a read cache option into a core policy. An absent option inherits
+/// the default.
+///
+/// # Errors
+///
+/// Returns an error that names `option` for `true` or an invalid duration.
+pub(crate) fn read_cache_policy(
+    option: &str,
+    config: Option<ReadCacheConfig>,
+) -> Result<ReadCachePolicy, String> {
+    match config {
+        None => Ok(ReadCachePolicy::Inherit),
+        Some(ReadCacheConfig::Disabled(false)) => Ok(ReadCachePolicy::Disabled),
+        Some(ReadCacheConfig::Disabled(true)) => Err(format!(
+            "{option}: true is ambiguous; use a duration or false"
+        )),
+        Some(ReadCacheConfig::Ttl(value)) => seconds(option, value).map(ReadCachePolicy::Ttl),
+    }
+}
+
 /// Builds the `KeyedStateConfiguration` by mapping each declared collection.
 /// The normal Prosody construction path validates the result.
 ///
@@ -272,22 +295,13 @@ pub(super) fn build_keyed_state_config(
         builder.read_cache_size(Some(size));
     }
 
-    if let Some(cache) = &config.state_read_cache {
-        match cache {
-            ReadCacheConfig::Disabled(false) => {
-                builder.read_cache_ttl(None);
-            }
-            ReadCacheConfig::Disabled(true) => {
-                return Err(
-                    "state_read_cache: true is ambiguous; use a duration or false".to_owned(),
-                );
-            }
-            ReadCacheConfig::Ttl(seconds) => {
-                let ttl = Duration::try_from_secs_f64(*seconds).map_err(|_| {
-                    "state_read_cache: duration must be finite and non-negative".to_owned()
-                })?;
-                builder.read_cache_ttl(Some(ttl));
-            }
+    match read_cache_policy("state_read_cache", config.state_read_cache)? {
+        ReadCachePolicy::Inherit => {}
+        ReadCachePolicy::Disabled => {
+            builder.read_cache_ttl(None);
+        }
+        ReadCachePolicy::Ttl(ttl) => {
+            builder.read_cache_ttl(Some(ttl));
         }
     }
 

@@ -1,7 +1,7 @@
 use super::{
-    Arc, Class, Client, Duration, ErasedReadCache, Error, FutureExt, Module, Object, RClass,
-    RModule, ROOT_MOD, ReprValue, ResponseError, Ruby, RubyHandler, SharedHighLevelClient,
-    Shutdown, Value, function, id, kwargs, method, readers, request,
+    Arc, Class, Client, Error, FutureExt, Module, Object, RClass, RModule, ROOT_MOD, ReprValue,
+    ResponseError, Ruby, RubyHandler, SharedHighLevelClient, Shutdown, Value, function, id, kwargs,
+    method, readers, request,
 };
 
 pub(super) fn validate_handler(ruby: &Ruby, handler: Value) -> Result<(), Error> {
@@ -22,29 +22,6 @@ pub(super) fn shutdown(client: &SharedHighLevelClient<RubyHandler>) -> Shutdown 
     }
     .boxed()
     .shared()
-}
-
-pub(super) fn read_cache(
-    ruby: &Ruby,
-    seconds: Option<f64>,
-    disabled: bool,
-) -> Result<ErasedReadCache, Error> {
-    match (seconds, disabled) {
-        (None, false) => Ok(ErasedReadCache::Inherit),
-        (None, true) => Ok(ErasedReadCache::Disabled),
-        (Some(seconds), false) => Duration::try_from_secs_f64(seconds)
-            .map(ErasedReadCache::Ttl)
-            .map_err(|_| {
-                Error::new(
-                    ruby.exception_arg_error(),
-                    "read_cache must be finite and non-negative",
-                )
-            }),
-        (Some(_), true) => Err(Error::new(
-            ruby.exception_arg_error(),
-            "read_cache cannot specify a TTL and be disabled",
-        )),
-    }
 }
 
 /// Initializes the client module in Ruby.
@@ -89,19 +66,19 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(
         id!(ruby, "published_value"),
-        method!(readers::published_value, 4),
+        method!(readers::published_value, 3),
     )?;
     class.define_method(
         id!(ruby, "published_map"),
-        method!(readers::published_map, 4),
+        method!(readers::published_map, 3),
     )?;
     class.define_method(
         id!(ruby, "published_set"),
-        method!(readers::published_set, 4),
+        method!(readers::published_set, 3),
     )?;
     class.define_method(
         id!(ruby, "published_deque"),
-        method!(readers::published_deque, 4),
+        method!(readers::published_deque, 3),
     )?;
 
     Ok(())
