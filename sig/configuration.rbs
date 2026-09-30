@@ -75,7 +75,7 @@ module Prosody
     def max_retry_delay: () -> Float?
     def max_retry_delay=: (Numeric) -> Float
 
-    # Size of the cache used for message idempotence
+    # Capacity of the producer idempotence cache and the consumer deduplication cache
     def idempotence_cache_size: () -> Integer?
     def idempotence_cache_size=: (Integer | _ToInt) -> Integer
 

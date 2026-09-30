@@ -134,8 +134,8 @@ module Prosody
     # Maximum delay between retries (in seconds).
     config_param :max_retry_delay, converter: ->(v) { duration_converter(v) }
 
-    # Global shared cache capacity across all partitions for message deduplication.
-    # Must be at least 1. Default: 8192.
+    # Capacity of the producer idempotence cache and of the consumer
+    # deduplication cache. Must be at least 1. Default: 8192.
     config_param :idempotence_cache_size, converter: ->(v) { Integer(v) }
 
     # Version string for cache-busting deduplication hashes. Changing this
