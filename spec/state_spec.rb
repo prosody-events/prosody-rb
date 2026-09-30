@@ -72,6 +72,7 @@ RSpec.describe "Prosody keyed state" do
       client = Prosody::Client.new(mock: true, group_id: "state-spec", bootstrap_servers: "localhost:9094")
       expect { client.state(:accounts, Prosody.value("v", read_cache: true)) }
         .to raise_error(ArgumentError, /read_cache.*ambiguous/)
+      expect(client.state(:accounts, Prosody.value("v", read_cache: Rational(1, 2)))).to be_a(Prosody::PublishedValue)
     ensure
       client&.shutdown
     end

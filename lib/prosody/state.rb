@@ -187,7 +187,9 @@ module Prosody
         if access.published_vend_method.nil? || access.published_wrapper.nil?
           raise ArgumentError, "published state readers support JSON and set collections only"
         end
-        native = send(access.published_vend_method, subsystem.to_s, definition.name, definition.read_cache)
+        cache = definition.read_cache
+        cache = Float(cache) unless cache.nil? || cache == true || cache == false
+        native = send(access.published_vend_method, subsystem.to_s, definition.name, cache)
         Prosody.const_get(access.published_wrapper).new(native)
       end
     end
