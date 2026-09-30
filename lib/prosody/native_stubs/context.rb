@@ -175,6 +175,8 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    private
+
     # Vends the native single-value JSON state handle for the named collection.
     #
     # Internal routing target for {Prosody::State::Vending#state}; prefer

@@ -26,13 +26,6 @@ module Prosody
   class NullValueError < TransientStateError
   end
 
-  class StateAccess < Data
-    attr_reader vend_method: Symbol
-    attr_reader wrapper: Symbol
-    attr_reader published_vend_method: Symbol?
-    attr_reader published_wrapper: Symbol?
-  end
-
   # Concrete immutable definition object returned by the constructor helpers.
   class StateDefinition < Data
     attr_reader name: String
@@ -44,7 +37,6 @@ module Prosody
     attr_reader read_cache: (Numeric | false)?
     attr_reader keyset_limit: Integer?
     attr_reader capacity: Integer?
-    attr_reader access: StateAccess
 
     def to_state_config: () -> Hash[Symbol, state_config_value]
   end
@@ -495,6 +487,8 @@ module Prosody
   # Reopened to add keyed-state vending (see lib/prosody/state.rb).
   class Context
     include State::Vending
+
+    private
 
     def value_state: (String name) -> NativeJsonValueState
     def map_state: (String name) -> NativeJsonMapState

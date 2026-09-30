@@ -303,6 +303,15 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody::Context.include?(Prosody::State::Vending)).to be(true)
     end
 
+    # The typed handles are the public API. The native vend methods return raw
+    # handles, so neither the Context nor the Client exposes them.
+    it "keeps the native vend methods private" do
+      owned = %i[value_state map_state set_state deque_state message_value_state message_map_state message_deque_state]
+      published = %i[published_value published_map published_set published_deque]
+      expect(owned.reject { |name| Prosody::Context.private_method_defined?(name) }).to be_empty
+      expect(published.reject { |name| Prosody::Client.private_method_defined?(name) }).to be_empty
+    end
+
     it "uses every descriptor's typed owned-state access strategy" do
       cases = [
         [Prosody.value("value"), :value_state, Prosody::ValueState],

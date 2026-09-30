@@ -159,6 +159,8 @@ module Prosody
       raise NotImplementedError, "This method is implemented natively in Rust"
     end
 
+    private
+
     # @private
     def published_value(subsystem, name, read_cache, read_cache_disabled)
       raise NotImplementedError, "This method is implemented natively in Rust"

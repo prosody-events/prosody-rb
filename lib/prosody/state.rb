@@ -190,7 +190,7 @@ module Prosody
           raise ArgumentError, "published state readers support JSON and set collections only"
         end
         cache_seconds = definition.read_cache unless definition.read_cache == false
-        native = public_send(access.published_vend_method, subsystem.to_s, definition.name, cache_seconds,
+        native = send(access.published_vend_method, subsystem.to_s, definition.name, cache_seconds,
           definition.read_cache == false)
         Prosody.const_get(access.published_wrapper).new(native)
       end
@@ -215,7 +215,7 @@ module Prosody
         cache_key = "#{definition.kind}:#{definition.payload}:#{definition.name}"
         return cache[cache_key] if cache.key?(cache_key)
 
-        native = public_send(definition.access.vend_method, definition.name)
+        native = send(definition.access.vend_method, definition.name)
         cache[cache_key] = Prosody.const_get(definition.access.wrapper).new(native)
       end
     end
@@ -264,11 +264,16 @@ module Prosody
 
   class Client
     include State::Reading
+
+    private :published_value, :published_map, :published_set, :published_deque
   end
 
   # Reopens the native context class to add keyed-state vending.
   class Context
     include State::Vending
+
+    private :value_state, :map_state, :set_state, :deque_state,
+      :message_value_state, :message_map_state, :message_deque_state
   end
 end
 
