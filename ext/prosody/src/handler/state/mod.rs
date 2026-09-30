@@ -439,7 +439,7 @@ mod set;
 pub(crate) use query::{key_query, position_query};
 pub(crate) use scan::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, NativeMessageDequeScan,
-    NativeMessageMapScan, published_deque_scan, published_map_key_scan, published_map_scan,
+    NativeMessageMapScan,
 };
 pub(crate) use set::NativeSetState;
 mod registration;

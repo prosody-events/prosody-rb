@@ -8,7 +8,7 @@ RSpec.describe "Prosody published state (integration)", integration: true do
   include_context "keyed state integration"
 
   describe "published reader errors" do
-    it "raises RuntimeError from point reads and traversals alike" do
+    it "raises a typed state error from point reads and traversals alike" do
       subsystem = "errors-#{SecureRandom.hex(4)}"
       name = random_state_name("val")
       definition = Prosody.value(name, published: true, read_cache: false)
@@ -42,10 +42,10 @@ RSpec.describe "Prosody published state (integration)", integration: true do
           error = begin
             read.call(reader)
             nil
-          rescue RuntimeError => e
+          rescue => e
             e
           end
-          expect([kind, error.class, error&.message]).to match([kind, RuntimeError, /identity mismatch/])
+          expect([kind, error.class, error&.message]).to match([kind, Prosody::PermanentStateError, /identity mismatch/])
         end
       end
     end

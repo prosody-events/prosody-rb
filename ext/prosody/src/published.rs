@@ -1,13 +1,13 @@
 //! Read-only published-state handles for Ruby.
 //!
-//! Every reader method runs through [`Reads`], which refuses a forked child,
-//! joins the caller's OpenTelemetry context, and raises a failed read as
-//! `RuntimeError`.
+//! Every reader method runs through [`Reads`], which refuses a forked child
+//! and joins the caller's OpenTelemetry context. A failed read raises the
+//! same typed state errors as an owned handle.
 
 use crate::bridge::Bridge;
 use crate::handler::{
     NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
-    published_deque_scan, published_map_key_scan, published_map_scan,
+    state_error,
 };
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ForkGuard;
@@ -15,12 +15,12 @@ use crate::{ROOT_MOD, id};
 use magnus::{Error, Module, RHash, Ruby, StaticSymbol, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
+use prosody::consumer::event_context::ErasedStateError;
 use prosody::high_level::erased::{
     SharedDequeReader, SharedMapReader, SharedSetReader, SharedValueReader,
 };
 use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
-use std::fmt::Display;
 use std::sync::Arc;
 use tracing::Span;
 
@@ -49,18 +49,18 @@ impl Reads {
     ///
     /// # Errors
     ///
-    /// Raises `RuntimeError` after fork or when the read fails.
-    fn read<F, T, E>(&self, ruby: &Ruby, read: F) -> Result<T, Error>
+    /// Raises `RuntimeError` after fork, and a typed state error when the
+    /// read fails.
+    fn read<F, T>(&self, ruby: &Ruby, read: F) -> Result<T, Error>
     where
-        F: Future<Output = Result<T, E>> + Send + 'static,
+        F: Future<Output = Result<T, ErasedStateError>> + Send + 'static,
         T: Send + 'static,
-        E: Display + Send + 'static,
     {
         self.fork.check(ruby)?;
         let context = extract_opentelemetry_context(ruby, &self.propagator)?;
         self.bridge
             .wait_for(ruby, read.with_context(context), Span::current())?
-            .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))
+            .map_err(|error| state_error(ruby, &error))
     }
 
     /// Waits for one optional JSON read and returns the value or `nil`.
@@ -68,10 +68,9 @@ impl Reads {
     /// # Errors
     ///
     /// See [`Reads::read`].
-    fn read_json<F, E>(&self, ruby: &Ruby, read: F) -> Result<Value, Error>
+    fn read_json<F>(&self, ruby: &Ruby, read: F) -> Result<Value, Error>
     where
-        F: Future<Output = Result<Option<JsonValue>, E>> + Send + 'static,
-        E: Display + Send + 'static,
+        F: Future<Output = Result<Option<JsonValue>, ErasedStateError>> + Send + 'static,
     {
         serialize(ruby, &self.read(ruby, read)?)
     }
@@ -162,7 +161,7 @@ impl NativePublishedMap {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let entries = this.inner.entries(key).with_query(query).stream();
-        published_map_scan(ruby, entries, bridge, propagator)
+        NativeJsonMapScan::new(ruby, entries, bridge, propagator)
     }
 
     fn keys(
@@ -175,7 +174,7 @@ impl NativePublishedMap {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let keys = this.inner.keys(key).with_query(query).stream();
-        published_map_key_scan(ruby, keys, bridge, propagator)
+        NativeMapKeyScan::new(ruby, keys, bridge, propagator)
     }
 }
 
@@ -221,7 +220,7 @@ impl NativePublishedSet {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let members = this.inner.keys(key).with_query(query).stream();
-        published_map_key_scan(ruby, members, bridge, propagator)
+        NativeMapKeyScan::new(ruby, members, bridge, propagator)
     }
 }
 
@@ -271,7 +270,7 @@ impl NativePublishedDeque {
         let query = position_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let values = this.inner.values(key).with_query(query).stream();
-        published_deque_scan(ruby, values, bridge, propagator)
+        NativeJsonDequeScan::new(ruby, values, bridge, propagator)
     }
 }
 
