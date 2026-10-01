@@ -24,12 +24,11 @@ pub(super) struct StateCollectionConfig {
     /// The collection name. Prosody requires it to be non-empty and unique.
     name: String,
 
-    /// The collection kind: `"value"`, `"map"`, `"set"`, or `"deque"`.
-    kind: String,
+    /// The collection kind.
+    kind: CollectionKind,
 
-    /// The item payload: `"json"` or `"message"`. A set stores membership
-    /// only, so it has no payload.
-    payload: Option<String>,
+    /// The item payload. A set stores membership only, so it has no payload.
+    payload: Option<CollectionPayload>,
 
     /// Optional per-write TTL in whole seconds.
     ttl_seconds: Option<u32>,
@@ -57,7 +56,10 @@ pub(crate) enum ReadCacheConfig {
     Ttl(f64),
 }
 
-/// The kind of a keyed-state collection.
+/// The kind of a keyed-state collection: `"value"`, `"map"`, `"set"`, or
+/// `"deque"`.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 enum CollectionKind {
     /// A single-value collection.
     Value,
@@ -69,47 +71,15 @@ enum CollectionKind {
     Deque,
 }
 
-/// The item payload of a value, map, or deque collection.
+/// The item payload of a value, map, or deque collection: `"json"` or
+/// `"message"`.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 enum CollectionPayload {
     /// JSON values.
     Json,
     /// The full Kafka message the handler received.
     Message,
-}
-
-/// Parses a collection-kind token.
-///
-/// # Errors
-///
-/// Returns a permanent-category error naming the field if the token is not
-/// `"value"`, `"map"`, `"set"`, or `"deque"`.
-fn parse_kind(index: usize, kind: &str) -> Result<CollectionKind, String> {
-    match kind {
-        "value" => Ok(CollectionKind::Value),
-        "map" => Ok(CollectionKind::Map),
-        "set" => Ok(CollectionKind::Set),
-        "deque" => Ok(CollectionKind::Deque),
-        other => Err(format!(
-            "state_collections[{index}].kind: expected \"value\", \"map\", \"set\", or \"deque\", \
-             got {other:?}"
-        )),
-    }
-}
-
-/// Parses a collection-payload token.
-///
-/// # Errors
-///
-/// Returns a permanent-category error naming the field if the token is not
-/// `"json"` or `"message"`.
-fn parse_payload(index: usize, payload: &str) -> Result<CollectionPayload, String> {
-    match payload {
-        "json" => Ok(CollectionPayload::Json),
-        "message" => Ok(CollectionPayload::Message),
-        other => Err(format!(
-            "state_collections[{index}].payload: expected \"json\" or \"message\", got {other:?}"
-        )),
-    }
 }
 
 /// Applies the options that every collection kind takes: TTL, commit mode,
@@ -140,17 +110,11 @@ fn register_state_collection(
     index: usize,
     collection: &StateCollectionConfig,
 ) -> Result<(), String> {
-    let kind = parse_kind(index, &collection.kind)?;
-    let payload = collection
-        .payload
-        .as_deref()
-        .map(|payload| parse_payload(index, payload))
-        .transpose()?;
-    let keyset_limit = keyset_limit(collection.keyset_limit, &kind, index)?;
-    let capacity = capacity(collection.capacity, &kind, index)?;
+    let keyset_limit = keyset_limit(collection.keyset_limit, collection.kind, index)?;
+    let capacity = capacity(collection.capacity, collection.kind, index)?;
 
     let name = collection.name.as_str();
-    match (kind, payload) {
+    match (collection.kind, collection.payload) {
         (CollectionKind::Value, Some(CollectionPayload::Json)) => {
             let _ = keyed.register(with_def(value_state::<JsonCodec>(name), collection));
         }
@@ -214,7 +178,7 @@ fn register_state_collection(
 /// Rejects a keyset limit on a collection that is not a map or a set.
 fn keyset_limit(
     value: Option<usize>,
-    kind: &CollectionKind,
+    kind: CollectionKind,
     index: usize,
 ) -> Result<Option<usize>, String> {
     if value.is_some() && !matches!(kind, CollectionKind::Map | CollectionKind::Set) {
@@ -228,7 +192,7 @@ fn keyset_limit(
 /// Rejects a capacity on a collection that is not a deque.
 fn capacity(
     value: Option<NonZeroUsize>,
-    kind: &CollectionKind,
+    kind: CollectionKind,
     index: usize,
 ) -> Result<Option<NonZeroUsize>, String> {
     if value.is_some() && !matches!(kind, CollectionKind::Deque) {
