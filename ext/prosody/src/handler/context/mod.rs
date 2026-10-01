@@ -79,9 +79,9 @@ impl Context {
 
     /// Returns the dispatch demand as a `Prosody::Demand`.
     ///
-    /// A normal delivery has kind `:normal` and retry ordinal 0. A retry after
-    /// a failure has kind `:failure` and an ordinal that starts at 1. The
-    /// ordinal is an estimate.
+    /// A normal delivery has kind `:normal` and 0 retries. A retry after a
+    /// failure has kind `:failure` and a retry count that starts at 1. The
+    /// count is an estimate.
     ///
     /// # Errors
     ///

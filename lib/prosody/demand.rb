@@ -4,10 +4,10 @@ module Prosody
   # The demand a handler call serves, from +context.demand+.
   #
   # +kind+ is +:normal+ for a normal delivery and +:failure+ for a retry after
-  # a failure. +retries+ is the retry ordinal: 0 for a normal delivery and 1 on
-  # the first retry. After Prosody defers an event, the ordinal starts again
-  # at 1. The ordinal is an estimate. Keep an exact attempt count in keyed
-  # state if the handler needs one.
+  # a failure. +retries+ is the number of retries: 0 for a normal delivery and
+  # 1 on the first retry. After Prosody defers an event, the count starts
+  # again at 1. The count is an estimate. Keep an exact attempt count in
+  # keyed state if the handler needs one.
   #
   # @example Alert only on a retry
   #   def on_message(context, message)
