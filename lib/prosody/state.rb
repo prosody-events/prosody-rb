@@ -25,26 +25,6 @@ module Prosody
   # @see TransientError
   class TransientStateError < TransientError; end
 
-  # How a definition opens its handle and its published reader.
-  StateAccess = Data.define(:vend_method, :wrapper, :published_vend_method, :published_wrapper)
-  private_constant :StateAccess
-  VALUE_ACCESS = StateAccess.new(vend_method: :value_state, wrapper: :ValueState,
-    published_vend_method: :published_value, published_wrapper: :PublishedValue)
-  MAP_ACCESS = StateAccess.new(vend_method: :map_state, wrapper: :MapState,
-    published_vend_method: :published_map, published_wrapper: :PublishedMap)
-  SET_ACCESS = StateAccess.new(vend_method: :set_state, wrapper: :SetState,
-    published_vend_method: :published_set, published_wrapper: :PublishedSet)
-  DEQUE_ACCESS = StateAccess.new(vend_method: :deque_state, wrapper: :DequeState,
-    published_vend_method: :published_deque, published_wrapper: :PublishedDeque)
-  MESSAGE_VALUE_ACCESS = StateAccess.new(vend_method: :message_value_state, wrapper: :ValueState,
-    published_vend_method: nil, published_wrapper: nil)
-  MESSAGE_MAP_ACCESS = StateAccess.new(vend_method: :message_map_state, wrapper: :MapState,
-    published_vend_method: nil, published_wrapper: nil)
-  MESSAGE_DEQUE_ACCESS = StateAccess.new(vend_method: :message_deque_state, wrapper: :DequeState,
-    published_vend_method: nil, published_wrapper: nil)
-  private_constant :VALUE_ACCESS, :MAP_ACCESS, :SET_ACCESS, :DEQUE_ACCESS,
-    :MESSAGE_VALUE_ACCESS, :MESSAGE_MAP_ACCESS, :MESSAGE_DEQUE_ACCESS
-
   # An immutable keyed-state collection definition.
   #
   # The {Prosody.value}, {Prosody.map}, {Prosody.set}, and {Prosody.deque}
@@ -209,14 +189,12 @@ module Prosody
       # @raise [TransientStateError, PermanentStateError] if Prosody cannot
       #   open the reader, for example for a zero +read_cache+
       def state(subsystem, definition)
-        access = definition.access
-        if access.published_vend_method.nil? || access.published_wrapper.nil?
-          raise ArgumentError, "published state readers support JSON and set collections only"
-        end
+        open, reader = definition.access.reader
+        raise ArgumentError, "published state readers support JSON and set collections only" unless open
+
         cache = definition.read_cache
         cache = Float(cache) unless cache.nil? || cache == true || cache == false
-        native = send(access.published_vend_method, subsystem.to_s, definition.name, cache)
-        Prosody.const_get(access.published_wrapper).new(native)
+        reader.new(send(open, subsystem.to_s, definition.name, cache))
       end
     end
 
@@ -235,7 +213,7 @@ module Prosody
       #   its registered identity mismatches
       def state(definition)
         (@state_handles ||= {})[definition] ||=
-          Prosody.const_get(definition.access.wrapper).new(send(definition.access.vend_method, definition.name))
+          definition.access.wrapper.new(send(definition.access.vend_method, definition.name))
       end
     end
 
@@ -301,3 +279,18 @@ require_relative "state/value"
 require_relative "state/map"
 require_relative "state/set"
 require_relative "state/deque"
+
+module Prosody
+  # How a definition opens its handle and, for a published collection, its reader.
+  StateAccess = Data.define(:vend_method, :wrapper, :reader)
+  private_constant :StateAccess
+  VALUE_ACCESS = StateAccess.new(:value_state, ValueState, [:published_value, PublishedValue])
+  MAP_ACCESS = StateAccess.new(:map_state, MapState, [:published_map, PublishedMap])
+  SET_ACCESS = StateAccess.new(:set_state, SetState, [:published_set, PublishedSet])
+  DEQUE_ACCESS = StateAccess.new(:deque_state, DequeState, [:published_deque, PublishedDeque])
+  MESSAGE_VALUE_ACCESS = StateAccess.new(:message_value_state, ValueState, nil)
+  MESSAGE_MAP_ACCESS = StateAccess.new(:message_map_state, MapState, nil)
+  MESSAGE_DEQUE_ACCESS = StateAccess.new(:message_deque_state, DequeState, nil)
+  private_constant :VALUE_ACCESS, :MAP_ACCESS, :SET_ACCESS, :DEQUE_ACCESS,
+    :MESSAGE_VALUE_ACCESS, :MESSAGE_MAP_ACCESS, :MESSAGE_DEQUE_ACCESS
+end
