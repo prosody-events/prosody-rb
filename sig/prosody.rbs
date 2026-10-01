@@ -44,14 +44,14 @@ module Prosody
   type demand_kind = :normal | :failure
 
   # The demand a handler call serves. kind is :normal for a normal delivery
-  # and :failure for a retry. retry is the retry ordinal: 0 for a normal
+  # and :failure for a retry. retries is the retry ordinal: 0 for a normal
   # delivery and 1 on the first retry. The ordinal is an estimate.
   class Demand < Data
     attr_reader kind: demand_kind
-    attr_reader retry: Integer
+    attr_reader retries: Integer
 
-    def self.new: (demand_kind kind, Integer retry) -> instance
-                | (kind: demand_kind, retry: Integer) -> instance
+    def self.new: (demand_kind kind, Integer retries) -> instance
+                | (kind: demand_kind, retries: Integer) -> instance
 
     def normal?: () -> bool
     def failure?: () -> bool

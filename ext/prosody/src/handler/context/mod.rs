@@ -87,14 +87,14 @@ impl Context {
     ///
     /// Returns a Ruby error if `Prosody::Demand` cannot be built.
     fn demand(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-        let (kind, retry) = match this.demand {
+        let (kind, retries) = match this.demand {
             DemandType::Normal => ("normal", 0),
-            DemandType::Failure { retry } => ("failure", retry),
+            DemandType::Failure { retry: retries } => ("failure", retries),
         };
         let class: RClass = ruby.get_inner(&ROOT_MOD).const_get(id!(ruby, "Demand"))?;
         // `Data.new` maps positional members to keywords; `new_instance` would
         // bypass it and call `initialize` with positional arguments.
-        class.funcall(id!(ruby, "new"), (ruby.sym_new(kind), retry))
+        class.funcall(id!(ruby, "new"), (ruby.sym_new(kind), retries))
     }
 
     /// Check if cancellation has been requested.

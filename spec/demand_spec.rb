@@ -6,11 +6,22 @@ require "spec_helper"
 # reaches the handler as a Prosody::Demand, for messages and for timers.
 RSpec.describe Prosody::Demand do
   it "answers the kind predicates" do
-    normal = described_class.new(kind: :normal, retry: 0)
+    normal = described_class.new(kind: :normal, retries: 0)
     failure = described_class.new(:failure, 2)
-    expect([normal.normal?, normal.failure?, normal.retry]).to eq([true, false, 0])
-    expect([failure.normal?, failure.failure?, failure.retry]).to eq([false, true, 2])
+    expect([normal.normal?, normal.failure?, normal.retries]).to eq([true, false, 0])
+    expect([failure.normal?, failure.failure?, failure.retries]).to eq([false, true, 2])
     expect(failure).to be_frozen
+  end
+
+  it "pattern-matches a failure and reads the bound retries variable" do
+    failure = described_class.new(kind: :failure, retries: 3)
+
+    case failure
+    in {kind: :failure, retries:}
+      expect(retries).to eq(3)
+    else
+      raise "expected a failure match"
+    end
   end
 
   describe "context.demand", integration: true do
@@ -45,10 +56,10 @@ RSpec.describe Prosody::Demand do
 
       observations = sink.wait(4)
       expect(observations).to eq([
-        [:message, described_class.new(kind: :normal, retry: 0)],
-        [:message, described_class.new(kind: :failure, retry: 1)],
-        [:timer, described_class.new(kind: :normal, retry: 0)],
-        [:timer, described_class.new(kind: :failure, retry: 1)]
+        [:message, described_class.new(kind: :normal, retries: 0)],
+        [:message, described_class.new(kind: :failure, retries: 1)],
+        [:timer, described_class.new(kind: :normal, retries: 0)],
+        [:timer, described_class.new(kind: :failure, retries: 1)]
       ])
     end
   end

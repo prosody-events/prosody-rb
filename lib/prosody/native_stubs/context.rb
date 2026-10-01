@@ -49,7 +49,7 @@ module Prosody
     #
     # @example Reading the retry ordinal
     #   def on_message(context, message)
-    #     logger.warn("retry #{context.demand.retry}") if context.demand.failure?
+    #     logger.warn("retry #{context.demand.retries}") if context.demand.failure?
     #   end
     def demand
       raise NotImplementedError, "This method is implemented natively in Rust"

@@ -1030,12 +1030,12 @@ A handler can tell a retry from a normal delivery through `context.demand`:
 ```ruby
 def on_message(context, message)
   demand = context.demand
-  logger.warn("retry #{demand.retry} for #{message.key}") if demand.failure?
+  logger.warn("retry #{demand.retries} for #{message.key}") if demand.failure?
   process(message)
 end
 ```
 
-`demand.retry` is the retry ordinal: 0 for a normal delivery and 1 on the first retry. After Prosody defers an event, the ordinal starts again at 1. The ordinal is an estimate. Keep an exact attempt count in keyed state if you need one.
+`demand.retries` is the retry ordinal: 0 for a normal delivery and 1 on the first retry. After Prosody defers an event, the ordinal starts again at 1. The ordinal is an estimate. Keep an exact attempt count in keyed state if you need one.
 
 ### Handling Task Cancellation
 
@@ -1223,7 +1223,7 @@ Represents the current event context:
 
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
 - `on_cancel`: Wait until cancellation occurs.
-- `demand`: A `Prosody::Demand` that tells whether this call is a normal delivery or a retry. `kind` is `:normal` or `:failure`, and `normal?` and `failure?` test it. `retry` is the retry ordinal: 0 for a normal delivery and 1 on the first retry. The ordinal is an estimate. Keep an exact attempt count in keyed state if you need one.
+- `demand`: A `Prosody::Demand` that tells whether this call is a normal delivery or a retry. `kind` is `:normal` or `:failure`, and `normal?` and `failure?` test it. `retries` is the retry ordinal: 0 for a normal delivery and 1 on the first retry. The ordinal is an estimate. Keep an exact attempt count in keyed state if you need one.
 - `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state).
 
 Timer scheduling methods:
