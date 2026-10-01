@@ -108,12 +108,10 @@ module Prosody
   # --- handles ------------------------------------------------------------
   # A single-value keyed-state handle. Reads return the stored value or nil.
   # Every op is fiber-yield async: it looks blocking but never blocks the thread.
-  class ValueState[T = json_value]
+  class ValueState[T = json_value] < State::Handle
     def get: () -> T?
     def set: (T value) -> void
     def clear: () -> void
-    def commit: () -> store_outcome
-    def rollback: () -> store_outcome
 
     # idiomatic conveniences
     def value: () -> T?              # alias of #get
@@ -124,7 +122,7 @@ module Prosody
   end
 
   # A String-keyed ordered-map keyed-state handle.
-  class MapState[V = json_value]
+  class MapState[V = json_value] < State::Handle
     include State::Scanning
 
     def get: (String key) -> V?
@@ -134,8 +132,6 @@ module Prosody
     def set: (String key, V value) -> void
     def delete: (String key) -> nil
     def clear: () -> void
-    def commit: () -> store_outcome
-    def rollback: () -> store_outcome
     # Traversals accept optional query keywords (see State::Scanning).
     def each_pair: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { ([String, V]) -> void } -> void
                  | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[[ String, V ], void]
@@ -174,7 +170,7 @@ module Prosody
   end
 
   # A presence-only ordered set of String members. Mirrors Ruby's Set.
-  class SetState
+  class SetState < State::Handle
     include State::Scanning
 
     def add: (String member) -> self
@@ -185,8 +181,6 @@ module Prosody
     def contains_many: (Array[String] members) -> Array[bool]
     def empty?: () -> bool
     def clear: () -> self
-    def commit: () -> store_outcome
-    def rollback: () -> store_outcome
     # Traversals accept optional query keywords (see State::Scanning).
     def each: (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) { (String) -> void } -> void
             | (?from: String?, ?after: String?, ?to: String?, ?before: String?, ?range: Range[String?]?, ?prefix: String?, ?limit: Integer?) -> Enumerator[String, void]
@@ -198,7 +192,7 @@ module Prosody
   end
 
   # A deque keyed-state handle.
-  class DequeState[T = json_value]
+  class DequeState[T = json_value] < State::Handle
     include State::Scanning
 
     def push: (T value) -> void
@@ -209,8 +203,6 @@ module Prosody
     def size: () -> Integer
     def empty?: () -> bool
     def clear: () -> void
-    def commit: () -> store_outcome
-    def rollback: () -> store_outcome
     def get: (Integer index) -> T?
     # Traversals accept optional position keywords (see State::Scanning).
     def each: (?from: Integer?, ?after: Integer?, ?to: Integer?, ?before: Integer?, ?range: Range[Integer?]?, ?limit: Integer?) { (T) -> void } -> void
@@ -338,6 +330,12 @@ module Prosody
 
   # --- shared state modules ------------------------------------------------
   module State
+    # The base class of the owned handles.
+    class Handle
+      def commit: () -> store_outcome
+      def rollback: () -> store_outcome
+    end
+
     # Adds keyed-state vending to the native context.
     module Vending
       def state: [T] (_ValueDefinition[T]) -> ValueState[T]

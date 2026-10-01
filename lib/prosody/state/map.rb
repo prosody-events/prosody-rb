@@ -10,13 +10,8 @@ module Prosody
   # pairs over a native scan, closing the scan via `ensure`. The map has no
   # aggregate mixin methods, because they would load the whole remote
   # collection.
-  class MapState
+  class MapState < State::Handle
     include State::Scanning
-
-    # @param native [Prosody::NativeJsonMapState, Prosody::NativeMessageMapState] the native handle
-    def initialize(native)
-      @native = native
-    end
 
     # Reads the value for `key`.
     #
@@ -66,18 +61,6 @@ module Prosody
     #
     # @return [void]
     def clear = @native.clear
-
-    # Durably commits the buffered operations mid-handler.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were written, or
-    #   +:no_op+ when nothing was buffered
-    def commit = @native.commit
-
-    # Discards the buffered uncommitted operations.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were discarded, or
-    #   +:no_op+ when nothing was buffered
-    def rollback = @native.rollback
 
     # Traverses the live entries in key order, yielding `key, value`.
     #

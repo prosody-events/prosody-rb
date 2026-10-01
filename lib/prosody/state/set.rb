@@ -8,13 +8,8 @@ module Prosody
   # {#commit}. Every operation yields the fiber, never the thread. There is
   # deliberately no +Enumerable+ or +to_a+: they would read the whole remote
   # set. Traverse members with {#each} or {#reverse_each}.
-  class SetState
+  class SetState < State::Handle
     include State::Scanning
-
-    # @param native [Prosody::NativeSetState] the native handle
-    def initialize(native)
-      @native = native
-    end
 
     # Adds +member+ (mirrors +Set#add+).
     #
@@ -62,18 +57,6 @@ module Prosody
       @native.clear
       self
     end
-
-    # Durably commits the buffered operations mid-handler.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were written, or
-    #   +:no_op+ when nothing was buffered
-    def commit = @native.commit
-
-    # Discards the buffered uncommitted operations.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were discarded, or
-    #   +:no_op+ when nothing was buffered
-    def rollback = @native.rollback
 
     # Traverses the live members in ascending order.
     #

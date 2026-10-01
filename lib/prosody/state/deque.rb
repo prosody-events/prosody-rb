@@ -9,13 +9,8 @@ module Prosody
   # Traversal is explicit: {#each}/{#reverse_each} yield single elements over a
   # native scan, closing the scan via `ensure`. No aggregate-mixin methods are
   # provided.
-  class DequeState
+  class DequeState < State::Handle
     include State::Scanning
-
-    # @param native [Prosody::NativeJsonDequeState, Prosody::NativeMessageDequeState] the native handle
-    def initialize(native)
-      @native = native
-    end
 
     # Appends an element at the back.
     #
@@ -57,18 +52,6 @@ module Prosody
     #
     # @return [void]
     def clear = @native.clear
-
-    # Durably commits the buffered operations mid-handler.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were written, or
-    #   +:no_op+ when nothing was buffered
-    def commit = @native.commit
-
-    # Discards the buffered uncommitted operations.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were discarded, or
-    #   +:no_op+ when nothing was buffered
-    def rollback = @native.rollback
 
     # Reads the element at `index`, resolving negatives Array-style (mirrors
     # +Array#[]+'s read domain, without the indexer). A non-negative index

@@ -180,6 +180,29 @@ module Prosody
 
   # Shared state wrapper behavior.
   module State
+    # The base class of the owned handles. It holds the native handle and gives
+    # the commit and rollback that every collection shares.
+    #
+    # @api private
+    class Handle
+      # @param native [Object] the native handle
+      def initialize(native)
+        @native = native
+      end
+
+      # Durably commits the buffered operations mid-handler.
+      #
+      # @return [Symbol] +:applied+ when buffered operations were written, or
+      #   +:no_op+ when nothing was buffered
+      def commit = @native.commit
+
+      # Discards the buffered uncommitted operations.
+      #
+      # @return [Symbol] +:applied+ when buffered operations were discarded, or
+      #   +:no_op+ when nothing was buffered
+      def rollback = @native.rollback
+    end
+
     module Reading
       # Opens a read-only view of a published JSON or set collection.
       #

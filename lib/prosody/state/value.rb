@@ -10,12 +10,7 @@ module Prosody
   # collections), or `nil` when the value is absent. Writes are buffered and
   # made durable by {#commit}. All operations are fiber-yield async: they look
   # blocking but never block the thread.
-  class ValueState
-    # @param native [Prosody::NativeJsonValueState, Prosody::NativeMessageValueState] the native handle
-    def initialize(native)
-      @native = native
-    end
-
+  class ValueState < State::Handle
     # Reads the current value.
     #
     # @return [Object, nil] the stored value, or `nil` when absent
@@ -32,18 +27,6 @@ module Prosody
     #
     # @return [void]
     def clear = @native.clear
-
-    # Durably commits the buffered operations mid-handler.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were written, or
-    #   +:no_op+ when nothing was buffered
-    def commit = @native.commit
-
-    # Discards the buffered uncommitted operations.
-    #
-    # @return [Symbol] +:applied+ when buffered operations were discarded, or
-    #   +:no_op+ when nothing was buffered
-    def rollback = @native.rollback
 
     # Reads the current value. Idiomatic alias of {#get}.
     #
