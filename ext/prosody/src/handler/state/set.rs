@@ -69,12 +69,11 @@ impl NativeSetState {
         options: RHash,
     ) -> Result<NativeMapKeyScan, Error> {
         let query = key_query(ruby, direction, options)?;
-        NativeMapKeyScan::new(
-            ruby,
+        Ok(NativeMapKeyScan::new(
             this.state.keys().with_query(query).stream(),
             this.bridge.clone(),
             Arc::clone(&this.propagator),
-        )
+        ))
     }
 
     pub(super) fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {

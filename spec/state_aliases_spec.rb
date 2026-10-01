@@ -32,17 +32,10 @@ RSpec.describe "keyed-state idiomatic aliases" do
   let(:cursor) do
     Class.new do
       def initialize(items)
-        @items = items
-        @index = 0
+        @chunks = [items]
       end
 
-      def next
-        return nil if @index >= @items.length
-
-        item = @items[@index]
-        @index += 1
-        item
-      end
+      def next_chunk = @chunks.shift
 
       def close = nil
     end

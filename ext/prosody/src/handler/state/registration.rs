@@ -83,7 +83,7 @@ macro_rules! register_deque {
 macro_rules! register_scan {
     ($ruby:expr, $module:expr, $name:literal, $type:ty) => {{
         let class = $module.define_class(id!($ruby, $name), $ruby.class_object())?;
-        class.define_method(id!($ruby, "next"), method!(<$type>::next, 0))?;
+        class.define_method(id!($ruby, "next_chunk"), method!(<$type>::next_chunk, 0))?;
         class.define_method(id!($ruby, "close"), method!(<$type>::close, 0))?;
     }};
 }

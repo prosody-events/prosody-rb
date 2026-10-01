@@ -4,21 +4,16 @@
 //! cursor through the Ruby `ensure`, so no later operation observes that chunk.
 
 use super::state_error;
-use crate::bridge::{Bridge, QUEUE_CLASS};
+use crate::bridge::Bridge;
 use crate::handler::message::Message;
-use crate::id;
 use crate::tracing_util::extract_opentelemetry_context;
-use crate::util::ThreadSafeValue;
-use magnus::value::ReprValue;
-use magnus::{Error, IntoValue, Ruby, Value};
+use magnus::{Error, IntoValue, RArray, Ruby, Value};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::StateCursor;
 use prosody::consumer::message::ConsumerMessage;
 use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
-use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use tracing::Span;
@@ -28,128 +23,53 @@ const SCAN_READY_CHUNK_SIZE: NonZeroUsize = match NonZeroUsize::new(256) {
     None => NonZeroUsize::MIN,
 };
 
-struct ScanInner<T> {
-    cursor: Arc<StateCursor<T>>,
-    buffer: VecDeque<T>,
-    done: bool,
-}
-
-macro_rules! drive_scan {
-    ($ruby:expr, $this:expr, $inner:expr, |$item:ident| $convert:block) => {{
-        loop {
-            if let Some($item) = $inner.buffer.pop_front() {
-                return $convert;
-            }
-            if $inner.done {
-                return Ok($ruby.qnil().as_value());
-            }
-            let cursor = Arc::clone(&$inner.cursor);
-            let context = extract_opentelemetry_context($ruby, &$this.propagator)?;
-            let chunk = $this
-                .bridge
-                .wait_for(
-                    $ruby,
-                    async move {
-                        cursor
-                            .next_ready_chunk(SCAN_READY_CHUNK_SIZE)
-                            .with_context(context)
-                            .await
-                    },
-                    Span::current(),
-                )?
-                .map_err(|error| state_error($ruby, &error))?;
-            match chunk {
-                Some(items) => $inner.buffer.extend(items),
-                None => {
-                    $inner.done = true;
-                    let cursor = Arc::clone(&$inner.cursor);
-                    $this.bridge.wait_for(
-                        $ruby,
-                        async move { cursor.close().await },
-                        Span::current(),
-                    )?;
-                    return Ok($ruby.qnil().as_value());
-                }
-            }
-        }
-    }};
-}
-
 macro_rules! native_scan {
     ($name:ident, $class:literal, $item:ty, |$ruby:ident, $item_name:ident| $convert:block) => {
         /// Native cursor with one item type.
         #[magnus::wrap(class = $class)]
         pub struct $name {
-            inner: RefCell<ScanInner<$item>>,
-            lock: ThreadSafeValue,
+            cursor: Arc<StateCursor<$item>>,
             bridge: Bridge,
             propagator: Arc<TextMapCompositePropagator>,
         }
 
         impl $name {
-            /// Wraps a cursor. Read failures raise the typed state errors.
             pub(crate) fn new(
-                ruby: &Ruby,
                 cursor: StateCursor<$item>,
                 bridge: Bridge,
                 propagator: Arc<TextMapCompositePropagator>,
-            ) -> Result<Self, Error> {
-                let queue: Value = ruby.get_inner(&QUEUE_CLASS).funcall(id!(ruby, "new"), ())?;
-                let _: Value = queue.funcall(id!(ruby, "push"), (ruby.qnil(),))?;
-                Ok(Self {
-                    inner: RefCell::new(ScanInner {
-                        cursor: Arc::new(cursor),
-                        buffer: VecDeque::new(),
-                        done: false,
-                    }),
-                    lock: ThreadSafeValue::new(queue, bridge.clone()),
+            ) -> Self {
+                Self {
+                    cursor: Arc::new(cursor),
                     bridge,
                     propagator,
-                })
+                }
             }
 
-            fn acquire(&self, ruby: &Ruby) -> Result<(), Error> {
-                let _: Value = self.lock.get(ruby).funcall(id!(ruby, "pop"), ())?;
-                Ok(())
-            }
-
-            fn release(&self, ruby: &Ruby) {
-                let _: Result<Value, Error> = self
-                    .lock
-                    .get(ruby)
-                    .funcall(id!(ruby, "push"), (ruby.qnil(),));
-            }
-
-            pub(super) fn next(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                this.acquire(ruby)?;
-                let out = Self::next_locked(ruby, this);
-                this.release(ruby);
-                out
-            }
-
-            fn next_locked(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                let inner = &mut *this.inner.borrow_mut();
-                drive_scan!(ruby, this, inner, |$item_name| {
-                    let $ruby = ruby;
-                    $convert
-                })
-            }
-
-            pub(super) fn close(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                this.acquire(ruby)?;
-                let out = Self::close_locked(ruby, this);
-                this.release(ruby);
-                out
-            }
-
-            fn close_locked(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
-                let inner = &mut *this.inner.borrow_mut();
-                inner.done = true;
-                inner.buffer.clear();
-                let cursor = Arc::clone(&inner.cursor);
+            /// Returns the next ready chunk as an Array, or `nil` after the
+            /// end. Read failures raise the typed state errors.
+            pub(super) fn next_chunk($ruby: &Ruby, this: &Self) -> Result<Option<RArray>, Error> {
+                let cursor = Arc::clone(&this.cursor);
+                let context = extract_opentelemetry_context($ruby, &this.propagator)?;
+                let pull = async move {
+                    cursor
+                        .next_ready_chunk(SCAN_READY_CHUNK_SIZE)
+                        .with_context(context)
+                        .await
+                };
                 this.bridge
-                    .wait_for(ruby, async move { cursor.close().await }, Span::current())?;
-                Ok(ruby.qnil().as_value())
+                    .wait_for($ruby, pull, Span::current())?
+                    .map_err(|error| state_error($ruby, &error))?
+                    .map(|items| {
+                        $ruby.ary_try_from_iter(items.into_iter().map(|$item_name| $convert))
+                    })
+                    .transpose()
+            }
+
+            pub(super) fn close(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+                let cursor = Arc::clone(&this.cursor);
+                this.bridge
+                    .wait_for(ruby, async move { cursor.close().await }, Span::current())
             }
         }
     };
@@ -159,7 +79,7 @@ native_scan!(
     NativeJsonDequeScan,
     "Prosody::NativeJsonDequeScan",
     JsonValue,
-    |ruby, item| { serialize(ruby, &item) }
+    |ruby, item| { serialize::<_, Value>(ruby, &item) }
 );
 native_scan!(
     NativeJsonMapScan,

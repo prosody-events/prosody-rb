@@ -312,7 +312,7 @@ module Prosody
   end
 
   interface _NativeScan[T]
-    def next: () -> T?
+    def next_chunk: () -> Array[T]?
     def close: () -> void
   end
 

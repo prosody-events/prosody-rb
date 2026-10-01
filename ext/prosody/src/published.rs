@@ -149,7 +149,7 @@ impl NativePublishedMap {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let entries = this.inner.entries(key).with_query(query).stream();
-        NativeJsonMapScan::new(ruby, entries, bridge, propagator)
+        Ok(NativeJsonMapScan::new(entries, bridge, propagator))
     }
 
     fn keys(
@@ -162,7 +162,7 @@ impl NativePublishedMap {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let keys = this.inner.keys(key).with_query(query).stream();
-        NativeMapKeyScan::new(ruby, keys, bridge, propagator)
+        Ok(NativeMapKeyScan::new(keys, bridge, propagator))
     }
 }
 
@@ -208,7 +208,7 @@ impl NativePublishedSet {
         let query = key_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let members = this.inner.keys(key).with_query(query).stream();
-        NativeMapKeyScan::new(ruby, members, bridge, propagator)
+        Ok(NativeMapKeyScan::new(members, bridge, propagator))
     }
 }
 
@@ -258,7 +258,7 @@ impl NativePublishedDeque {
         let query = position_query(ruby, direction, options)?;
         let (bridge, propagator) = this.reads.scan_parts(ruby)?;
         let values = this.inner.values(key).with_query(query).stream();
-        NativeJsonDequeScan::new(ruby, values, bridge, propagator)
+        Ok(NativeJsonDequeScan::new(values, bridge, propagator))
     }
 }
 

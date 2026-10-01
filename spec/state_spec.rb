@@ -267,7 +267,7 @@ RSpec.describe "Prosody keyed state" do
       native.define_singleton_method(:peek_back) { nil }
       native.define_singleton_method(:scan) do |_direction, _query = {}|
         scan = Object.new
-        scan.define_singleton_method(:next) { nil }
+        scan.define_singleton_method(:next_chunk) { nil }
         scan.define_singleton_method(:close) { nil }
         scan
       end
@@ -296,15 +296,14 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "traversal over falsy items" do
-    # A stand-in native handle whose scan replays `items` and then returns nil
-    # (the exhaustion sentinel), so traversal can be exercised without a vended
-    # native handle.
+    # A stand-in native handle whose scan returns `items` as one chunk and then
+    # `nil`, so traversal can be exercised without a vended native handle.
     def fake_scanning_native(items)
       native = Object.new
       native.define_singleton_method(:scan) do |_direction, _query = {}|
-        remaining = items.dup
+        chunks = [items]
         scan = Object.new
-        scan.define_singleton_method(:next) { remaining.empty? ? nil : remaining.shift }
+        scan.define_singleton_method(:next_chunk) { chunks.shift }
         scan.define_singleton_method(:close) { nil }
         scan
       end

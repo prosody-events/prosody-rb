@@ -239,16 +239,12 @@ module Prosody
       # yields each item, and closes the cursor via `ensure` on stop or
       # exception. Without a block, returns an Enumerator. A map scan yields
       # each `[key, value]` pair as one Array, as `Hash#each_pair` does.
-      def traverse(opener, *args)
-        return enum_for(:traverse, opener, *args) unless block_given?
+      def traverse(opener, *args, &block)
+        return enum_for(:traverse, opener, *args) unless block
 
         scan = @native.public_send(opener, *args)
-        # `nil` is the exhaustion sentinel (unambiguous under the null ban);
-        # terminate on it explicitly rather than on falsiness, so a legal
-        # stored `false` (or a `[key, false]` pair, always a truthy Array)
-        # does not stop iteration and drop the tail after it.
-        until (item = scan.next).nil?
-          yield item
+        while (chunk = scan.next_chunk)
+          chunk.each(&block)
         end
       ensure
         scan&.close

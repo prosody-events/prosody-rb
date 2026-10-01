@@ -267,12 +267,11 @@ macro_rules! map_state {
                 options: RHash,
             ) -> Result<$scan, Error> {
                 let query = key_query(ruby, direction, options)?;
-                $scan::new(
-                    ruby,
+                Ok($scan::new(
                     this.state.entries().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
-                )
+                ))
             }
 
             fn keys(
@@ -282,12 +281,11 @@ macro_rules! map_state {
                 options: RHash,
             ) -> Result<NativeMapKeyScan, Error> {
                 let query = key_query(ruby, direction, options)?;
-                NativeMapKeyScan::new(
-                    ruby,
+                Ok(NativeMapKeyScan::new(
                     this.state.keys().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
-                )
+                ))
             }
 
             fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
@@ -395,12 +393,11 @@ macro_rules! deque_state {
                 options: RHash,
             ) -> Result<$scan, Error> {
                 let query = position_query(ruby, direction, options)?;
-                $scan::new(
-                    ruby,
+                Ok($scan::new(
                     this.state.values().with_query(query).stream(),
                     this.bridge.clone(),
                     Arc::clone(&this.propagator),
-                )
+                ))
             }
 
             fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
