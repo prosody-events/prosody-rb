@@ -27,7 +27,7 @@ RSpec.describe Prosody::Demand do
   describe "context.demand", integration: true do
     include_context "keyed state integration"
 
-    it "reports normal delivery first and the retry ordinal after a failure" do
+    it "reports normal delivery first and the retry count after a failure" do
       handler_class = Class.new(CompleteHandler) do
         def initialize(sink)
           @sink = sink
