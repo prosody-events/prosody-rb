@@ -43,7 +43,7 @@ mod state;
 mod trigger;
 
 pub(crate) use state::{
-    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query, run_state,
     state_error,
 };
 

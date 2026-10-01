@@ -3,13 +3,11 @@
 //! Cancellation can discard an orphaned chunk. The attempt then closes the
 //! cursor through the Ruby `ensure`, so no later operation observes that chunk.
 
-use super::{state_error, wrapped_class};
+use super::{run_state, wrapped_class};
 use crate::bridge::Bridge;
 use crate::handler::message::Message;
-use crate::tracing_util::extract_opentelemetry_context;
 use magnus::{Error, IntoValue, Module, RArray, RModule, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::StateCursor;
 use prosody::consumer::message::ConsumerMessage;
 use serde_json::Value as JsonValue;
@@ -50,20 +48,11 @@ macro_rules! native_scan {
             /// end. Read failures raise the typed state errors.
             fn next_chunk($ruby: &Ruby, this: &Self) -> Result<Option<RArray>, Error> {
                 let cursor = Arc::clone(&this.cursor);
-                let context = extract_opentelemetry_context($ruby, &this.propagator)?;
-                let pull = async move {
-                    cursor
-                        .next_ready_chunk(SCAN_READY_CHUNK_SIZE)
-                        .with_context(context)
-                        .await
-                };
-                this.bridge
-                    .wait_for($ruby, pull, Span::current())?
-                    .map_err(|error| state_error($ruby, &error))?
-                    .map(|items| {
-                        $ruby.ary_try_from_iter(items.into_iter().map(|$item_name| $convert))
-                    })
-                    .transpose()
+                run_state($ruby, &this.bridge, &this.propagator, async move {
+                    cursor.next_ready_chunk(SCAN_READY_CHUNK_SIZE).await
+                })?
+                .map(|items| $ruby.ary_try_from_iter(items.into_iter().map(|$item_name| $convert)))
+                .transpose()
             }
 
             fn close(ruby: &Ruby, this: &Self) -> Result<(), Error> {

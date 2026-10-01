@@ -113,27 +113,32 @@ fn wrapped_class(ruby: &Ruby, module: RModule, path: &str) -> Result<RClass, Err
     module.define_class(path.trim_start_matches("Prosody::"), ruby.class_object())
 }
 
-/// Drives an infallible erased async op through [`Bridge::wait_for`] with the
-/// extracted carrier active, yielding the op's value.
-macro_rules! run_infallible {
-    ($ruby:expr, $this:expr, $handle:expr, $call:ident ( $($arg:expr),* )) => {{
-        let handle = Arc::clone($handle);
-        let context = extract_opentelemetry_context($ruby, &$this.propagator)?;
-        $this.bridge.wait_for(
-            $ruby,
-            async move { handle.$call($($arg),*).with_context(context).await },
-            Span::current(),
-        )?
-    }};
+/// Waits for one state operation in the caller's trace. An
+/// [`ErasedStateError`] raises its matching Ruby class.
+pub(crate) fn run_state<F, T>(
+    ruby: &Ruby,
+    bridge: &Bridge,
+    propagator: &Arc<TextMapCompositePropagator>,
+    operation: F,
+) -> Result<T, Error>
+where
+    F: Future<Output = Result<T, ErasedStateError>> + Send + 'static,
+    T: Send + 'static,
+{
+    let context = extract_opentelemetry_context(ruby, propagator)?;
+    bridge
+        .wait_for(ruby, operation.with_context(context), Span::current())?
+        .map_err(|error| state_error(ruby, &error))
 }
 
-/// Drives an erased async op like `run_infallible!`, and maps its
-/// [`ErasedStateError`] to the matching Ruby class.
+/// Calls one method of an erased handle through [`run_state`].
 macro_rules! run_op {
-    ($ruby:expr, $this:expr, $handle:expr, $call:ident ( $($arg:expr),* )) => {
-        run_infallible!($ruby, $this, $handle, $call($($arg),*))
-            .map_err(|error| state_error($ruby, &error))
-    };
+    ($ruby:expr, $this:expr, $handle:expr, $call:ident ( $($arg:expr),* )) => {{
+        let handle = Arc::clone($handle);
+        run_state($ruby, &$this.bridge, &$this.propagator, async move {
+            handle.$call($($arg),*).await
+        })
+    }};
 }
 
 macro_rules! value_state {
@@ -178,7 +183,10 @@ macro_rules! value_state {
             }
 
             fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
-                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                let state = Arc::clone(&this.state);
+                let outcome = run_state(ruby, &this.bridge, &this.propagator, async move {
+                    Ok(state.rollback().await)
+                })?;
                 Ok(outcome_symbol(ruby, outcome))
             }
 
@@ -311,7 +319,10 @@ macro_rules! map_state {
             }
 
             fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
-                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                let state = Arc::clone(&this.state);
+                let outcome = run_state(ruby, &this.bridge, &this.propagator, async move {
+                    Ok(state.rollback().await)
+                })?;
                 Ok(outcome_symbol(ruby, outcome))
             }
 
@@ -440,7 +451,10 @@ macro_rules! deque_state {
             }
 
             fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
-                let outcome = run_infallible!(ruby, this, &this.state, rollback());
+                let state = Arc::clone(&this.state);
+                let outcome = run_state(ruby, &this.bridge, &this.propagator, async move {
+                    Ok(state.rollback().await)
+                })?;
                 Ok(outcome_symbol(ruby, outcome))
             }
 

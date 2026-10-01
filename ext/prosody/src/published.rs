@@ -6,15 +6,12 @@
 
 use crate::bridge::Bridge;
 use crate::handler::{
-    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query,
-    state_error,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query, run_state,
 };
-use crate::tracing_util::extract_opentelemetry_context;
 use crate::util::ForkGuard;
 use crate::{ROOT_MOD, id};
 use magnus::{Error, Module, RHash, Ruby, StaticSymbol, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::ErasedStateError;
 use prosody::high_level::erased::{
     SharedDequeReader, SharedMapReader, SharedSetReader, SharedValueReader,
@@ -22,7 +19,6 @@ use prosody::high_level::erased::{
 use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
 use std::sync::Arc;
-use tracing::Span;
 
 /// The bridge, trace propagator, and fork guard that every reader shares.
 #[derive(Clone)]
@@ -45,10 +41,7 @@ impl Reads {
         T: Send + 'static,
     {
         self.fork.check(ruby)?;
-        let context = extract_opentelemetry_context(ruby, &self.propagator)?;
-        self.bridge
-            .wait_for(ruby, read.with_context(context), Span::current())?
-            .map_err(|error| state_error(ruby, &error))
+        run_state(ruby, &self.bridge, &self.propagator, read)
     }
 
     /// Waits for one optional JSON read and returns the value or `nil`.

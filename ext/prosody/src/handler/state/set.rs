@@ -3,15 +3,12 @@
 //! A set stores membership only. Member traversal reuses the map key cursor,
 //! since both yield bare `String` keys.
 
-use super::{NativeMapKeyScan, key_query, outcome_symbol, state_error, wrapped_class};
+use super::{NativeMapKeyScan, key_query, outcome_symbol, run_state, wrapped_class};
 use crate::bridge::Bridge;
-use crate::tracing_util::extract_opentelemetry_context;
 use magnus::{Error, Module, RHash, RModule, Ruby, StaticSymbol, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::DynSetState;
 use std::sync::Arc;
-use tracing::Span;
 
 /// Native set handle, wrapped by `Prosody::SetState`.
 #[magnus::wrap(class = "Prosody::NativeSetState")]
@@ -78,7 +75,10 @@ impl NativeSetState {
     }
 
     fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
-        let outcome = run_infallible!(ruby, this, &this.state, rollback());
+        let state = Arc::clone(&this.state);
+        let outcome = run_state(ruby, &this.bridge, &this.propagator, async move {
+            Ok(state.rollback().await)
+        })?;
         Ok(outcome_symbol(ruby, outcome))
     }
 
