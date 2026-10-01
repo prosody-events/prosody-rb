@@ -16,7 +16,8 @@ use crate::handler::message::Message;
 use crate::tracing_util::extract_opentelemetry_context;
 use magnus::value::ReprValue;
 use magnus::{
-    Error, ExceptionClass, IntoValue, Module, RHash, Ruby, StaticSymbol, TryConvert, Value,
+    Error, ExceptionClass, IntoValue, Module, RClass, RHash, RModule, Ruby, StaticSymbol,
+    TryConvert, Value, method,
 };
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
@@ -106,6 +107,12 @@ fn outcome_symbol(ruby: &Ruby, outcome: StoreOutcome) -> StaticSymbol {
     }
 }
 
+/// Defines the class that a `magnus::wrap` path such as
+/// `"Prosody::NativeSetState"` names.
+fn wrapped_class(ruby: &Ruby, module: RModule, path: &str) -> Result<RClass, Error> {
+    module.define_class(path.trim_start_matches("Prosody::"), ruby.class_object())
+}
+
 /// Drives an infallible erased async op through [`Bridge::wait_for`] with the
 /// extracted carrier active, yielding the op's value.
 macro_rules! run_infallible {
@@ -173,6 +180,16 @@ macro_rules! value_state {
             fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
                 let outcome = run_infallible!(ruby, this, &this.state, rollback());
                 Ok(outcome_symbol(ruby, outcome))
+            }
+
+            pub(super) fn register(ruby: &Ruby, module: RModule) -> Result<(), Error> {
+                let class = wrapped_class(ruby, module, $class)?;
+                class.define_method("get", method!($name::get, 0))?;
+                class.define_method("set", method!($name::set, 1))?;
+                class.define_method("clear", method!($name::clear, 0))?;
+                class.define_method("commit", method!($name::commit, 0))?;
+                class.define_method("rollback", method!($name::rollback, 0))?;
+                Ok(())
             }
         }
     };
@@ -297,6 +314,23 @@ macro_rules! map_state {
                 let outcome = run_infallible!(ruby, this, &this.state, rollback());
                 Ok(outcome_symbol(ruby, outcome))
             }
+
+            pub(super) fn register(ruby: &Ruby, module: RModule) -> Result<(), Error> {
+                let class = wrapped_class(ruby, module, $class)?;
+                class.define_method("get", method!($name::get, 1))?;
+                class.define_method("contains_key", method!($name::contains_key, 1))?;
+                class.define_method("is_empty", method!($name::is_empty, 0))?;
+                class.define_method("get_many", method!($name::get_many, 1))?;
+                class.define_method("contains_many", method!($name::contains_many, 1))?;
+                class.define_method("set", method!($name::set, 2))?;
+                class.define_method("remove", method!($name::remove, 1))?;
+                class.define_method("clear", method!($name::clear, 0))?;
+                class.define_method("scan", method!($name::scan, 2))?;
+                class.define_method("keys", method!($name::keys, 2))?;
+                class.define_method("commit", method!($name::commit, 0))?;
+                class.define_method("rollback", method!($name::rollback, 0))?;
+                Ok(())
+            }
         }
     };
 }
@@ -408,6 +442,24 @@ macro_rules! deque_state {
             fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
                 let outcome = run_infallible!(ruby, this, &this.state, rollback());
                 Ok(outcome_symbol(ruby, outcome))
+            }
+
+            pub(super) fn register(ruby: &Ruby, module: RModule) -> Result<(), Error> {
+                let class = wrapped_class(ruby, module, $class)?;
+                class.define_method("len", method!($name::len, 0))?;
+                class.define_method("is_empty", method!($name::is_empty, 0))?;
+                class.define_method("get", method!($name::get, 1))?;
+                class.define_method("peek_front", method!($name::peek_front, 0))?;
+                class.define_method("peek_back", method!($name::peek_back, 0))?;
+                class.define_method("push_back", method!($name::push_back, 1))?;
+                class.define_method("push_front", method!($name::push_front, 1))?;
+                class.define_method("pop_front", method!($name::pop_front, 0))?;
+                class.define_method("pop_back", method!($name::pop_back, 0))?;
+                class.define_method("clear", method!($name::clear, 0))?;
+                class.define_method("scan", method!($name::scan, 2))?;
+                class.define_method("commit", method!($name::commit, 0))?;
+                class.define_method("rollback", method!($name::rollback, 0))?;
+                Ok(())
             }
         }
     };

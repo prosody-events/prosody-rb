@@ -3,10 +3,10 @@
 //! A set stores membership only. Member traversal reuses the map key cursor,
 //! since both yield bare `String` keys.
 
-use super::{NativeMapKeyScan, key_query, outcome_symbol, state_error};
+use super::{NativeMapKeyScan, key_query, outcome_symbol, state_error, wrapped_class};
 use crate::bridge::Bridge;
 use crate::tracing_util::extract_opentelemetry_context;
-use magnus::{Error, RHash, Ruby, StaticSymbol};
+use magnus::{Error, Module, RHash, RModule, Ruby, StaticSymbol, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::DynSetState;
@@ -34,35 +34,31 @@ impl NativeSetState {
         }
     }
 
-    pub(super) fn contains(ruby: &Ruby, this: &Self, member: String) -> Result<bool, Error> {
+    fn contains(ruby: &Ruby, this: &Self, member: String) -> Result<bool, Error> {
         run_op!(ruby, this, &this.state, contains(member))
     }
 
-    pub(super) fn contains_many(
-        ruby: &Ruby,
-        this: &Self,
-        members: Vec<String>,
-    ) -> Result<Vec<bool>, Error> {
+    fn contains_many(ruby: &Ruby, this: &Self, members: Vec<String>) -> Result<Vec<bool>, Error> {
         run_op!(ruby, this, &this.state, contains_many(members))
     }
 
-    pub(super) fn is_empty(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+    fn is_empty(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
         run_op!(ruby, this, &this.state, is_empty())
     }
 
-    pub(super) fn insert(ruby: &Ruby, this: &Self, member: String) -> Result<(), Error> {
+    fn insert(ruby: &Ruby, this: &Self, member: String) -> Result<(), Error> {
         run_op!(ruby, this, &this.state, insert(member))
     }
 
-    pub(super) fn remove(ruby: &Ruby, this: &Self, member: String) -> Result<(), Error> {
+    fn remove(ruby: &Ruby, this: &Self, member: String) -> Result<(), Error> {
         run_op!(ruby, this, &this.state, remove(member))
     }
 
-    pub(super) fn clear(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+    fn clear(ruby: &Ruby, this: &Self) -> Result<(), Error> {
         run_op!(ruby, this, &this.state, clear())
     }
 
-    pub(super) fn keys(
+    fn keys(
         ruby: &Ruby,
         this: &Self,
         direction: StaticSymbol,
@@ -76,13 +72,27 @@ impl NativeSetState {
         ))
     }
 
-    pub(super) fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+    fn commit(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
         let outcome = run_op!(ruby, this, &this.state, commit())?;
         Ok(outcome_symbol(ruby, outcome))
     }
 
-    pub(super) fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
+    fn rollback(ruby: &Ruby, this: &Self) -> Result<StaticSymbol, Error> {
         let outcome = run_infallible!(ruby, this, &this.state, rollback());
         Ok(outcome_symbol(ruby, outcome))
+    }
+
+    pub(super) fn register(ruby: &Ruby, module: RModule) -> Result<(), Error> {
+        let class = wrapped_class(ruby, module, "Prosody::NativeSetState")?;
+        class.define_method("contains", method!(NativeSetState::contains, 1))?;
+        class.define_method("contains_many", method!(NativeSetState::contains_many, 1))?;
+        class.define_method("is_empty", method!(NativeSetState::is_empty, 0))?;
+        class.define_method("insert", method!(NativeSetState::insert, 1))?;
+        class.define_method("remove", method!(NativeSetState::remove, 1))?;
+        class.define_method("clear", method!(NativeSetState::clear, 0))?;
+        class.define_method("keys", method!(NativeSetState::keys, 2))?;
+        class.define_method("commit", method!(NativeSetState::commit, 0))?;
+        class.define_method("rollback", method!(NativeSetState::rollback, 0))?;
+        Ok(())
     }
 }

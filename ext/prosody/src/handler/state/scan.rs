@@ -3,11 +3,11 @@
 //! Cancellation can discard an orphaned chunk. The attempt then closes the
 //! cursor through the Ruby `ensure`, so no later operation observes that chunk.
 
-use super::state_error;
+use super::{state_error, wrapped_class};
 use crate::bridge::Bridge;
 use crate::handler::message::Message;
 use crate::tracing_util::extract_opentelemetry_context;
-use magnus::{Error, IntoValue, RArray, Ruby, Value};
+use magnus::{Error, IntoValue, Module, RArray, RModule, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
 use opentelemetry::trace::FutureExt;
 use prosody::consumer::event_context::StateCursor;
@@ -48,7 +48,7 @@ macro_rules! native_scan {
 
             /// Returns the next ready chunk as an Array, or `nil` after the
             /// end. Read failures raise the typed state errors.
-            pub(super) fn next_chunk($ruby: &Ruby, this: &Self) -> Result<Option<RArray>, Error> {
+            fn next_chunk($ruby: &Ruby, this: &Self) -> Result<Option<RArray>, Error> {
                 let cursor = Arc::clone(&this.cursor);
                 let context = extract_opentelemetry_context($ruby, &this.propagator)?;
                 let pull = async move {
@@ -66,10 +66,17 @@ macro_rules! native_scan {
                     .transpose()
             }
 
-            pub(super) fn close(ruby: &Ruby, this: &Self) -> Result<(), Error> {
+            fn close(ruby: &Ruby, this: &Self) -> Result<(), Error> {
                 let cursor = Arc::clone(&this.cursor);
                 this.bridge
                     .wait_for(ruby, async move { cursor.close().await }, Span::current())
+            }
+
+            pub(super) fn register(ruby: &Ruby, module: RModule) -> Result<(), Error> {
+                let class = wrapped_class(ruby, module, $class)?;
+                class.define_method("next_chunk", method!($name::next_chunk, 0))?;
+                class.define_method("close", method!($name::close, 0))?;
+                Ok(())
             }
         }
     };
