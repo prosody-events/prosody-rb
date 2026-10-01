@@ -1,76 +1,97 @@
 //! Read-only published-state handles for Ruby.
+//!
+//! Every reader method runs through [`Reads`], which refuses a forked child
+//! and joins the caller's OpenTelemetry context. A failed read raises the
+//! same typed state errors as an owned handle.
 
 use crate::bridge::Bridge;
 use crate::handler::{
-    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, parse_direction,
-    published_deque_scan, published_map_key_scan, published_map_scan,
+    NativeJsonDequeScan, NativeJsonMapScan, NativeMapKeyScan, key_query, position_query, run_state,
 };
+use crate::util::ForkGuard;
 use crate::{ROOT_MOD, id};
-use magnus::value::ReprValue;
-use magnus::{Error, Module, Ruby, StaticSymbol, Value, method};
+use magnus::{Error, Module, RHash, Ruby, StaticSymbol, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
-use prosody::JsonCodec;
+use prosody::consumer::event_context::ErasedStateError;
 use prosody::high_level::erased::{
-    ErasedDirection, SharedDequeReader, SharedMapReader, SharedValueReader,
+    SharedDequeReader, SharedMapReader, SharedSetReader, SharedValueReader,
 };
-use prosody::state::Direction;
+use serde_json::Value as JsonValue;
 use serde_magnus::serialize;
 use std::sync::Arc;
-use tracing::Span;
 
-fn read_error(ruby: &Ruby, error: &impl ToString) -> Error {
-    Error::new(ruby.exception_runtime_error(), error.to_string())
+/// The bridge, trace propagator, and fork guard that every reader shares.
+#[derive(Clone)]
+pub(crate) struct Reads {
+    pub(crate) bridge: Bridge,
+    pub(crate) propagator: Arc<TextMapCompositePropagator>,
+    pub(crate) fork: ForkGuard,
 }
 
-fn erased_direction(direction: Direction) -> ErasedDirection {
-    match direction {
-        Direction::Forward => ErasedDirection::Forward,
-        Direction::Backward => ErasedDirection::Backward,
+impl Reads {
+    /// Waits for one read in the caller's trace.
+    ///
+    /// # Errors
+    ///
+    /// Raises `RuntimeError` after fork, and a typed state error when the
+    /// read fails.
+    fn read<F, T>(&self, ruby: &Ruby, read: F) -> Result<T, Error>
+    where
+        F: Future<Output = Result<T, ErasedStateError>> + Send + 'static,
+        T: Send + 'static,
+    {
+        self.fork.check(ruby)?;
+        run_state(ruby, &self.bridge, &self.propagator, read)
+    }
+
+    /// Waits for one optional JSON read and returns the value or `nil`.
+    ///
+    /// # Errors
+    ///
+    /// See [`Reads::read`].
+    fn read_json<F>(&self, ruby: &Ruby, read: F) -> Result<Value, Error>
+    where
+        F: Future<Output = Result<Option<JsonValue>, ErasedStateError>> + Send + 'static,
+    {
+        serialize(ruby, &self.read(ruby, read)?)
+    }
+
+    /// Returns the bridge and propagator for a new scan.
+    ///
+    /// # Errors
+    ///
+    /// Raises `RuntimeError` after fork.
+    fn scan_parts(&self, ruby: &Ruby) -> Result<(Bridge, Arc<TextMapCompositePropagator>), Error> {
+        self.fork.check(ruby)?;
+        Ok((self.bridge.clone(), Arc::clone(&self.propagator)))
     }
 }
 
 #[magnus::wrap(class = "Prosody::NativePublishedValue")]
 pub(crate) struct NativePublishedValue {
-    pub(crate) inner: SharedValueReader<JsonCodec>,
-    pub(crate) bridge: Bridge,
+    pub(crate) inner: SharedValueReader<JsonValue>,
+    pub(crate) reads: Reads,
 }
 
 impl NativePublishedValue {
     fn get(ruby: &Ruby, this: &Self, key: String) -> Result<Value, Error> {
         let inner = Arc::clone(&this.inner);
-        let value = this
-            .bridge
-            .wait_for(ruby, async move { inner.get(key).await }, Span::current())?
-            .map_err(|error| read_error(ruby, &error))?;
-        match value {
-            Some(value) => serialize(ruby, &value),
-            None => Ok(ruby.qnil().as_value()),
-        }
+        this.reads
+            .read_json(ruby, async move { inner.get(key).await })
     }
 }
 
 #[magnus::wrap(class = "Prosody::NativePublishedMap")]
 pub(crate) struct NativePublishedMap {
-    pub(crate) inner: SharedMapReader<JsonCodec>,
-    pub(crate) bridge: Bridge,
-    pub(crate) propagator: Arc<TextMapCompositePropagator>,
+    pub(crate) inner: SharedMapReader<JsonValue>,
+    pub(crate) reads: Reads,
 }
 
 impl NativePublishedMap {
     fn get(ruby: &Ruby, this: &Self, key: String, map_key: String) -> Result<Value, Error> {
         let inner = Arc::clone(&this.inner);
-        let value = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.get(key, map_key).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        match value {
-            Some(value) => serialize(ruby, &value),
-            None => Ok(ruby.qnil().as_value()),
-        }
+        this.reads
+            .read_json(ruby, async move { inner.get(key, map_key).await })
     }
 
     fn get_many(
@@ -81,25 +102,34 @@ impl NativePublishedMap {
     ) -> Result<Value, Error> {
         let inner = Arc::clone(&this.inner);
         let values = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.get_many(key, map_keys).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
+            .reads
+            .read(ruby, async move { inner.get_many(key, map_keys).await })?;
         serialize(ruby, &values)
+    }
+
+    fn contains_many(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        map_keys: Vec<String>,
+    ) -> Result<Vec<bool>, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.reads.read(
+            ruby,
+            async move { inner.contains_many(key, map_keys).await },
+        )
+    }
+
+    fn is_empty(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.reads
+            .read(ruby, async move { inner.is_empty(key).await })
     }
 
     fn contains_key(ruby: &Ruby, this: &Self, key: String, map_key: String) -> Result<bool, Error> {
         let inner = Arc::clone(&this.inner);
-        this.bridge
-            .wait_for(
-                ruby,
-                async move { inner.contains_key(key, map_key).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))
+        this.reads
+            .read(ruby, async move { inner.contains_key(key, map_key).await })
     }
 
     fn scan(
@@ -107,23 +137,12 @@ impl NativePublishedMap {
         this: &Self,
         key: String,
         direction: StaticSymbol,
+        options: RHash,
     ) -> Result<NativeJsonMapScan, Error> {
-        let direction = erased_direction(parse_direction(ruby, direction)?);
-        let inner = Arc::clone(&this.inner);
-        let cursor = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.stream(key, direction).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        published_map_scan(
-            ruby,
-            cursor,
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        )
+        let query = key_query(ruby, direction, options)?;
+        let (bridge, propagator) = this.reads.scan_parts(ruby)?;
+        let entries = this.inner.entries(key).with_query(query).stream();
+        Ok(NativeJsonMapScan::new(entries, bridge, propagator))
     }
 
     fn keys(
@@ -131,98 +150,95 @@ impl NativePublishedMap {
         this: &Self,
         key: String,
         direction: StaticSymbol,
+        options: RHash,
     ) -> Result<NativeMapKeyScan, Error> {
-        let direction = erased_direction(parse_direction(ruby, direction)?);
+        let query = key_query(ruby, direction, options)?;
+        let (bridge, propagator) = this.reads.scan_parts(ruby)?;
+        let keys = this.inner.keys(key).with_query(query).stream();
+        Ok(NativeMapKeyScan::new(keys, bridge, propagator))
+    }
+}
+
+#[magnus::wrap(class = "Prosody::NativePublishedSet")]
+pub(crate) struct NativePublishedSet {
+    pub(crate) inner: SharedSetReader,
+    pub(crate) reads: Reads,
+}
+
+impl NativePublishedSet {
+    fn contains(ruby: &Ruby, this: &Self, key: String, member: String) -> Result<bool, Error> {
         let inner = Arc::clone(&this.inner);
-        let cursor = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.keys(key, direction).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        published_map_key_scan(
-            ruby,
-            cursor,
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        )
+        this.reads
+            .read(ruby, async move { inner.contains(key, member).await })
+    }
+
+    fn contains_many(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        members: Vec<String>,
+    ) -> Result<Vec<bool>, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.reads
+            .read(ruby, async move { inner.contains_many(key, members).await })
+    }
+
+    fn is_empty(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.reads
+            .read(ruby, async move { inner.is_empty(key).await })
+    }
+
+    /// Opens a member cursor. Members are bare `String` keys, so the map key
+    /// cursor carries them.
+    fn keys(
+        ruby: &Ruby,
+        this: &Self,
+        key: String,
+        direction: StaticSymbol,
+        options: RHash,
+    ) -> Result<NativeMapKeyScan, Error> {
+        let query = key_query(ruby, direction, options)?;
+        let (bridge, propagator) = this.reads.scan_parts(ruby)?;
+        let members = this.inner.keys(key).with_query(query).stream();
+        Ok(NativeMapKeyScan::new(members, bridge, propagator))
     }
 }
 
 #[magnus::wrap(class = "Prosody::NativePublishedDeque")]
 pub(crate) struct NativePublishedDeque {
-    pub(crate) inner: SharedDequeReader<JsonCodec>,
-    pub(crate) bridge: Bridge,
-    pub(crate) propagator: Arc<TextMapCompositePropagator>,
+    pub(crate) inner: SharedDequeReader<JsonValue>,
+    pub(crate) reads: Reads,
 }
 
 impl NativePublishedDeque {
     fn get(ruby: &Ruby, this: &Self, key: String, index: usize) -> Result<Value, Error> {
         let inner = Arc::clone(&this.inner);
-        let value = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.get(key, index).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        match value {
-            Some(value) => serialize(ruby, &value),
-            None => Ok(ruby.qnil().as_value()),
-        }
+        this.reads
+            .read_json(ruby, async move { inner.get(key, index).await })
     }
 
     fn length(ruby: &Ruby, this: &Self, key: String) -> Result<usize, Error> {
         let inner = Arc::clone(&this.inner);
-        this.bridge
-            .wait_for(ruby, async move { inner.len(key).await }, Span::current())?
-            .map_err(|error| read_error(ruby, &error))
+        this.reads.read(ruby, async move { inner.len(key).await })
     }
 
     fn is_empty(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
         let inner = Arc::clone(&this.inner);
-        this.bridge
-            .wait_for(
-                ruby,
-                async move { inner.is_empty(key).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))
+        this.reads
+            .read(ruby, async move { inner.is_empty(key).await })
     }
 
     fn peek_front(ruby: &Ruby, this: &Self, key: String) -> Result<Value, Error> {
         let inner = Arc::clone(&this.inner);
-        let value = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.peek_front(key).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        match value {
-            Some(value) => serialize(ruby, &value),
-            None => Ok(ruby.qnil().as_value()),
-        }
+        this.reads
+            .read_json(ruby, async move { inner.peek_front(key).await })
     }
 
     fn peek_back(ruby: &Ruby, this: &Self, key: String) -> Result<Value, Error> {
         let inner = Arc::clone(&this.inner);
-        let value = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.peek_back(key).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        match value {
-            Some(value) => serialize(ruby, &value),
-            None => Ok(ruby.qnil().as_value()),
-        }
+        this.reads
+            .read_json(ruby, async move { inner.peek_back(key).await })
     }
 
     fn scan(
@@ -230,23 +246,12 @@ impl NativePublishedDeque {
         this: &Self,
         key: String,
         direction: StaticSymbol,
+        options: RHash,
     ) -> Result<NativeJsonDequeScan, Error> {
-        let direction = erased_direction(parse_direction(ruby, direction)?);
-        let inner = Arc::clone(&this.inner);
-        let cursor = this
-            .bridge
-            .wait_for(
-                ruby,
-                async move { inner.stream(key, direction).await },
-                Span::current(),
-            )?
-            .map_err(|error| read_error(ruby, &error))?;
-        published_deque_scan(
-            ruby,
-            cursor,
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        )
+        let query = position_query(ruby, direction, options)?;
+        let (bridge, propagator) = this.reads.scan_parts(ruby)?;
+        let values = this.inner.values(key).with_query(query).stream();
+        Ok(NativeJsonDequeScan::new(values, bridge, propagator))
     }
 }
 
@@ -259,8 +264,22 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     map.define_method("get", method!(NativePublishedMap::get, 2))?;
     map.define_method("get_many", method!(NativePublishedMap::get_many, 2))?;
     map.define_method("contains_key", method!(NativePublishedMap::contains_key, 2))?;
-    map.define_method("scan", method!(NativePublishedMap::scan, 2))?;
-    map.define_method("keys", method!(NativePublishedMap::keys, 2))?;
+    map.define_method(
+        "contains_many",
+        method!(NativePublishedMap::contains_many, 2),
+    )?;
+    map.define_method("is_empty", method!(NativePublishedMap::is_empty, 1))?;
+    map.define_method("scan", method!(NativePublishedMap::scan, 3))?;
+    map.define_method("keys", method!(NativePublishedMap::keys, 3))?;
+
+    let set = module.define_class(id!(ruby, "NativePublishedSet"), ruby.class_object())?;
+    set.define_method("contains", method!(NativePublishedSet::contains, 2))?;
+    set.define_method(
+        "contains_many",
+        method!(NativePublishedSet::contains_many, 2),
+    )?;
+    set.define_method("is_empty", method!(NativePublishedSet::is_empty, 1))?;
+    set.define_method("keys", method!(NativePublishedSet::keys, 3))?;
 
     let deque = module.define_class(id!(ruby, "NativePublishedDeque"), ruby.class_object())?;
     deque.define_method("get", method!(NativePublishedDeque::get, 2))?;
@@ -268,6 +287,6 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     deque.define_method("is_empty", method!(NativePublishedDeque::is_empty, 1))?;
     deque.define_method("peek_front", method!(NativePublishedDeque::peek_front, 1))?;
     deque.define_method("peek_back", method!(NativePublishedDeque::peek_back, 1))?;
-    deque.define_method("scan", method!(NativePublishedDeque::scan, 2))?;
+    deque.define_method("scan", method!(NativePublishedDeque::scan, 3))?;
     Ok(())
 }

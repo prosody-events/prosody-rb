@@ -80,9 +80,10 @@ impl ResultSender {
             return false;
         };
 
+        // A result with no JSON form is a handler mistake, so it retries.
         if is_success {
             let result = deserialize(ruby, result)
-                .map_err(|error| ProcessingError::Permanent(error.to_string()));
+                .map_err(|error| ProcessingError::Transient(error.to_string()));
             if result_tx.send(result).is_err() {
                 debug!("discarding result; receiver went away");
             }

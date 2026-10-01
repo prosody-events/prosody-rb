@@ -9,8 +9,7 @@ require "tmpdir"
 require "opentelemetry/sdk"
 require "opentelemetry-exporter-otlp"
 
-# Full LGTM trace-topology audit for keyed state (Appendix 1 item 12), per
-# docs/keyed-state/clients/02-lgtm-trace-audit.md. Runs a focused state group
+# Full LGTM trace-topology audit for keyed state. Runs a focused state group
 # under a unique OTEL_SERVICE_NAME, exports to the live collector, then queries
 # Tempo and audits the complete span graph: exactly one core semantic span per
 # state op parented directly to the Ruby handler span, no binding/Magnus wrapper
@@ -129,15 +128,17 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
   it "emits exactly one core semantic span per state op, parented to the Ruby handler span" do
     value_def = Prosody.value(random_state_name("val"))
     map_def = Prosody.map(random_state_name("map"))
+    set_def = Prosody.set(random_state_name("set"))
     latch = Thread::Queue.new
     tracer = OpenTelemetry.tracer_provider.tracer(TRACER_SCOPE)
 
     handler_class = Class.new(CompleteHandler) do
-      def initialize(latch, tracer, value_def, map_def)
+      def initialize(latch, tracer, value_def, map_def, set_def)
         @latch = latch
         @tracer = tracer
         @value_def = value_def
         @map_def = map_def
+        @set_def = set_def
       end
 
       def on_message(context, _message)
@@ -148,15 +149,18 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
           map = context.state(@map_def)
           map.set("a", 1)
           map.each_pair { |_k, _v| }
+          set = context.state(@set_def)
+          set.add("a")
+          set.each(prefix: "a") { |_member| }
           @latch << :done
         end
       end
     end
 
-    config = state_config(topic, value_def, map_def)
+    config = state_config(topic, value_def, map_def, set_def)
     client = Prosody::Client.new(config)
     begin
-      client.subscribe(handler_class.new(latch, tracer, value_def, map_def))
+      client.subscribe(handler_class.new(latch, tracer, value_def, map_def, set_def))
       client.send_message(topic, "k1", {go: true})
       Timeout.timeout(TestConfig::MESSAGE_TIMEOUT) { latch.pop }
 
@@ -165,7 +169,7 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
       client.shutdown unless client.consumer_state == :shut_down
     end
 
-    expected_core = %w[value.set value.get map.set map.stream]
+    expected_core = %w[value.set value.get map.set map.stream set.insert set.stream]
     trace_id, spans = await_audit_trace(expected_core)
     expect(trace_id).not_to be_nil, "no trace under #{SERVICE} contained #{expected_core.inspect}"
 
@@ -197,6 +201,8 @@ RSpec.describe "Prosody keyed state tracing", integration: true, tracing: true d
     expect(core_spans["value.get"][:attrs]["collection"]).to eq(value_def.name)
     expect(core_spans["map.set"][:attrs]["collection"]).to eq(map_def.name)
     expect(core_spans["map.stream"][:attrs]["collection"]).to eq(map_def.name)
+    expect(core_spans["set.insert"][:attrs]["collection"]).to eq(set_def.name)
+    expect(core_spans["set.stream"][:attrs]["collection"]).to eq(set_def.name)
 
     # No same-named wrapper span (the duplicate-wrapper signature).
     expected_core.each do |name|

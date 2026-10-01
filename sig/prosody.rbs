@@ -23,8 +23,9 @@ module Prosody
     # Creates an admin client for the specified Kafka bootstrap servers.
     def self.new: (Array[String]) -> AdminClient
 
-    # Creates a topic.
-    def create_topic: (String, Integer, Integer) -> void
+    # Creates a topic. A nil cleanup_policy or retention uses the cluster
+    # default. retention is in seconds.
+    def create_topic: (String name, Integer partition_count, Integer replication_factor, ?cleanup_policy: String?, ?retention: Numeric?) -> void
 
     # Deletes a topic.
     def delete_topic: (String) -> void
@@ -40,10 +41,30 @@ module Prosody
     def initialize: (untyped) -> void
   end
 
+  type demand_kind = :normal | :failure
+
+  # The demand a handler call serves. kind is :normal for a normal delivery
+  # and :failure for a retry. retries is the number of retries: 0 for a
+  # normal delivery and 1 on the first retry. The count is an estimate.
+  class Demand < Data
+    attr_reader kind: demand_kind
+    attr_reader retries: Integer
+
+    def self.new: (demand_kind kind, Integer retries) -> instance
+                | (kind: demand_kind, retries: Integer) -> instance
+
+    def normal?: () -> bool
+    def failure?: () -> bool
+  end
+
   # Represents the context of a Kafka message.
   # Provides metadata and control capabilities for message processing.
   class Context
     # This class is instantiated internally by the client.
+
+    # Returns whether this call is a normal delivery or a retry.
+    # @return [Demand] the demand this call serves
+    def demand: () -> Demand
 
     # Checks if cancellation has been requested.
     # Cancellation includes both message-level cancellation (e.g., timeout)
@@ -111,6 +132,12 @@ module Prosody
     # Returns the deserialized message payload.
     # @return [Payload] The message content
     def payload: () -> Payload
+
+    # Returns the producer's source system, or nil when the message has none.
+    def source_system: () -> String?
+
+    # Reports whether the producer requested a response to this message.
+    def response_requested?: () -> bool
   end
 
   # Represents an excise record with no payload.
@@ -120,6 +147,8 @@ module Prosody
     def offset: () -> Integer
     def key: () -> String
     def timestamp: () -> Time
+    def source_system: () -> String?
+    def response_requested?: () -> bool
   end
 
   # Represents a timer that was scheduled to fire at a specific time.
@@ -151,6 +180,9 @@ module Prosody
     def self.new: (Hash[Symbol, untyped] | Configuration config) -> Client
                 | (**untyped options) -> Client
 
+    # Creates a client, yields it, and shuts it down when the block exits.
+    def self.open: [T] (Hash[Symbol, untyped] | Configuration config) { (Client client) -> T } -> T
+
     # Returns the current state of the consumer.
     #
     # @return [Symbol] The consumer state: :shut_down, :unconfigured, :configured, or :running
@@ -159,7 +191,7 @@ module Prosody
     # Returns the number of Kafka partitions currently assigned to this consumer.
     #
     # @return [Integer] The number of assigned partitions
-    def assigned_partitions: () -> Integer
+    def assigned_partition_count: () -> Integer
 
     # Checks if the consumer is stalled.
     #
@@ -167,7 +199,7 @@ module Prosody
     # errors or reaching processing limits.
     #
     # @return [Boolean] true if the consumer is stalled, false otherwise
-    def is_stalled?: () -> bool
+    def stalled?: () -> bool
 
     # Sends a message to the specified Kafka topic.
     #
@@ -212,6 +244,7 @@ module Prosody
 
     def state: [T] (_ToS subsystem, _ValueDefinition[T] definition) -> PublishedValue[T]
              | [V] (_ToS subsystem, _MapDefinition[V] definition) -> PublishedMap[V]
+             | (_ToS subsystem, _SetDefinition definition) -> PublishedSet
              | [T] (_ToS subsystem, _DequeDefinition[T] definition) -> PublishedDeque[T]
   end
 end

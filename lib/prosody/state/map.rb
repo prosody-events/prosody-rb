@@ -1,0 +1,313 @@
+# frozen_string_literal: true
+
+# The map collection: the owned {Prosody::MapState} handle and the
+# {Prosody::PublishedMap} reader.
+
+module Prosody
+  # A `String`-keyed ordered-map keyed-state handle.
+  #
+  # Traversal is explicit: {#each_pair}/{#reverse_each_pair} yield `key, value`
+  # pairs over a native scan, closing the scan via `ensure`. The map has no
+  # aggregate mixin methods, because they would load the whole remote
+  # collection.
+  class MapState < State::Handle
+    include State::Scanning
+
+    # Reads the value for `key`.
+    #
+    # @param key [String] the map key
+    # @return [Object, nil] the value, or `nil` when the key is absent
+    def get(key) = @native.get(key)
+
+    # Reads several keys in a single isolated batch.
+    #
+    # @param keys [Array<String>] the keys to read, in order
+    # @return [Array<Object, nil>] one result per input key; `nil` for absent keys
+    def get_many(keys) = @native.get_many(keys)
+
+    # Tests several keys for presence in a single batch. Like {#key?}, it
+    # decodes no values.
+    #
+    # @param keys [Array<String>] the keys to test, in order
+    # @return [Array<Boolean>] one result per input key
+    def contains_many(keys) = @native.contains_many(keys)
+
+    # Whether the map holds no live entries (mirrors +Hash#empty?+).
+    #
+    # @return [Boolean]
+    def empty? = @native.is_empty
+
+    # Inserts or overwrites `key`.
+    #
+    # @param key [String] the map key
+    # @param value [Object] the value to store (JSON, or a message)
+    # @return [void]
+    # @raise [PermanentStateError] if `value` is `nil` (use {#delete} to remove)
+    def set(key, value) = @native.set(key, value)
+
+    # Removes `key`.
+    #
+    # Documented divergence from `Hash#delete`: this returns `nil`, never the
+    # removed value (the erased FFI seam does not surface it).
+    #
+    # @param key [String] the map key
+    # @return [nil]
+    def delete(key)
+      @native.remove(key)
+      nil
+    end
+
+    # Removes every entry.
+    #
+    # @return [void]
+    def clear = @native.clear
+
+    # Traverses the live entries in key order, yielding `key, value`.
+    #
+    # Without a block, returns an {Enumerator} over the native scan. Each step
+    # fiber-yields; the scan is closed via `ensure` on stop or exception. The
+    # enumerator is valid only within the current handler invocation.
+    #
+    # Every map traversal accepts the query keywords documented on
+    # {State::Scanning}. For keyset paging, pass the last key of the previous
+    # page as `after:` and the page size as `limit:`.
+    #
+    # @param query [Hash] optional `from:`, `after:`, `to:`, `before:`,
+    #   `range:`, `prefix:`, and `limit:` keywords
+    # @yieldparam key [String]
+    # @yieldparam value [Object]
+    # @return [Enumerator, void]
+    # @raise [ArgumentError, TypeError] if a query keyword is invalid
+    def each_pair(**query, &block) = traverse(:scan, :forward, query, &block)
+
+    # Traverses the live entries in reverse key order, yielding `key, value`.
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam key [String]
+    # @yieldparam value [Object]
+    # @return [Enumerator, void]
+    def reverse_each_pair(**query, &block) = traverse(:scan, :backward, query, &block)
+
+    # Traverses the live keys in key order, yielding each key (mirrors
+    # +Hash#each_key+). The key scan decodes no values, so a message-backed map
+    # fetches no Kafka messages. It can still read the store. Without a block,
+    # it returns an {Enumerator} that reads on demand. The map has no +keys+
+    # array, because it would load the whole remote keyset. The block form
+    # returns +nil+, as {#each_pair} does.
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam key [String]
+    # @return [Enumerator, void]
+    def each_key(**query, &block) = traverse(:keys, :forward, query, &block)
+
+    # Traverses the live keys in reverse key order, yielding each key.
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam key [String]
+    # @return [Enumerator, void]
+    def reverse_each_key(**query, &block) = traverse(:keys, :backward, query, &block)
+
+    # Traverses the live values in key order (mirrors +Hash#each_value+).
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam value [Object]
+    # @return [Enumerator, void]
+    def each_value(**query, &block) = traverse_values(:forward, query, &block)
+
+    # Traverses the live values in reverse key order.
+    #
+    # @param query [Hash] optional query keywords, as on {#each_pair}
+    # @yieldparam value [Object]
+    # @return [Enumerator, void]
+    def reverse_each_value(**query, &block) = traverse_values(:backward, query, &block)
+
+    # --- idiomatic Hash-style aliases and conveniences ------------------
+    # Each is composed from the canonical ops above and adds no capability
+    # the naming matrix lacks. Bounded reads only: there is deliberately no
+    # +keys+/+values+/+to_h+/+count+ or +Enumerable+, which would materialize
+    # the whole (potentially unbounded) remote collection.
+
+    # Reads +key+. Idiomatic alias of {#get} (mirrors +Hash#[]+).
+    alias_method :[], :get
+
+    # Writes +key+. Idiomatic alias of {#set} (mirrors +Hash#[]=+). As with any
+    # Ruby +[]=+, `map[key] = value` evaluates to +value+ regardless of return.
+    alias_method :[]=, :set
+
+    # Writes +key+, returning the stored +value+ (mirrors +Hash#store+). A
+    # wrapper, not an alias: a caller sees the return value of +store+, and
+    # the native write returns +nil+.
+    #
+    # @param key [String]
+    # @param value [Object]
+    # @return [Object] the stored +value+
+    def store(key, value)
+      set(key, value)
+      value
+    end
+
+    # Traverses live entries in key order. Idiomatic alias of {#each_pair}
+    # (mirrors +Hash#each+).
+    alias_method :each, :each_pair
+
+    # Reads several keys positionally (mirrors +Hash#values_at+).
+    #
+    # @param keys [Array<String>] the keys to read
+    # @return [Array<Object, nil>] one result per key; +nil+ for absent keys
+    def values_at(*keys) = get_many(keys)
+
+    # Reads +key+, raising or defaulting when absent (mirrors +Hash#fetch+).
+    # Performs a single read; a +nil+ result is unambiguously "absent" under
+    # the null ban.
+    #
+    # @param key [String]
+    # @param default [Object] returned when +key+ is absent
+    # @yieldparam key [String] called (instead of +default+) when +key+ is absent
+    # @return [Object]
+    # @raise [KeyError] when +key+ is absent and no default or block is given
+    def fetch(key, *default, &block)
+      if default.length > 1
+        raise ArgumentError, "wrong number of arguments (given #{default.length + 1}, expected 1..2)"
+      end
+      warn "warning: block supersedes default value argument" if block && !default.empty?
+
+      value = @native.get(key)
+      return value unless value.nil?
+      return block.call(key) if block
+      raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self) if default.empty?
+
+      # Steep merges the overloads, so it cannot type the default as D.
+      default.fetch(0) #: untyped
+    end
+
+    # Whether +key+ has a live value (mirrors +Hash#key?+). The check decodes
+    # no value, so a message-backed map fetches no Kafka message. It returns
+    # +true+ for an entry whose message cannot be fetched. A cache miss can
+    # still read the store.
+    #
+    # @param key [String]
+    # @return [Boolean]
+    def key?(key) = @native.contains_key(key)
+    alias_method :has_key?, :key?
+    alias_method :include?, :key?
+    alias_method :member?, :key?
+
+    # Reads +key+ and digs into the nested value (mirrors +Hash#dig+). A single
+    # bounded read; digging continues in the returned local value.
+    #
+    # @param key [String]
+    # @return [Object, nil]
+    # @raise [TypeError] if a nested value does not respond to +dig+
+    def dig(key, *rest)
+      value = @native.get(key)
+      return value if rest.empty? || value.nil?
+
+      unless value.respond_to?(:dig)
+        raise TypeError, "#{value.class} does not have #dig method"
+      end
+
+      value.dig(*rest)
+    end
+
+    # Reads +keys+ as a single bounded batch, returning a +Hash+ of only the
+    # keys that are present (mirrors +Hash#slice+). Absent keys are omitted.
+    #
+    # @param keys [Array<String>] the keys to read
+    # @return [Hash{String => Object}] present keys mapped to their values
+    def slice(*keys) = keys.zip(get_many(keys)).to_h.compact
+
+    # Reads +keys+ as a single bounded batch, requiring every key to be present
+    # (mirrors +Hash#fetch_values+). Without a block, a missing key raises
+    # {KeyError}; with a block, the block is called with each missing key and
+    # its result substituted.
+    #
+    # @param keys [Array<String>] the keys to read, in order
+    # @yieldparam key [String] called for each absent key
+    # @return [Array<Object>] one value per key, in order
+    # @raise [KeyError] when a key is absent and no block is given
+    def fetch_values(*keys, &block)
+      keys.zip(get_many(keys)).map do |key, value|
+        case value
+        when nil
+          next block.call(key) if block
+
+          raise KeyError.new("key not found: #{key.inspect}", key: key, receiver: self)
+        else
+          value
+        end
+      end
+    end
+  end
+
+  # A read-only view of a published map, opened by
+  # +client.state(subsystem, definition)+. Each read takes the user key and
+  # sees only committed state. A failed read raises the same state errors as
+  # an owned handle. A read in a forked child process raises +RuntimeError+.
+  class PublishedMap
+    include State::Scanning
+
+    # @param native [Prosody::NativePublishedMap] the native reader
+    def initialize(native) = @native = native
+
+    # Reads the committed entry for +map_key+ in the map for +key+.
+    #
+    # @return [Object, nil] the value, or +nil+ when the entry is absent
+    def get(key, map_key) = @native.get(key, map_key)
+
+    # Reads several entries of the map for +key+ in one batch.
+    #
+    # @return [Array<Object, nil>] one result per map key; +nil+ for an absent entry
+    def get_many(key, map_keys) = @native.get_many(key, map_keys)
+
+    # Whether the map for +key+ has a committed entry for +map_key+.
+    #
+    # @return [Boolean]
+    def key?(key, map_key) = @native.contains_key(key, map_key)
+    alias_method :has_key?, :key?
+    alias_method :include?, :key?
+    alias_method :member?, :key?
+
+    # Tests several entries of the map for +key+ in one batch.
+    #
+    # @return [Array<Boolean>] one result per map key
+    def contains_many(key, map_keys) = @native.contains_many(key, map_keys)
+
+    # Whether the map for +key+ has no committed entries.
+    #
+    # @return [Boolean]
+    def empty?(key) = @native.is_empty(key)
+
+    # Traverses the committed entries for +key+ in key order, yielding one
+    # +[map_key, value]+ pair for each entry. Each traversal accepts the query
+    # keywords documented on {State::Scanning}.
+    #
+    # @return [Enumerator, void]
+    def each_pair(key, **query, &block) = traverse(:scan, key, :forward, query, &block)
+
+    # Traverses the committed entries for +key+ in reverse key order.
+    #
+    # @return [Enumerator, void]
+    def reverse_each_pair(key, **query, &block) = traverse(:scan, key, :backward, query, &block)
+
+    # Traverses the committed map keys for +key+ in key order.
+    #
+    # @return [Enumerator, void]
+    def each_key(key, **query, &block) = traverse(:keys, key, :forward, query, &block)
+
+    # Traverses the committed map keys for +key+ in reverse key order.
+    #
+    # @return [Enumerator, void]
+    def reverse_each_key(key, **query, &block) = traverse(:keys, key, :backward, query, &block)
+
+    # Traverses the committed values for +key+ in key order.
+    #
+    # @return [Enumerator, void]
+    def each_value(key, **query, &block) = traverse_values(key, :forward, query, &block)
+
+    # Traverses the committed values for +key+ in reverse key order.
+    #
+    # @return [Enumerator, void]
+    def reverse_each_value(key, **query, &block) = traverse_values(key, :backward, query, &block)
+    alias_method :each, :each_pair
+  end
+end

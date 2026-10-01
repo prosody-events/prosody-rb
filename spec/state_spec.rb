@@ -23,139 +23,60 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "host-value mapping" do
-    it "accepts a single bare registration hash" do
-      error = client_error(state_collections: {name: "cart", kind: "value", payload: "json"})
-      expect(error).to be_nil
+    value = {name: "c", kind: "value", payload: "json"}
+    map = {name: "m", kind: "map", payload: "json"}
+    deque = {name: "d", kind: "deque", payload: "json"}
+
+    # Each row is [label, client options, expected message], where a nil
+    # message means the options are valid.
+    [
+      ["a single bare registration hash", {state_collections: value}, nil],
+      ["a set with a TTL and a keyset limit", {state_collections: [Prosody.set("s", ttl: 60, keyset_limit: 16)]}, nil],
+      ["keyset_limit 0 on a map", {state_collections: [map.merge(keyset_limit: 0)]}, nil],
+      ["a positive capacity on a deque", {state_collections: [deque.merge(capacity: 100)]}, nil],
+      ["a fractional TTL", {state_collections: [value.merge(ttl_seconds: 30.5)]}, /expected u32/],
+      ["a Float TTL", {state_collections: [value.merge(ttl_seconds: 5.0)]}, /expected u32/],
+      ["a negative TTL", {state_collections: [value.merge(ttl_seconds: -5)]}, /expected u32/],
+      ["a NaN TTL", {state_collections: [value.merge(ttl_seconds: Float::NAN)]}, /expected u32/],
+      ["an infinite TTL", {state_collections: [value.merge(ttl_seconds: Float::INFINITY)]}, /expected u32/],
+      ["a TTL above the u32 ceiling", {state_collections: [value.merge(ttl_seconds: 2**32)]}, /expected u32/],
+      ["a fractional keyset_limit", {state_collections: [map.merge(keyset_limit: 128.5)]}, /expected usize/],
+      ["a negative keyset_limit", {state_collections: [map.merge(keyset_limit: -1)]}, /expected usize/],
+      ["an infinite keyset_limit", {state_collections: [map.merge(keyset_limit: Float::INFINITY)]}, /expected usize/],
+      ["keyset_limit on a value", {state_collections: [value.merge(keyset_limit: 128)]}, /keyset_limit.*only valid for map and set/],
+      ["a set with a json payload", {state_collections: [{name: "s", kind: "set", payload: "json"}]}, /state_collections\[0\]\.payload/],
+      ["a set with a presence payload", {state_collections: [{name: "s", kind: "set", payload: "presence"}]}, /state_collections\[0\]\.payload/],
+      ["a map without a payload", {state_collections: [{name: "m", kind: "map"}]}, /state_collections\[0\]\.payload: required/],
+      ["capacity on a map", {state_collections: [map.merge(capacity: 100)]}, /capacity.*only valid for deque/],
+      ["a zero capacity", {state_collections: [deque.merge(capacity: 0)]}, /expected a nonzero usize/],
+      ["a negative capacity", {state_collections: [deque.merge(capacity: -1)]}, /expected a nonzero usize/],
+      ["a fractional capacity", {state_collections: [deque.merge(capacity: 1.5)]}, /expected a nonzero usize/],
+      ["a NaN capacity", {state_collections: [deque.merge(capacity: Float::NAN)]}, /expected a nonzero usize/],
+      ["an infinite capacity", {state_collections: [deque.merge(capacity: Float::INFINITY)]}, /expected a nonzero usize/],
+      ["an unknown kind token", {state_collections: [value.merge(kind: "tree")]}, /state_collections\[0\]\.kind.*expected/],
+      ["an unknown payload token", {state_collections: [value.merge(payload: "proto")]}, /state_collections\[0\]\.payload.*expected/],
+      ["a zero in-memory block-cache size", {state_owned_cache_size: "0"}, /state_owned_cache_size/],
+      ["a zero memtable size", {state_memtable_size: "0"}, /state_memtable_size/],
+      ["a zero published-read cache size", {state_read_cache_size: "0"}, /state_read_cache_size/]
+    ].each do |label, options, expected|
+      it "#{expected ? "rejects" : "accepts"} #{label}" do
+        error = client_error(**options)
+        expect(error&.message).to(expected ? match(expected) : be_nil)
+      end
     end
 
-    it "rejects a fractional TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 30.5}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
-    end
-
-    it "rejects a negative TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: -5}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
-    end
-
-    it "rejects a NaN TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: Float::NAN}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
-    end
-
-    it "rejects an infinite TTL" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: Float::INFINITY}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
-    end
-
-    it "rejects a TTL above the u32 ceiling" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "json", ttl_seconds: 2**32}])
-      expect(error.message).to match(/state_collections\[0\]\.ttl_seconds.*whole number/)
-    end
-
-    it "rejects a fractional keyset_limit on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 128.5}])
-      expect(error.message).to match(/keyset_limit.*whole number/)
-    end
-
-    it "rejects a negative keyset_limit on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: -1}])
-      expect(error.message).to match(/keyset_limit.*whole number/)
-    end
-
-    it "rejects an infinite keyset_limit on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: Float::INFINITY}])
-      expect(error.message).to match(/keyset_limit.*whole number/)
-    end
-
-    it "rejects keyset_limit on a non-map collection" do
-      error = client_error(state_collections: [{name: "v", kind: "value", payload: "json", keyset_limit: 128}])
-      expect(error.message).to match(/keyset_limit.*only valid for map/)
-    end
-
-    it "accepts keyset_limit 0 on a map" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", keyset_limit: 0}])
-      expect(error).to be_nil
-    end
-
-    it "accepts a positive capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 100}])
-      expect(error).to be_nil
-    end
-
-    it "rejects capacity on a non-deque collection" do
-      error = client_error(state_collections: [{name: "m", kind: "map", payload: "json", capacity: 100}])
-      expect(error.message).to match(/capacity.*only valid for deque/)
-    end
-
-    it "rejects a zero capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 0}])
-      expect(error.message).to match(/capacity.*whole number/)
-    end
-
-    it "rejects a negative capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: -1}])
-      expect(error.message).to match(/capacity.*whole number/)
-    end
-
-    it "rejects a fractional capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: 1.5}])
-      expect(error.message).to match(/capacity.*whole number/)
-    end
-
-    it "rejects a NaN capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::NAN}])
-      expect(error.message).to match(/capacity.*whole number/)
-    end
-
-    it "rejects an infinite capacity on a deque" do
-      error = client_error(state_collections: [{name: "d", kind: "deque", payload: "json", capacity: Float::INFINITY}])
-      expect(error.message).to match(/capacity.*whole number/)
-    end
-
-    it "rejects an unknown kind token" do
-      error = client_error(state_collections: [{name: "c", kind: "set", payload: "json"}])
-      expect(error.message).to match(/state_collections\[0\]\.kind.*expected/)
-    end
-
-    it "rejects an unknown payload token" do
-      error = client_error(state_collections: [{name: "c", kind: "value", payload: "proto"}])
-      expect(error.message).to match(/state_collections\[0\]\.payload.*expected/)
-    end
-
-    it "rejects a fractional recovery delay" do
-      error = client_error(state_recovery_delay: 0.5)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a negative recovery delay" do
-      error = client_error(state_recovery_delay: -1)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a NaN recovery delay" do
-      error = client_error(state_recovery_delay: Float::NAN)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects an infinite recovery delay" do
-      error = client_error(state_recovery_delay: Float::INFINITY)
-      expect(error.message).to match(/state_recovery_delay.*whole number/)
-    end
-
-    it "rejects a zero in-memory block-cache size" do
-      error = client_error(state_owned_cache_size: "0")
-      expect(error.message).to match(/state_owned_cache_size/)
-    end
-
-    it "rejects a zero published-read cache size" do
-      error = client_error(state_read_cache_size: "0")
-      expect(error.message).to match(/state_read_cache_size/)
-    end
-
-    it "rejects an ambiguous published-read cache policy" do
+    it "maps a published-read cache policy when the reader opens" do
       error = client_error(state_read_cache: true)
       expect(error.message).to match(/state_read_cache.*ambiguous/)
+
+      client = Prosody::Client.new(mock: true, group_id: "state-spec", bootstrap_servers: "localhost:9094")
+      expect { client.state(:accounts, Prosody.value("v", read_cache: true)) }
+        .to raise_error(ArgumentError, /read_cache.*ambiguous/)
+      expect { client.state(:accounts, Prosody.value("v", read_cache: 0)) }
+        .to raise_error(Prosody::PermanentStateError, /cache ttl is zero/)
+      expect(client.state(:accounts, Prosody.value("v", read_cache: Rational(1, 2)))).to be_a(Prosody::PublishedValue)
+    ensure
+      client&.shutdown
     end
   end
 
@@ -169,13 +90,6 @@ RSpec.describe "Prosody keyed state" do
 
     it "classifies TransientStateError as a transient Prosody error" do
       error = Prosody::TransientStateError.new("boom")
-      expect(error).to be_a(Prosody::TransientError)
-      expect(error.permanent?).to be(false)
-    end
-
-    it "classifies NullValueError as a transient state error" do
-      error = Prosody::NullValueError.new("boom")
-      expect(error).to be_a(Prosody::TransientStateError)
       expect(error).to be_a(Prosody::TransientError)
       expect(error.permanent?).to be(false)
     end
@@ -196,6 +110,18 @@ RSpec.describe "Prosody keyed state" do
       expect(definition.kind).to eq("map")
       expect(definition.payload).to eq("json")
       expect(definition.keyset_limit).to eq(256)
+    end
+
+    it "builds a set definition with no payload" do
+      definition = Prosody.set("tags", ttl: 60, keyset_limit: 16, read_uncommitted: true, published: true, read_cache: 2)
+      expect(definition).to be_frozen
+      expect(definition.payload).to be_nil
+      expect(definition.to_state_config).to eq({
+        name: "tags", kind: "set", ttl_seconds: 60,
+        read_uncommitted: true, published: true, keyset_limit: 16
+      })
+      expect(definition.read_cache).to eq(2)
+      expect { Prosody.set("tags", capacity: 1) }.to raise_error(ArgumentError)
     end
 
     it "builds a deque definition" do
@@ -240,11 +166,11 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "Prosody::State::Reading#state" do
-    it "uses every JSON descriptor's typed published-state access strategy" do
+    it "uses every JSON and set descriptor's typed published-state access strategy" do
       calls = []
       native = Object.new
       reader = Object.new.extend(Prosody::State::Reading)
-      %i[published_value published_map published_deque].each do |vend_method|
+      %i[published_value published_map published_set published_deque].each do |vend_method|
         reader.define_singleton_method(vend_method) do |*args|
           calls << [vend_method, *args]
           native
@@ -254,12 +180,21 @@ RSpec.describe "Prosody keyed state" do
       cases = [
         [Prosody.value("cart", published: true, read_cache: 2), :published_value, Prosody::PublishedValue],
         [Prosody.map("sessions", published: true, read_cache: 2), :published_map, Prosody::PublishedMap],
+        [Prosody.set("tags", published: true, read_cache: 2), :published_set, Prosody::PublishedSet],
         [Prosody.deque("jobs", published: true, read_cache: 2), :published_deque, Prosody::PublishedDeque]
       ]
 
       cases.each do |definition, vend_method, wrapper|
         expect(reader.state(:accounts, definition)).to be_a(wrapper)
-        expect(calls.last).to eq([vend_method, "accounts", definition.name, 2, false])
+        expect(calls.last).to eq([vend_method, "accounts", definition.name, 2])
+      end
+    end
+
+    it "rejects message collections" do
+      reader = Object.new.extend(Prosody::State::Reading)
+      [Prosody.message_value("v"), Prosody.message_map("m"), Prosody.message_deque("d")].each do |definition|
+        expect { reader.state(:accounts, definition) }
+          .to raise_error(ArgumentError, "published state readers support JSON and set collections only")
       end
     end
   end
@@ -270,7 +205,7 @@ RSpec.describe "Prosody keyed state" do
     def build_fake_context(calls)
       fake = Object.new.extend(Prosody::State::Vending)
       sentinel = Object.new
-      %i[value_state map_state deque_state message_value_state message_map_state message_deque_state].each do |vend|
+      %i[value_state map_state set_state deque_state message_value_state message_map_state message_deque_state].each do |vend|
         fake.define_singleton_method(vend) do |name|
           calls << [vend, name]
           sentinel
@@ -283,10 +218,20 @@ RSpec.describe "Prosody keyed state" do
       expect(Prosody::Context.include?(Prosody::State::Vending)).to be(true)
     end
 
+    # The typed handles are the public API. The native vend methods return raw
+    # handles, so neither the Context nor the Client exposes them.
+    it "keeps the native vend methods private" do
+      owned = %i[value_state map_state set_state deque_state message_value_state message_map_state message_deque_state]
+      published = %i[published_value published_map published_set published_deque]
+      expect(owned.reject { |name| Prosody::Context.private_method_defined?(name) }).to be_empty
+      expect(published.reject { |name| Prosody::Client.private_method_defined?(name) }).to be_empty
+    end
+
     it "uses every descriptor's typed owned-state access strategy" do
       cases = [
         [Prosody.value("value"), :value_state, Prosody::ValueState],
         [Prosody.map("map"), :map_state, Prosody::MapState],
+        [Prosody.set("set"), :set_state, Prosody::SetState],
         [Prosody.deque("deque"), :deque_state, Prosody::DequeState],
         [Prosody.message_value("message-value"), :message_value_state, Prosody::ValueState],
         [Prosody.message_map("message-map"), :message_map_state, Prosody::MapState],
@@ -301,7 +246,7 @@ RSpec.describe "Prosody keyed state" do
       end
     end
 
-    it "caches vended handles per kind/payload/name" do
+    it "caches vended handles per definition" do
       calls = []
       fake = build_fake_context(calls)
       first = fake.state(Prosody.value("cart"))
@@ -320,9 +265,9 @@ RSpec.describe "Prosody keyed state" do
       native.define_singleton_method(:get) { |_index| nil }
       native.define_singleton_method(:len) { 0 }
       native.define_singleton_method(:peek_back) { nil }
-      native.define_singleton_method(:scan) do |_direction|
+      native.define_singleton_method(:scan) do |_direction, _query = {}|
         scan = Object.new
-        scan.define_singleton_method(:next) { nil }
+        scan.define_singleton_method(:next_chunk) { nil }
         scan.define_singleton_method(:close) { nil }
         scan
       end
@@ -351,15 +296,14 @@ RSpec.describe "Prosody keyed state" do
   end
 
   describe "traversal over falsy items" do
-    # A stand-in native handle whose scan replays `items` and then returns nil
-    # (the exhaustion sentinel), so traversal can be exercised without a vended
-    # native handle.
+    # A stand-in native handle whose scan returns `items` as one chunk and then
+    # `nil`, so traversal can be exercised without a vended native handle.
     def fake_scanning_native(items)
       native = Object.new
-      native.define_singleton_method(:scan) do |_direction|
-        remaining = items.dup
+      native.define_singleton_method(:scan) do |_direction, _query = {}|
+        chunks = [items]
         scan = Object.new
-        scan.define_singleton_method(:next) { remaining.empty? ? nil : remaining.shift }
+        scan.define_singleton_method(:next_chunk) { chunks.shift }
         scan.define_singleton_method(:close) { nil }
         scan
       end
@@ -384,8 +328,8 @@ RSpec.describe "Prosody keyed state" do
       native = fake_scanning_native([])
       original_scan = native.method(:scan)
       native.define_singleton_method(:scan) do |*args|
-        directions << args.last
-        original_scan.call(args.last)
+        directions << args.grep(Symbol).last
+        original_scan.call(args.grep(Symbol).last)
       end
 
       Prosody::MapState.new(native).reverse_each_pair.to_a
@@ -397,11 +341,11 @@ RSpec.describe "Prosody keyed state" do
     it "gives published maps the owned read operations" do
       native = fake_scanning_native([["a", 1], ["b", 2]])
       scan = native.method(:scan)
-      native.define_singleton_method(:scan) { |_key, direction| scan.call(direction) }
+      native.define_singleton_method(:scan) { |_key, direction, _query| scan.call(direction) }
       native.define_singleton_method(:contains_key) { |key, map_key| [key, map_key] == ["user-1", "a"] }
       key_scan = []
       key_native = fake_scanning_native(["b", "a"])
-      native.define_singleton_method(:keys) do |key, direction|
+      native.define_singleton_method(:keys) do |key, direction, _query|
         key_scan << [key, direction]
         key_native.scan(direction)
       end

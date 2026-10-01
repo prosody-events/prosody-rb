@@ -41,6 +41,15 @@ not yet understand the code well enough to change it.
 encouraged when they are scoped to the area you are already touching. Do not
 sprawl — but do not walk past obvious cleanup either.
 
+**Do not break users without a reason.** The published package has real
+users. A release can break them only for a clear improvement that the
+owner decided on: a fixed defect, an invalid state that the types now
+prevent, or a need of a new feature. "Nothing in this repo calls it" is
+not a reason to remove, rename, or narrow a public member, an error
+class, a log text, or a dependency floor. When you are not sure, keep
+the old shape. List each break under `## Breaking changes` in the PR
+body.
+
 ## Definition of Done
 
 No change is complete until every line below holds. These are acts, not
@@ -299,12 +308,13 @@ Constants → Statics → Types → Implementations → Functions → Errors (bo
 
 - `sig/` — public RBS signatures; `sig-private/` — internal signatures.
   Every API change updates the signatures in the same commit.
-- `lib/prosody/native_stubs.rb` — documented Ruby stubs for the classes and
-  methods the Rust extension implements. Editors and documentation tools read
-  them; the runtime does not (the native extension provides the real
-  definitions), and Steep ignores the file. When the extension's public
-  surface changes, update the matching stub and its YARD doc in the same
-  commit.
+- Public API docs are YARD comments on the public Ruby classes. A public
+  class that the Rust extension implements (`Client`, `Context`, `Message`,
+  `Timer`) keeps a documented stub in `lib/prosody/native_stubs/`. Do not
+  write stubs for internal native classes or private methods; `sig/` and
+  `sig-private/` type them. The runtime does not load the stubs, and Steep
+  ignores them. When a public native method changes, update its stub in the
+  same commit.
 - Steep targets (`Steepfile`): `lib` checks the implementation;
   `consumer_types` (`typecheck/`) verifies a payload type flows through the
   public API; `typed_examples` checks every runnable example;

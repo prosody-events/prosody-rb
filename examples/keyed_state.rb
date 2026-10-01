@@ -3,7 +3,7 @@
 require "prosody"
 require "logger"
 
-# Keyed-state example: per-key value/map/deque collections that survive across
+# Keyed-state example: per-key value/map/set/deque collections that survive across
 # events. Definitions are declared once and reused for both registration (on the
 # client) and binding (inside the handler). Every state op yields the fiber,
 # never the thread.
@@ -12,6 +12,7 @@ require "logger"
 # keyed_state.rbs for payload and state types checked by Steep.
 CART = Prosody.value("cart", ttl: 30 * 24 * 3600)      # ValueState
 TOTALS = Prosody.map("totals")                          # keys are always String
+SEEN = Prosody.set("seen", ttl: 7 * 24 * 3600)          # String members, no payload
 BACKLOG = Prosody.message_deque("backlog", capacity: 100) # bounded window of messages
 
 class KeyedStateHandler < Prosody::EventHandler
@@ -19,6 +20,7 @@ class KeyedStateHandler < Prosody::EventHandler
     puts "Excise #{message.key}"
     context.state(CART).clear
     context.state(TOTALS).clear
+    context.state(SEEN).clear
     context.state(BACKLOG).clear
     nil
   end
@@ -29,6 +31,10 @@ class KeyedStateHandler < Prosody::EventHandler
 
   def on_message(context, message)
     payload = message.payload
+    seen = context.state(SEEN)
+    return if seen.include?(payload["order_id"]) # skip an order seen before
+    seen << payload["order_id"]
+
     cart = context.state(CART)             # bound for this attempt only
     current = cart.get || {"items" => []}  # Hash, or nil when absent
     cart.set(current.merge("items" => current["items"] + [payload["order_id"]]))
@@ -37,6 +43,8 @@ class KeyedStateHandler < Prosody::EventHandler
     totals.set(message.key, payload["total"])
     # Steep infers key as String and total as Integer from TOTALS's RBS type.
     totals.each_pair { |key, total| @logger.info(format_total(key, total)) }
+    # Query keywords narrow a traversal: here, the first ten keys after this one.
+    totals.each_key(after: message.key, limit: 10) { |key| @logger.info("next key: #{key}") }
 
     backlog = context.state(BACKLOG)
     backlog.push(message)                  # stores the full Prosody::Message
@@ -63,7 +71,7 @@ if __FILE__ == $PROGRAM_NAME
     mock: true,
     group_id: "keyed-state-example",
     subscribed_topics: "orders",
-    state_collections: [CART, TOTALS, BACKLOG]
+    state_collections: [CART, TOTALS, SEEN, BACKLOG]
   )
   client.subscribe(KeyedStateHandler.new(logger: Logger.new($stdout)))
   client.shutdown

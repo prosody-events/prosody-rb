@@ -124,14 +124,18 @@ module Prosody
     # Interval between offset commit operations (in seconds).
     config_param :commit_interval, converter: ->(v) { duration_converter(v) }
 
+    # Interval between librdkafka statistics reports (in seconds).
+    # Env: PROSODY_STATISTICS_INTERVAL. Default: 5 seconds.
+    config_param :statistics_interval, converter: ->(v) { duration_converter(v) }
+
     # Base delay for retry operations (in seconds).
     config_param :retry_base, converter: ->(v) { duration_converter(v) }
 
     # Maximum delay between retries (in seconds).
     config_param :max_retry_delay, converter: ->(v) { duration_converter(v) }
 
-    # Global shared cache capacity across all partitions for message deduplication.
-    # Must be at least 1. Default: 8192.
+    # Capacity of the producer idempotence cache and of the consumer
+    # deduplication cache. Must be at least 1. Default: 8192.
     config_param :idempotence_cache_size, converter: ->(v) { Integer(v) }
 
     # Version string for cache-busting deduplication hashes. Changing this
@@ -303,7 +307,7 @@ module Prosody
 
     # Keyed-state collections to register before subscribe.
     #
-    # Accepts an array of StateDefinition objects (from Prosody.value/map/deque
+    # Accepts an array of StateDefinition objects (from Prosody.value/map/set/deque
     # and their message_* siblings) or already-serialized registration hashes.
     # Duplicate names within the set are rejected by the native layer.
     config_param :state_collections,
@@ -312,19 +316,28 @@ module Prosody
         list.map { |d| d.respond_to?(:to_state_config) ? d.to_state_config : d }
       }
 
-    # Subsystem under which published JSON collections are advertised.
+    # Subsystem under which published JSON and set collections are advertised.
     # Uses PROSODY_SUBSYSTEM when omitted. Published collections require it.
     config_param :subsystem, converter: lambda(&:to_s)
 
-    # Disk workspace for the local keyed-state cache. Each live client
-    # needs its own directory. Falls back to the
-    # PROSODY_STATE_CACHE_DIR environment variable. Must not be an empty string.
+    # Directory for the local keyed-state caches. Each consumer opens its
+    # cache in a new subdirectory and removes it when the consumer stops, so
+    # clients can share the directory. Falls back to the
+    # PROSODY_STATE_CACHE_DIR environment variable, then to
+    # <temp>/prosody/keyed-state. Must not be an empty string.
     config_param :state_cache_dir, converter: lambda(&:to_s)
 
     # Capacity of the owning keyed-state cache, such as "64 MiB". Uses
     # PROSODY_STATE_OWNED_CACHE_SIZE when omitted. Otherwise, the engine
     # selects its default.
     config_param :state_owned_cache_size, converter: lambda(&:to_s)
+
+    # Bytes of in-memory writes the local keyed-state cache holds for each
+    # assigned partition before it flushes them to disk, such as "16 MiB".
+    # Memory use scales with the number of assigned partitions. Uses
+    # PROSODY_STATE_MEMTABLE_SIZE when omitted. Otherwise, the engine uses
+    # its default of 64 MiB.
+    config_param :state_memtable_size, converter: lambda(&:to_s)
 
     # Capacity of the published-state read-through cache, such as "1 MiB".
     # Uses PROSODY_STATE_READ_CACHE_SIZE when omitted. It then uses the owned
@@ -335,11 +348,6 @@ module Prosody
     # Uses PROSODY_STATE_READ_CACHE_TTL when omitted, then 5 seconds.
     config_param :state_read_cache,
       converter: ->(v) { (v == true || v == false) ? v : Float(v) }
-
-    # Delay in whole seconds between staging a provisional cell and the
-    # keyed-state recovery sweep. Every registered TTL must strictly exceed this.
-    # Must be a whole number of seconds >= 1 (validated natively).
-    config_param :state_recovery_delay, converter: ->(v) { duration_converter(v) }
 
     # Operation mode of the client.
     #

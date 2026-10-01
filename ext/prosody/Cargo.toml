@@ -15,10 +15,10 @@ crossbeam-channel.workspace = true
 educe.workspace = true
 futures.workspace = true
 magnus = { workspace = true, default-features = false }
-mimalloc = { workspace = true, features = ["local_dynamic_tls"] }
 opentelemetry.workspace = true
 prosody = { workspace = true }
 rb-sys.workspace = true
+rustfs-mimalloc = { workspace = true, features = ["local_dynamic_tls"] }
 serde = { workspace = true, features = ["derive"] }
 serde-untagged.workspace = true
 serde_json.workspace = true

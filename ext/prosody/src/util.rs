@@ -13,7 +13,11 @@ use prosody::tracing::{
     TracingError, flush_telemetry as core_flush_telemetry, initialize_tracing,
     shutdown_telemetry as core_shutdown_telemetry,
 };
+use std::fmt;
+use std::io::{self, Write};
 use std::mem::{ManuallyDrop, forget};
+use std::process;
+use std::time::Duration;
 use tokio::runtime::{EnterGuard, Handle};
 use tracing::{error, warn};
 
@@ -179,6 +183,65 @@ impl Drop for RubyDrop {
     }
 }
 
+/// Writes one line to standard error.
+///
+/// Use it only where no logger exists: before tracing starts, or when the
+/// Ruby logger itself fails.
+pub(crate) fn report(message: fmt::Arguments<'_>) {
+    drop(writeln!(io::stderr().lock(), "{message}"));
+}
+
+/// Converts a Ruby number of seconds into a [`Duration`].
+///
+/// # Errors
+///
+/// Returns an error that names `option` if the value is negative, not
+/// finite, or too large for a [`Duration`].
+pub(crate) fn seconds(option: &str, value: f64) -> Result<Duration, String> {
+    Duration::try_from_secs_f64(value)
+        .map_err(|_| format!("{option}: must be a finite, non-negative number of seconds"))
+}
+
+/// Detects the use of a native object in a forked child process.
+///
+/// The Tokio runtime and the bridge thread do not survive `fork`. A native
+/// object that waits on them in a child waits forever, so it raises instead.
+#[derive(Clone, Copy, Debug)]
+pub struct ForkGuard {
+    /// The process that created the object.
+    pid: u32,
+    /// The Ruby class name that the error message shows.
+    class: &'static str,
+}
+
+impl ForkGuard {
+    /// Records the current process for an object of the Ruby `class`.
+    pub fn new(class: &'static str) -> Self {
+        Self {
+            pid: process::id(),
+            class,
+        }
+    }
+
+    /// Checks that the current process created the object.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `RuntimeError` in a forked child process.
+    pub fn check(self, ruby: &Ruby) -> Result<(), Error> {
+        if process::id() == self.pid {
+            return Ok(());
+        }
+        Err(Error::new(
+            ruby.exception_runtime_error(),
+            format!(
+                "{} cannot be used after fork. Create a new client in the child process.",
+                self.class
+            ),
+        ))
+    }
+}
+
 /// Ensures a Tokio runtime context exists, entering one if necessary.
 ///
 /// Only creates a runtime guard when not already in a runtime context, avoiding
@@ -207,14 +270,13 @@ pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
     let bridge = BRIDGE.get_or_init(|| Bridge::new(ruby));
 
     // Initialize tracing for observability
-    #[allow(clippy::print_stderr, reason = "logger has not been initialized yet")]
     TRACING_INIT.get_or_init(|| {
         let maybe_logger = Logger::new(ruby, bridge.clone())
-            .inspect_err(|error| eprintln!("failed to create logger: {error:#}"))
+            .inspect_err(|error| report(format_args!("failed to create logger: {error:#}")))
             .ok();
 
         if let Err(error) = initialize_tracing(maybe_logger) {
-            eprintln!("failed to initialize tracing: {error:#}");
+            report(format_args!("failed to initialize tracing: {error:#}"));
         }
     });
 

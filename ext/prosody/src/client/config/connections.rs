@@ -1,0 +1,170 @@
+//! Conversion of [`NativeConfiguration`] into the Kafka producer, Kafka
+//! consumer, Cassandra, and telemetry emitter builders.
+
+use super::{NativeConfiguration, ProbePort};
+use crate::util::seconds;
+use prosody::cassandra::config::CassandraConfigurationBuilder;
+use prosody::consumer::ConsumerConfigurationBuilder;
+use prosody::producer::ProducerConfigurationBuilder;
+use prosody::telemetry::emitter::TelemetryEmitterConfiguration;
+
+impl<'a> TryFrom<&'a NativeConfiguration> for ProducerConfigurationBuilder {
+    type Error = String;
+
+    /// Reads the Kafka producer settings.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut builder = Self::default();
+
+        if let Some(bootstrap_servers) = &config.bootstrap_servers {
+            builder.bootstrap_servers(bootstrap_servers.clone());
+        }
+
+        if let Some(send_timeout) = &config.send_timeout {
+            builder.send_timeout(seconds("send_timeout", *send_timeout)?);
+        }
+
+        if let Some(idempotence_cache_size) = &config.idempotence_cache_size {
+            builder.idempotence_cache_size(*idempotence_cache_size as usize);
+        }
+
+        if let Some(source_system) = &config.source_system {
+            builder.source_system(source_system.clone());
+        }
+
+        if let Some(mock) = &config.mock {
+            builder.mock(*mock);
+        }
+
+        Ok(builder)
+    }
+}
+
+impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
+    type Error = String;
+
+    /// Reads the Kafka consumer settings.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut builder = Self::default();
+
+        if let Some(bootstrap_servers) = &config.bootstrap_servers {
+            builder.bootstrap_servers(bootstrap_servers.clone());
+        }
+
+        if let Some(group_id) = &config.group_id {
+            builder.group_id(group_id.clone());
+        }
+
+        if let Some(subscribed_topics) = &config.subscribed_topics {
+            builder.subscribed_topics(subscribed_topics.clone());
+        }
+
+        if let Some(allowed_events) = &config.allowed_events {
+            builder.allowed_events(allowed_events.clone());
+        }
+
+        if let Some(max_uncommitted) = &config.max_uncommitted {
+            builder.max_uncommitted(*max_uncommitted as usize);
+        }
+
+        if let Some(stall_threshold) = &config.stall_threshold {
+            builder.stall_threshold(seconds("stall_threshold", *stall_threshold)?);
+        }
+
+        if let Some(shutdown_timeout) = &config.shutdown_timeout {
+            builder.shutdown_timeout(seconds("shutdown_timeout", *shutdown_timeout)?);
+        }
+
+        if let Some(poll_interval) = &config.poll_interval {
+            builder.poll_interval(seconds("poll_interval", *poll_interval)?);
+        }
+
+        if let Some(commit_interval) = &config.commit_interval {
+            builder.commit_interval(seconds("commit_interval", *commit_interval)?);
+        }
+
+        if let Some(statistics_interval) = &config.statistics_interval {
+            builder.statistics_interval(seconds("statistics_interval", *statistics_interval)?);
+        }
+
+        if let Some(mock) = &config.mock {
+            builder.mock(*mock);
+        }
+
+        if let Some(probe_port) = &config.probe_port {
+            match probe_port {
+                ProbePort::Unconfigured => {}
+                ProbePort::Disabled => {
+                    builder.probe_port(None);
+                }
+                ProbePort::Configured(port) => {
+                    builder.probe_port(*port);
+                }
+            }
+        }
+
+        if let Some(slab_size) = &config.slab_size {
+            builder.slab_size(seconds("slab_size", *slab_size)?);
+        }
+
+        Ok(builder)
+    }
+}
+
+impl<'a> TryFrom<&'a NativeConfiguration> for CassandraConfigurationBuilder {
+    type Error = String;
+
+    /// Reads the Cassandra settings.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut builder = Self::default();
+
+        if let Some(nodes) = &config.cassandra_nodes {
+            builder.nodes(nodes.clone());
+        }
+
+        if let Some(keyspace) = &config.cassandra_keyspace {
+            builder.keyspace(keyspace.clone());
+        }
+
+        if let Some(datacenter) = &config.cassandra_datacenter {
+            builder.datacenter(Some(datacenter.clone()));
+        }
+
+        if let Some(rack) = &config.cassandra_rack {
+            builder.rack(Some(rack.clone()));
+        }
+
+        if let Some(user) = &config.cassandra_user {
+            builder.user(Some(user.clone()));
+        }
+
+        if let Some(password) = &config.cassandra_password {
+            builder.password(Some(password.clone()));
+        }
+
+        if let Some(retention) = &config.cassandra_retention {
+            builder.retention(seconds("cassandra_retention", *retention)?);
+        }
+
+        Ok(builder)
+    }
+}
+
+impl<'a> TryFrom<&'a NativeConfiguration> for TelemetryEmitterConfiguration {
+    type Error = String;
+
+    /// Reads the telemetry emitter settings. Environment variables fill unset
+    /// fields.
+    fn try_from(config: &'a NativeConfiguration) -> Result<Self, Self::Error> {
+        let mut builder = Self::builder();
+
+        if let Some(topic) = &config.telemetry_topic {
+            builder.topic(topic.clone());
+        }
+
+        if let Some(enabled) = &config.telemetry_enabled {
+            builder.enabled(*enabled);
+        }
+
+        builder.build().map_err(|e| e.to_string())
+    }
+}

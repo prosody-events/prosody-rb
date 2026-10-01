@@ -10,23 +10,22 @@ resolver = "2"
 atomic-take = "1.1"
 bumpalo = "3.20"
 crossbeam-channel = "0.5"
-educe = "0.7"
+educe = "0.8"
 futures = "0.3"
-magnus = { version = "0.8", default-features = false }
-# TODO: Use a crates.io release after it includes the fix for https://github.com/microsoft/mimalloc/issues/1287.
-mimalloc = { git = "https://github.com/xonatius/mimalloc_rust.git", rev = "6d4c41bb10c6d9da1d1b6f07b38c4cc051667f11" }
-opentelemetry = "0.32"
-prosody = { version = "0.6.0", features = ["libz-static"] }
+magnus = { version = "0.9", default-features = false }
+opentelemetry = "0.33"
+prosody = { version = "0.7.0", features = ["libz-static"] }
 rb-sys = "0.9"
+rustfs-mimalloc = "0.5.6"
 serde = "1.0"
 serde-untagged = "0.1"
 serde_json = "1.0"
 serde_magnus = "0.11"
 thiserror = "2.0"
-tokio = "1.52"
+tokio = "1.53"
 tokio-stream = "0.1"
 tracing = "0.1"
-tracing-opentelemetry = "0.33"
+tracing-opentelemetry = "0.34"
 tracing-subscriber = "0.3"
 
 [profile.release]
@@ -78,3 +77,7 @@ unneeded_field_pattern = "warn"
 unreachable = "warn"
 unwrap_used = "deny"
 verbose_file_reads = "warn"
+
+[patch.crates-io]
+# TODO: Use a crates.io release after serde_magnus supports magnus 0.9.
+serde_magnus = { git = "https://github.com/hadronzoo/serde-magnus", rev = "27aee737829a6bca399289b6e64ce4bcc08bfd94" }

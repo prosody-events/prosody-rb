@@ -8,12 +8,10 @@
 //! It uses bump allocation for efficient string formatting and concurrent
 //! processing for high-throughput logging scenarios.
 
-#![allow(clippy::print_stderr)]
-
 use crate::ROOT_MOD;
 use crate::bridge::Bridge;
 use crate::id;
-use crate::util::ThreadSafeValue;
+use crate::util::{ThreadSafeValue, report};
 use bumpalo::Bump;
 use bumpalo::collections::string::String as BumpString;
 use educe::Educe;
@@ -113,12 +111,12 @@ async fn log_event(bridge: Bridge, logger: Arc<ThreadSafeValue>, (level, msg): (
             };
 
             if let Err(error) = logger.get(ruby).funcall::<_, _, Value>(method, (msg,)) {
-                eprintln!("failed to log to Ruby: {error:#}");
+                report(format_args!("failed to log to Ruby: {error:#}"));
             }
         })
         .await
     {
-        eprintln!("failed to log to Ruby: {error:#}");
+        report(format_args!("failed to log to Ruby: {error:#}"));
     }
 }
 
@@ -150,7 +148,9 @@ impl<S: Subscriber> Layer<S> for Logger {
             event.record(&mut visitor);
 
             if let Err(error) = self.tx.send((*metadata.level(), visitor.to_string())) {
-                eprintln!("failed to send log message: {error:#}; message: {visitor}");
+                report(format_args!(
+                    "failed to send log message: {error:#}; message: {visitor}"
+                ));
             }
         });
     }

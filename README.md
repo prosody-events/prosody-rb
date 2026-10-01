@@ -277,10 +277,10 @@ You can monitor the stall state programmatically using the client's methods:
 
 ```ruby
 # Get the number of partitions currently assigned to this consumer
-partition_count = client.assigned_partitions
+partition_count = client.assigned_partition_count
 
 # Check if the consumer has stalled partitions
-if client.is_stalled?
+if client.stalled?
   warn 'Consumer has stalled partitions'
 end
 ```
@@ -299,7 +299,7 @@ Send a request from a handler or other application code. The Prosody client does
 
 Do not rely on hash order. The hash contains one entry for each selected subsystem. A missing response becomes a timeout `Failure`; Prosody does not omit the subsystem. The request raises an error for request-level failures, such as invalid input, a Kafka send failure, or shutdown. Do not wait for a request if the current consumer group must process it for the same key. That group cannot process it until the handler returns.
 
-Message and excise handler return values become successful outcomes. Each return value must have a JSON representation.
+Message and excise handler return values become successful outcomes. Each return value must have a JSON representation. A return value without one is a transient handler error, so Prosody retries the message.
 
 Set `subsystem` to `inventory` on the client that subscribes this handler.
 
@@ -626,12 +626,53 @@ State operations look synchronous. They yield the current fiber while Prosody pe
 | Collection | JSON payload | Kafka message | Main operations |
 | --- | --- | --- | --- |
 | Value | `Prosody.value` | `Prosody.message_value` | `get`, `set`, `clear` |
-| Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
+| Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `contains_many`, `empty?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
+| Ordered string set | `Prosody.set` | - | `add` / `<<`, `delete`, `include?`, `contains_many`, `empty?`, `each`, `clear` |
 | Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
 
-Map and deque scans return enumerators when called without a block. Map keys are strings.
+Map, set, and deque scans return enumerators when called without a block. Map keys and set members are strings. A set stores membership only, so it has no payload type.
 
-`nil` means absence. Do not store this value. Use `clear` or `delete`.
+A value, map, or deque read returns `nil` when no value is present. Do not store `nil` as a value. A `nil` write fails with a `PermanentStateError`. Use `clear` (value, deque) or `delete` (map) to remove a value.
+
+A set handle mirrors Ruby's `Set`:
+
+```ruby
+SEEN_ORDERS = Prosody.set("seen-orders", ttl: 7 * 24 * 60 * 60)
+
+def on_message(context, message)
+  seen = context.state(SEEN_ORDERS)
+  return if seen.include?(message.payload["order_id"])
+
+  seen << message.payload["order_id"]
+  fulfill(message)
+end
+```
+
+### Query keywords
+
+Every traversal method accepts optional query keywords. Prosody applies them in storage, so a query reads only the selected entries. The `each` and `each_*` methods iterate forward. The `reverse_each` and `reverse_each_*` methods iterate backward.
+
+| Keyword | Selects |
+| --- | --- |
+| `from:` / `after:` | Starts at the key or position, or just after it, in iteration order |
+| `to:` / `before:` | Stops at the key or position, or just before it, in iteration order |
+| `range:` | Keeps keys or positions in a Ruby `Range`: `"a".."m"`, `"a"..."m"`, `.."m"`, or `"a"..`. Write the range in ascending order; it applies in both directions. A descending range is empty |
+| `prefix:` | Keeps map keys or set members that start with the string |
+| `limit:` | Stops after this many items; a positive `Integer` |
+
+A reverse traversal starts at the high end. Keywords narrow the selection and never widen it. Pass at most one of `from:` and `after:`, and at most one of `to:` and `before:`. Set traversals select members. Deque positions count from the front and must be non-negative. To read the last N items, use `reverse_each(limit: N)`. Deques have no `prefix:`. A bad keyword raises `ArgumentError` or `TypeError`.
+
+To read a map in pages, pass the last key of the previous page as `after:`:
+
+```ruby
+page = map.each_pair(prefix: "order:", limit: 100).to_a
+until page.empty?
+  page.each { |key, order| archive(key, order) }
+  page = map.each_pair(prefix: "order:", after: page.last.first, limit: 100).to_a
+end
+```
+
+The same pattern works backward with `reverse_each_pair`.
 
 ### When keyed-state changes become visible
 
@@ -642,6 +683,8 @@ This transaction applies only to keyed state. Some workflows need state changes 
 - `read_uncommitted: true` persists keyed-state changes before Prosody records the event as complete. If the process stops between these steps, Prosody can process the same event again. The retry sees state changes from the earlier attempt. You must make these keyed-state changes idempotent. Each retry must produce the same state.
 - `commit` commits the collection's pending changes before the handler ends. A later handler failure does not remove them.
 - `rollback` discards pending changes since the last `commit`. It cannot undo committed changes.
+
+`commit` and `rollback` return `:applied` when they wrote or discarded pending changes. They return `:no_op` when the collection had no pending changes.
 
 ### Published state
 
@@ -665,7 +708,7 @@ current_order = context.state(CURRENT_ORDER)
 current_order.set({"sku" => "book"})
 ```
 
-Read published state from a handler or other application code. The Prosody client does not need an active subscription.
+Read published state from a handler or other application code. The Prosody client does not need an active subscription. A client that only reads published state needs no `subscribed_topics`.
 
 Use the subsystem and the same definition to open a reader:
 
@@ -674,9 +717,9 @@ order_reader = client.state("checkout", CURRENT_ORDER)
 current_order = order_reader.get("customer-123")
 ```
 
-The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit key because no handler supplies one.
+The reader cannot see pending changes that exist only in a handler. It cannot change the collection. Each read takes an explicit String key because no handler supplies one.
 
-Map and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block.
+Map, set, and deque readers fetch data in chunks. They do not load the complete collection before iteration starts. Readers return an `Enumerator` without a block. Reader traversals accept the same [query keywords](#query-keywords) after the key. A failed read raises `Prosody::TransientStateError` or `Prosody::PermanentStateError`, as an owned handle does, for point reads and traversals alike. A reader that Prosody cannot open, such as one with a zero `read_cache`, raises the same classes.
 
 Use `reverse_each_pair`, `reverse_each_key`, `reverse_each_value`, or `reverse_each` for reverse traversal.
 
@@ -783,9 +826,9 @@ all traces to Ruby.
 To use OpenTelemetry tracing with Prosody, you need to install the following gems:
 
 ```ruby
-gem 'opentelemetry-sdk', '~> 1.10'
-gem 'opentelemetry-api', '~> 1.7'
-gem 'opentelemetry-exporter-otlp', '~> 0.31'
+gem 'opentelemetry-sdk', '~> 1.13'
+gem 'opentelemetry-api', '~> 1.10'
+gem 'opentelemetry-exporter-otlp', '~> 0.36'
 ```
 
 ### Initializing Tracing
@@ -907,6 +950,16 @@ Call `shutdown` when the application terminates. It stops all client services an
 client.shutdown
 ```
 
+To scope a client to a block, use `Prosody::Client.open`. It yields the client and calls `shutdown` when the block exits, also when the block raises. It returns the value of the block.
+
+```ruby
+Prosody::Client.open(bootstrap_servers: "localhost:9092") do |client|
+  client.send_message("my-topic", "key", {"hello" => "world"})
+end
+```
+
+Repeated `shutdown` calls wait for the same operation, so the block can also call `shutdown`.
+
 Handle application shutdown with signal handlers:
 
 ```ruby
@@ -971,6 +1024,18 @@ Best practices:
 - Use transient errors for temporary issues like network problems.
 - Be cautious with permanent errors as they prevent retries and can result in data loss.
 - Consider system reliability and data consistency when classifying errors.
+
+A handler can tell a retry from a normal delivery through `context.demand`:
+
+```ruby
+def on_message(context, message)
+  demand = context.demand
+  logger.warn("retry #{demand.retries} for #{message.key}") if demand.failure?
+  process(message)
+end
+```
+
+`demand.retries` is the number of retries: 0 for a normal delivery and 1 on the first retry. After Prosody defers an event, the count starts again at 1. The count is an estimate. Keep an exact attempt count in keyed state if you need one.
 
 ### Handling Task Cancellation
 
@@ -1064,23 +1129,24 @@ Ensure you have thoroughly tested your changes before merging to `main`.
 ### Prosody::Client
 
 - `new(config)` or `new(**options)`: Create a client from a `Configuration`, hash, or keyword options.
+- `open(config) { |client| ... }`: Create a client, yield it, and shut it down when the block exits. It returns the value of the block.
 - `send_message(String topic, String key, Prosody::json_value payload)`: Send a JSON-serializable message.
 - `excise(String topic, String key)`: Send an excise record for a key.
 - `request(topic:, key:, payload:, subsystems:, timeout:)`: Return one outcome for each subsystem.
 - `request_excise(topic:, key:, subsystems:, timeout:)`: Return one excise outcome for each subsystem.
 - `consumer_state`: Get the client state (`:shut_down`, `:unconfigured`, `:configured`, or `:running`).
 - `source_system`: Get the source system identifier configured for the client.
-- `state(subsystem, definition)`: Open a typed, read-only published value, map, or deque.
+- `state(subsystem, definition)`: Open a typed, read-only published value, map, set, or deque.
 - `subscribe(handler)`: Start event processing with the specified handler.
 - `unsubscribe`: Stop the consumer. You can subscribe again later.
 - `shutdown`: Stop all client services. Concurrent and repeated calls wait for the same operation.
-- `assigned_partitions`: Get the number of partitions currently assigned to this consumer.
-- `is_stalled?`: Check if the consumer has stalled partitions.
+- `assigned_partition_count`: Get the number of partitions currently assigned to this consumer.
+- `stalled?`: Check if the consumer has stalled partitions.
 
 ### Prosody::AdminClient
 
 - `new(bootstrap_servers)`: Create an admin client for the specified Kafka servers.
-- `create_topic(name, partitions, replication_factor)`: Create a Kafka topic.
+- `create_topic(name, partitions, replication_factor, cleanup_policy: nil, retention: nil)`: Create a Kafka topic. `cleanup_policy` is a Kafka cleanup policy such as `"delete"`, `"compact"`, or `"delete,compact"`. `retention` is the message retention in seconds. A `nil` keyword uses the cluster default.
 - `delete_topic(name)`: Delete a Kafka topic.
 
 ### Prosody::EventHandler
@@ -1144,10 +1210,12 @@ Messages have the following attributes:
 - `timestamp` (Time): The timestamp when the message was created or sent.
 - `key` (String): The message key.
 - `payload` (`Payload`): The JSON-deserialized message payload.
+- `source_system` (String or nil): The source system of the producer that sent the message, or `nil` when the message has none.
+- `response_requested?` (Boolean): Whether the producer requested a response. When it is false, Prosody discards the handler result, so a handler can skip work that only builds the response.
 
 ### Prosody::ExciseMessage
 
-An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, and `key` attributes. It has no `payload` attribute.
+An `ExciseMessage` has `topic`, `partition`, `offset`, `timestamp`, `key`, `source_system`, and `response_requested?` attributes. It has no `payload` attribute.
 
 ### Prosody::Context
 
@@ -1155,7 +1223,8 @@ Represents the current event context:
 
 - `should_cancel?`: Check if cancellation has been requested (includes timeout and shutdown).
 - `on_cancel`: Wait until cancellation occurs.
-- `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state-2).
+- `demand`: A `Prosody::Demand` that tells whether this call is a normal delivery or a retry. `kind` is `:normal` or `:failure`, and `normal?` and `failure?` test it. `retries` is the number of retries: 0 for a normal delivery and 1 on the first retry. The count is an estimate. Keep an exact attempt count in keyed state if you need one.
+- `state(definition)`: Bind a registered collection for the current attempt. An unregistered or mismatched definition raises `PermanentStateError`. See [Keyed State](#keyed-state).
 
 Timer scheduling methods:
 
@@ -1186,6 +1255,7 @@ Definition constructors (each returns a frozen definition object used both in `C
 
 - `Prosody.value(name, ttl: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
+- `Prosody.set(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.deque(name, ttl: nil, capacity: nil, read_uncommitted: nil, published: nil, read_cache: nil)`
 - `Prosody.message_value(name, ttl: nil, read_uncommitted: nil)`
 - `Prosody.message_map(name, ttl: nil, keyset_limit: nil, read_uncommitted: nil)`
@@ -1195,13 +1265,15 @@ Each constructor returns a `StateDefinition`. It exposes `name`, `kind`, `payloa
 
 Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`.
 
-`Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, and `member?`.
+`Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, `member?`, `contains_many`, and `empty?`.
 
 It provides `each` or `each_pair`, `each_key`, and `each_value`. The reverse methods are `reverse_each_pair`, `reverse_each_key`, and `reverse_each_value`.
 
+`Prosody::PublishedSet` provides `include?` or `member?`, `contains_many`, `empty?`, `each`, and `reverse_each`.
+
 `Prosody::PublishedDeque` provides `get`, `length` or `size`, `empty?`, `first`, `last`, `each`, and `reverse_each`.
 
-Traversal methods return an `Enumerator` without a block.
+Traversal methods return an `Enumerator` without a block. Every traversal accepts the optional [query keywords](#query-keywords) `from:`, `after:`, `to:`, `before:`, `range:`, and `limit:`. Map and set traversals also accept `prefix:`.
 
 `Prosody::ValueState`:
 
@@ -1210,9 +1282,15 @@ Traversal methods return an `Enumerator` without a block.
 `Prosody::MapState` (keys are `String`):
 
 - `get` / `[]`, `get_many`, `set` / `[]=`, `store`, `delete`, and `clear`
-- `key?`, `has_key?`, `include?`, `member?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
+- `key?`, `has_key?`, `include?`, `member?`, `contains_many`, `empty?`, `dig`, `slice`, `values_at`, `fetch`, and `fetch_values`
 - `each` / `each_pair`, `each_key`, and `each_value`, including each reverse form
 - `commit` and `rollback`
+
+`Prosody::SetState` (members are `String`):
+
+- `add` / `<<`, `delete`, and `clear`, which return the set
+- `include?` / `member?`, `contains_many`, and `empty?`
+- `each` / `reverse_each`, `commit`, and `rollback`
 
 `Prosody::DequeState`:
 
@@ -1223,8 +1301,7 @@ Traversal methods return an `Enumerator` without a block.
 Errors:
 
 - `Prosody::TransientStateError < Prosody::TransientError`: Reports a keyed-state error that Prosody can retry.
-- `Prosody::PermanentStateError < Prosody::PermanentError`: Reports a keyed-state error that another attempt cannot resolve.
-- `Prosody::NullValueError < Prosody::TransientStateError`: raised when a `nil` is written; use `clear`/`delete` instead.
+- `Prosody::PermanentStateError < Prosody::PermanentError`: Reports a keyed-state error that another attempt cannot resolve, such as a `nil` write.
 
 Handler error types:
 

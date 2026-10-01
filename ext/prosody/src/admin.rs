@@ -4,9 +4,10 @@
 //! This module implements Ruby bindings for creating and deleting Kafka topics.
 
 use crate::bridge::Bridge;
-use crate::util::ensure_runtime_context;
+use crate::util::{ForkGuard, ensure_runtime_context, seconds};
 use crate::{ROOT_MOD, id};
-use magnus::{Error, Module, Object, Ruby, function, method};
+use magnus::scan_args::{get_kwargs, scan_args};
+use magnus::{Error, Module, Object, RHash, Ruby, Value, function, method};
 use prosody::admin::{AdminConfiguration, ProsodyAdminClient, TopicConfiguration};
 use std::sync::Arc;
 use tracing::Span;
@@ -22,8 +23,8 @@ pub struct AdminClient {
     client: Arc<ProsodyAdminClient>,
     /// Bridge for executing asynchronous operations from Ruby
     bridge: Bridge,
-    /// PID at construction time, used to detect post-fork usage
-    pid: u32,
+    /// Refuses use in a forked child process
+    fork: ForkGuard,
 }
 
 impl AdminClient {
@@ -39,7 +40,6 @@ impl AdminClient {
     /// Returns a `Magnus::Error` if:
     /// - The client cannot be created with the provided bootstrap servers
     /// - The bridge is not initialized
-    #[allow(clippy::needless_pass_by_value)]
     pub fn new(ruby: &Ruby, bootstrap_servers: Vec<String>) -> Result<Self, Error> {
         let _guard = ensure_runtime_context(ruby);
         let admin_config = AdminConfiguration::new(bootstrap_servers)
@@ -61,48 +61,48 @@ impl AdminClient {
         Ok(Self {
             client,
             bridge,
-            pid: std::process::id(),
+            fork: ForkGuard::new("Prosody::AdminClient"),
         })
-    }
-
-    fn check_fork(ruby: &Ruby, this: &Self) -> Result<(), Error> {
-        if std::process::id() != this.pid {
-            return Err(Error::new(
-                ruby.exception_runtime_error(),
-                "Prosody::AdminClient cannot be used after fork. Create a new client in the child \
-                 process.",
-            ));
-        }
-        Ok(())
     }
 
     /// Creates a new Kafka topic.
     ///
-    /// # Arguments
-    ///
-    /// * `ruby` - Reference to the Ruby VM
-    /// * `this` - The admin client instance
-    /// * `name` - Name of the topic to create
-    /// * `partition_count` - Number of partitions for the topic
-    /// * `replication_factor` - Replication factor for the topic
+    /// Ruby calls it as `create_topic(name, partition_count,
+    /// replication_factor, cleanup_policy: nil, retention: nil)`. A `nil`
+    /// keyword uses the cluster default. `retention` is in seconds.
     ///
     /// # Errors
     ///
     /// Returns a `Magnus::Error` if:
+    /// - An argument has the wrong type, or `retention` has no `Duration` form
     /// - The topic creation fails
     /// - There's an issue with the asynchronous execution
-    pub fn create_topic(
-        ruby: &Ruby,
-        this: &Self,
-        name: String,
-        partition_count: u16,
-        replication_factor: u16,
-    ) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
-        let topic_config = TopicConfiguration::builder()
+    pub fn create_topic(ruby: &Ruby, this: &Self, args: &[Value]) -> Result<(), Error> {
+        this.fork.check(ruby)?;
+        let args = scan_args::<(String, u16, u16), (), (), (), RHash, ()>(args)?;
+        let (name, partition_count, replication_factor) = args.required;
+        let keywords = get_kwargs::<_, (), (Option<Option<String>>, Option<Option<f64>>), ()>(
+            args.keywords,
+            &[],
+            &["cleanup_policy", "retention"],
+        )?;
+        let (cleanup_policy, retention) = keywords.optional;
+
+        let mut builder = TopicConfiguration::builder();
+        builder
             .name(name)
             .partition_count(partition_count)
-            .replication_factor(replication_factor)
+            .replication_factor(replication_factor);
+        if let Some(cleanup_policy) = cleanup_policy.flatten() {
+            builder.cleanup_policy(cleanup_policy);
+        }
+        if let Some(retention) = retention.flatten() {
+            builder.retention(
+                seconds("retention", retention)
+                    .map_err(|error| Error::new(ruby.exception_arg_error(), error))?,
+            );
+        }
+        let topic_config = builder
             .build()
             .map_err(|error| Error::new(ruby.exception_runtime_error(), error.to_string()))?;
 
@@ -128,7 +128,7 @@ impl AdminClient {
     /// - The topic deletion fails
     /// - There's an issue with the asynchronous execution
     pub fn delete_topic(ruby: &Ruby, this: &Self, name: String) -> Result<(), Error> {
-        Self::check_fork(ruby, this)?;
+        this.fork.check(ruby)?;
         let client = this.client.clone();
         let future = async move { client.delete_topic(&name).await };
 
@@ -156,7 +156,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     class.define_singleton_method("new", function!(AdminClient::new, 1))?;
     class.define_method(
         id!(ruby, "create_topic"),
-        method!(AdminClient::create_topic, 3),
+        method!(AdminClient::create_topic, -1),
     )?;
     class.define_method(
         id!(ruby, "delete_topic"),

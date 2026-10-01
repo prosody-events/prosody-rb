@@ -3,24 +3,24 @@
 //! This module provides a Ruby-compatible wrapper around the Prosody library's
 //! `MessageContext`, allowing Ruby code to interact with message context
 //! information from Kafka messages and schedule timer events.
+//! The `vending` submodule owns the keyed-state vend methods.
 
 use crate::bridge::Bridge;
-use crate::handler::state::{
-    NativeJsonDequeState, NativeJsonMapState, NativeJsonValueState, NativeMessageDequeState,
-    NativeMessageMapState, NativeMessageValueState, state_error,
-};
 use crate::tracing_util::extract_opentelemetry_context;
 use crate::{ROOT_MOD, id};
 use educe::Educe;
 use magnus::value::ReprValue;
 use magnus::{Error, Module, RClass, Ruby, Value, method};
 use opentelemetry::propagation::TextMapCompositePropagator;
+use prosody::consumer::DemandType;
 use prosody::consumer::event_context::BoxEventContext;
 use prosody::timers::TimerType;
 use prosody::timers::datetime::CompactDateTime;
 use std::sync::Arc;
 use tracing::{Span, debug, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+mod vending;
 
 /// Nanosecond threshold for rounding Ruby Time objects to the nearest second.
 /// At 0.5 seconds, times round up; below 0.5 seconds, they round down.
@@ -49,6 +49,9 @@ pub struct Context {
     /// OpenTelemetry propagator for distributed tracing
     #[educe(Debug(ignore))]
     propagator: Arc<TextMapCompositePropagator>,
+
+    /// Whether this dispatch is a normal delivery or a retry after a failure.
+    demand: DemandType,
 }
 
 impl Context {
@@ -59,16 +62,39 @@ impl Context {
     /// * `inner` - The Prosody event context to wrap
     /// * `bridge` - The bridge for handling async operations
     /// * `propagator` - Shared OpenTelemetry propagator for distributed tracing
+    /// * `demand` - The demand this dispatch serves
     pub fn new(
         inner: BoxEventContext<serde_json::Value>,
         bridge: Bridge,
         propagator: Arc<TextMapCompositePropagator>,
+        demand: DemandType,
     ) -> Self {
         Self {
             inner,
             bridge,
             propagator,
+            demand,
         }
+    }
+
+    /// Returns the dispatch demand as a `Prosody::Demand`.
+    ///
+    /// A normal delivery has kind `:normal` and 0 retries. A retry after a
+    /// failure has kind `:failure` and a retry count that starts at 1. The
+    /// count is an estimate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Ruby error if `Prosody::Demand` cannot be built.
+    fn demand(ruby: &Ruby, this: &Self) -> Result<Value, Error> {
+        let (kind, retries) = match this.demand {
+            DemandType::Normal => ("normal", 0),
+            DemandType::Failure { retry: retries } => ("failure", retries),
+        };
+        let class: RClass = ruby.get_inner(&ROOT_MOD).const_get(id!(ruby, "Demand"))?;
+        // `Data.new` maps positional members to keywords; `new_instance` would
+        // bypass it and call `initialize` with positional arguments.
+        class.funcall(id!(ruby, "new"), (ruby.sym_new(kind), retries))
     }
 
     /// Check if cancellation has been requested.
@@ -312,8 +338,8 @@ impl Context {
                 )
             })?;
 
-        // Convert CompactDateTime objects to Ruby Time objects using idiomatic iterator
-        // pattern
+        // Convert CompactDateTime objects to Ruby Time objects using idiomatic
+        // iterator pattern
         let ruby_array = ruby.ary_try_from_iter(
             scheduled_times
                 .into_iter()
@@ -321,131 +347,6 @@ impl Context {
         )?;
 
         Ok(ruby_array.as_value())
-    }
-
-    /// Vends the handle for the named JSON value collection.
-    ///
-    /// Vending verifies the collection's registration (core-side); no span is
-    /// opened here — vended handles outlive the call, and every operation opens
-    /// its own span.
-    ///
-    /// # Errors
-    ///
-    /// Returns a permanent state error if the name is unregistered or its
-    /// registered identity mismatches.
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn value_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeJsonValueState, Error> {
-        let handle = this
-            .inner
-            .value_state(&name)
-            .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeJsonValueState::new(
-            Arc::from(handle),
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        ))
-    }
-
-    /// Vends the handle for the named JSON map collection.
-    ///
-    /// # Errors
-    ///
-    /// See [`value_state`](Self::value_state).
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn map_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeJsonMapState, Error> {
-        let handle = this
-            .inner
-            .map_state(&name)
-            .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeJsonMapState::new(
-            Arc::from(handle),
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        ))
-    }
-
-    /// Vends the handle for the named JSON deque collection.
-    ///
-    /// # Errors
-    ///
-    /// See [`value_state`](Self::value_state).
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn deque_state(ruby: &Ruby, this: &Self, name: String) -> Result<NativeJsonDequeState, Error> {
-        let handle = this
-            .inner
-            .deque_state(&name)
-            .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeJsonDequeState::new(
-            Arc::from(handle),
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        ))
-    }
-
-    /// Vends the handle for the named Kafka-message value collection.
-    ///
-    /// # Errors
-    ///
-    /// See [`value_state`](Self::value_state).
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn message_value_state(
-        ruby: &Ruby,
-        this: &Self,
-        name: String,
-    ) -> Result<NativeMessageValueState, Error> {
-        let handle = this
-            .inner
-            .message_value_state(&name)
-            .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeMessageValueState::new(
-            Arc::from(handle),
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        ))
-    }
-
-    /// Vends the handle for the named Kafka-message map collection.
-    ///
-    /// # Errors
-    ///
-    /// See [`value_state`](Self::value_state).
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn message_map_state(
-        ruby: &Ruby,
-        this: &Self,
-        name: String,
-    ) -> Result<NativeMessageMapState, Error> {
-        let handle = this
-            .inner
-            .message_map_state(&name)
-            .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeMessageMapState::new(
-            Arc::from(handle),
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        ))
-    }
-
-    /// Vends the handle for the named Kafka-message deque collection.
-    ///
-    /// # Errors
-    ///
-    /// See [`value_state`](Self::value_state).
-    #[allow(clippy::needless_pass_by_value, reason = "Magnus method argument type")]
-    fn message_deque_state(
-        ruby: &Ruby,
-        this: &Self,
-        name: String,
-    ) -> Result<NativeMessageDequeState, Error> {
-        let handle = this
-            .inner
-            .message_deque_state(&name)
-            .map_err(|error| state_error(ruby, &error))?;
-        Ok(NativeMessageDequeState::new(
-            Arc::from(handle),
-            this.bridge.clone(),
-            Arc::clone(&this.propagator),
-        ))
     }
 }
 
@@ -471,6 +372,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(Context::should_cancel, 0),
     )?;
     class.define_method(id!(ruby, "on_cancel"), method!(Context::on_cancel, 0))?;
+    class.define_method(id!(ruby, "demand"), method!(Context::demand, 0))?;
 
     // Timer scheduling methods
     class.define_method(id!(ruby, "schedule"), method!(Context::schedule, 1))?;
@@ -485,24 +387,7 @@ pub fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     class.define_method(id!(ruby, "scheduled"), method!(Context::scheduled, 0))?;
 
-    // Keyed-state vend methods
-    class.define_method(id!(ruby, "value_state"), method!(Context::value_state, 1))?;
-    class.define_method(id!(ruby, "map_state"), method!(Context::map_state, 1))?;
-    class.define_method(id!(ruby, "deque_state"), method!(Context::deque_state, 1))?;
-    class.define_method(
-        id!(ruby, "message_value_state"),
-        method!(Context::message_value_state, 1),
-    )?;
-    class.define_method(
-        id!(ruby, "message_map_state"),
-        method!(Context::message_map_state, 1),
-    )?;
-    class.define_method(
-        id!(ruby, "message_deque_state"),
-        method!(Context::message_deque_state, 1),
-    )?;
-
-    Ok(())
+    vending::define_methods(ruby, class)
 }
 
 /// Converts a Ruby Time object to `CompactDateTime`.
@@ -571,7 +456,8 @@ fn time_to_compact_datetime(ruby: &Ruby, ruby_time: Value) -> Result<CompactDate
 /// Returns an error if the Ruby Time class cannot be accessed or if
 /// creating the Time object fails.
 fn compact_datetime_to_time(ruby: &Ruby, compact_time: CompactDateTime) -> Result<Value, Error> {
-    // Direct access to epoch seconds - CompactDateTime has no sub-second precision
+    // Direct access to epoch seconds - CompactDateTime has no sub-second
+    // precision
     let epoch_seconds = i64::from(compact_time.epoch_seconds());
 
     // Create Ruby Time with zero nanoseconds (CompactDateTime precision limit)

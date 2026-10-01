@@ -10,12 +10,14 @@ The Ruby client reports values it cannot convert to Prosody types. Prosody valid
 |-----------------------------------------|---------------------------------------------------|--------------|
 | `bootstrap_servers` / `PROSODY_BOOTSTRAP_SERVERS` | Kafka servers to connect to             | -            |
 | `group_id` / `PROSODY_GROUP_ID`         | Consumer group name                               | -            |
-| `subscribed_topics` / `PROSODY_SUBSCRIBED_TOPICS` | Topics to read from                     | -            |
+| `subscribed_topics` / `PROSODY_SUBSCRIBED_TOPICS` | Topics to read from; a client that only reads published state needs none | -            |
 | `allowed_events` / `PROSODY_ALLOWED_EVENTS` | Only process events matching these prefixes   | (all)        |
 | `source_system` / `PROSODY_SOURCE_SYSTEM` | Tag for outgoing messages (prevents reprocessing)| `<group_id>` |
 | `mock` / `PROSODY_MOCK`                 | Use in-memory Kafka for testing                   | false        |
 | `mode` / -                              | Processing mode: `pipeline`, `low_latency`, or `best_effort` | `pipeline` |
-| - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info` |
+| - / `PROSODY_LOG`                       | Rust log filter, such as `info` or `prosody=debug` | `info`, with `warn` for `scylla` and `opentelemetry` |
+
+`PROSODY_LOG` directives apply on top of the defaults above. A value that names only targets, such as `prosody=debug`, keeps other targets at `info`. Set `PROSODY_LOG=opentelemetry=info` to restore the OpenTelemetry info events.
 
 ## Requests
 
@@ -45,9 +47,9 @@ Set `subsystem` to make this client answer requests. Without it, the client cons
 | `shutdown_timeout` / `PROSODY_SHUTDOWN_TIMEOUT` | Shutdown budget; handlers run freely until cancellation fires near the end of the timeout | 30s |
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks; use `false`, `:disabled`, or the environment value `none` to disable | 8000 |
-| - / `PROSODY_STATISTICS_INTERVAL`       | How often librdkafka reports client statistics; must be between 1ms and 24h | 5s |
+| `statistics_interval` / `PROSODY_STATISTICS_INTERVAL` | How often librdkafka reports client statistics; must be between 1ms and 24h | 5s |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
-| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Global shared cache capacity across all partitions for message deduplication. Consumer deduplication is mandatory and cannot be disabled, so this must be at least 1; setting it to 0 in the client configuration is rejected | 8192 |
+| `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Capacity of the producer idempotence cache and of the consumer deduplication cache. Consumer deduplication cannot be turned off, so the value must be at least 1 | 8192 |
 | `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
 | `idempotence_ttl` / `PROSODY_IDEMPOTENCE_TTL`         | TTL for dedup records in Cassandra            | 7d (604800 seconds) |
 | `slab_size` / `PROSODY_SLAB_SIZE`       | Timer storage granularity (rarely needs changing)    | 1h                     |
@@ -141,27 +143,28 @@ Register keyed-state collections before you subscribe. Persistence is backed by 
 | Option / Environment Variable | Description | Default |
 |-------------------------------|-------------|---------|
 | `state_collections` / - | Keyed-state collections to register before subscribe (array of definitions or config hashes; duplicate names rejected) | (none) |
-| `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise JSON collections whose definitions set `published: true` | (none) |
-| `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Disk workspace for the local keyed-state cache; each live client needs its own directory. Set a mounted path in production | per-client temp dir |
+| `subsystem` / `PROSODY_SUBSYSTEM` | Subsystem name used to advertise JSON and set collections whose definitions set `published: true` | (none) |
+| `state_cache_dir` / `PROSODY_STATE_CACHE_DIR` | Directory for the local keyed-state caches. Each consumer opens its cache in a new subdirectory and removes it when the consumer stops, so clients can share the directory. Set a mounted path in production | `<temp>/prosody/keyed-state` |
 | `state_owned_cache_size` / `PROSODY_STATE_OWNED_CACHE_SIZE` | Capacity of the owning keyed-state cache; accepts sizes such as `64 MiB` or `500 MB` | storage-engine default |
+| `state_memtable_size` / `PROSODY_STATE_MEMTABLE_SIZE` | Bytes of in-memory writes the local keyed-state cache holds for each assigned partition before it flushes them to disk; accepts sizes such as `16 MiB`. Memory use scales with the number of assigned partitions | storage-engine default of 64 MiB |
 | `state_read_cache_size` / `PROSODY_STATE_READ_CACHE_SIZE` | Capacity of the published-state read cache; accepts sizes such as `1 MiB` | `state_owned_cache_size` or `PROSODY_STATE_OWNED_CACHE_SIZE` when set; otherwise 1 MiB |
 | `state_read_cache` / `PROSODY_STATE_READ_CACHE_TTL` | Default published-read cache TTL. Use `false` or the environment value `none` to bypass the cache | 5s |
-| `state_recovery_delay` / `PROSODY_STATE_RECOVERY_DELAY` | Whole-second delay between staging a provisional cell and the recovery sweep; every collection TTL must strictly exceed it | 30s |
-
-Prefer the definition constructors from the [API reference](README.md#api-reference). They serialize into `state_collections`, so you can reuse the same object with `context.state`. Each entry has these fields:
 
 Published collections require `subsystem`. Keep it configured for one deployment after removing `published: true` so readers can observe the collection's retirement.
+
+Prefer the definition constructors from the [API reference](README.md#api-reference). They serialize into `state_collections`, so you can reuse the same object with `context.state`. Each entry has these fields:
 
 | Field | Description | Default |
 |-------|-------------|---------|
 | `name` | Collection name; non-empty and unique within the client | (required) |
-| `kind` | `"value"`, `"map"`, or `"deque"` | (required) |
-| `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received) | (required) |
-| `ttl_seconds` | Per-write TTL in whole seconds (at least 1; must exceed the recovery delay) | (none) |
+| `kind` | `"value"`, `"map"`, `"set"`, or `"deque"` | (required) |
+| `payload` | `"json"` (JSON values) or `"message"` (the full Kafka message the handler received). Omit it for a set, which stores membership only | (required for a value, map, or deque) |
+| `ttl_seconds` | Per-write TTL in whole seconds (at least 1) | (none) |
 | `read_uncommitted` | Opt out of transactional staging | false |
-| `published` | Allow read-only access from other consumer groups; JSON collections only | false |
-| `read_cache` | Published-read cache override: a positive duration, `false`, or inherit when omitted | inherit |
-| `keyset_limit` | Map-only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
+| `published` | Allow read-only access from other consumer groups; JSON and set collections only | false |
+| `keyset_limit` | Map and set only; ordered-scan bound in `0..=4096` (`0` disables ordered-scan tracking) | 128 |
 | `capacity` | Deque-only window bound (at least 1); keeps at most N slots, enforced lazily on push. Runtime-only and mutable across deploys — not persisted | unbounded |
 
-Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`, `published:`, `read_cache:`). `read_cache` is a positive duration in seconds, `false` to bypass the cache, or `nil` to inherit the client default.
+Constructors set these via keyword arguments (`ttl:`, `keyset_limit:`, `capacity:`, `read_uncommitted:`, `published:`).
+
+A JSON or set constructor also takes `read_cache:`. It is not a registration field: it applies only to the readers that `client.state` opens with the definition. `read_cache` is a positive duration in seconds, `false` to bypass the cache, or `nil` to inherit the client default.
