@@ -30,6 +30,9 @@ jobs:
         with:
           path: target/planning-evidence
           key: cargo-rail-evidence-${{ runner.os }}-${{ runner.arch }}-${{ github.event.pull_request.base.sha || github.event.before }}
+      # The planner rejects a missing evidence directory but accepts an empty one after a cache miss.
+      - name: Create the evidence directory
+        run: mkdir -p target/planning-evidence
       - id: rail
         uses: loadingalias/cargo-rail-action@409962f05d90a78aae995ef6b1c8466010c0a460 # v10.1.1
         with:
