@@ -1,0 +1,26 @@
+[plan.work.ci]
+paths = [".config/rail.toml", ".github/**", ".taplo.toml", "Makefile"]
+scope = "repository"
+
+[plan.work.ruby]
+paths = [
+    ".rspec",
+    ".ruby-version",
+    ".standard.yml",
+    "Gemfile",
+    "Gemfile.lock",
+    "Rakefile",
+    "Steepfile",
+    "bin/**",
+    "examples/**",
+    "ext/prosody/extconf.rb",
+    "lib/**",
+    "prosody.gemspec",
+    "sig-private/**",
+    "sig/**",
+    "spec/**",
+    "steep_expectations.yml",
+    "typecheck/**",
+    "typecheck_negative/**",
+]
+scope = "repository"

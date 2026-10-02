@@ -1,4 +1,4 @@
-include = ["*.toml", ".cargo/*.toml", "ext/**/*.toml"]
+include = ["*.toml", ".cargo/*.toml", ".config/*.toml", "ext/**/*.toml"]
 
 [formatting]
 indent_string = "    "
