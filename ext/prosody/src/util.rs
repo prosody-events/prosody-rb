@@ -29,13 +29,6 @@ use tracing::{error, warn};
 ///
 /// This macro requires a `ruby: &Ruby` parameter to enforce that it can only
 /// be used within a Ruby thread context, ensuring thread safety.
-///
-/// # Examples
-///
-/// ```
-/// let method_name = id!(ruby, "to_s");
-/// // Use method_name with Ruby function calls
-/// ```
 #[macro_export]
 macro_rules! id {
     ($ruby:expr, $str:expr) => {{
@@ -256,13 +249,6 @@ impl ForkGuard {
 ///
 /// `Some(EnterGuard)` if we entered a new runtime (hold the guard), or `None`
 /// if already in a runtime context.
-///
-/// # Examples
-///
-/// ```rust
-/// let _guard = ensure_runtime_context(ruby);
-/// // Safe to perform async operations
-/// ```
 pub fn ensure_runtime_context(ruby: &Ruby) -> Option<EnterGuard<'static>> {
     let guard = Handle::try_current().is_err().then(|| RUNTIME.enter());
 

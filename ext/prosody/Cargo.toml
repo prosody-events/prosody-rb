@@ -6,6 +6,7 @@ publish = false
 version = "0.1.0"
 
 [lib]
+# cdylib only: the extension has no Rust doctests; the RSpec suite covers it.
 crate-type = ["cdylib"]
 
 [dependencies]

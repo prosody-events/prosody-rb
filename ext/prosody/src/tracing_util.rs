@@ -32,14 +32,6 @@ use std::collections::HashMap;
 /// - OpenTelemetry module is not available in Ruby
 /// - Context extraction or propagation fails
 /// - Ruby-to-Rust type conversion fails
-///
-/// # Example
-///
-/// ```rust
-/// let context = extract_opentelemetry_context(ruby, &propagator)?;
-/// let span = info_span!("operation");
-/// span.set_parent(context);
-/// ```
 pub fn extract_opentelemetry_context(
     ruby: &Ruby,
     propagator: &TextMapCompositePropagator,
