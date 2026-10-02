@@ -1,5 +1,5 @@
 [plan.work.ci]
-paths = [".config/rail.toml", ".github/**", ".taplo.toml", "Makefile"]
+paths = [".config/rail.toml", ".github/**"]
 scope = "repository"
 
 [plan.work.ruby]
@@ -23,4 +23,8 @@ paths = [
     "typecheck/**",
     "typecheck_negative/**",
 ]
+scope = "repository"
+
+[plan.work.taplo]
+paths = [".taplo.toml"]
 scope = "repository"
