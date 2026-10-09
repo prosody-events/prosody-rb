@@ -201,7 +201,7 @@ jobs:
         run: |
           docker run -d --name cassandra --network kafka-test-network \
             -p 9042:9042 \
-            cassandra:latest
+            public.ecr.aws/docker/library/cassandra:latest
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
@@ -228,7 +228,7 @@ jobs:
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3 \
+            public.ecr.aws/docker/library/ruby:3.3 \
             bash -c "cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
@@ -270,7 +270,7 @@ jobs:
         run: |
           docker run -d --name cassandra --network kafka-test-network \
             -p 9042:9042 \
-            cassandra:latest
+            public.ecr.aws/docker/library/cassandra:latest
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
@@ -297,7 +297,7 @@ jobs:
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3-alpine \
+            public.ecr.aws/docker/library/ruby:3.3-alpine \
             sh -c "cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
@@ -338,7 +338,7 @@ jobs:
         run: |
           docker run -d --name cassandra --network kafka-test-network \
             -p 9042:9042 \
-            cassandra:latest
+            public.ecr.aws/docker/library/cassandra:latest
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
@@ -365,7 +365,7 @@ jobs:
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3 \
+            public.ecr.aws/docker/library/ruby:3.3 \
             bash -c "set -e && cd /tmp && \
                      cp -r /repo/spec /tmp/ && \
                      apt-get update && \
@@ -407,7 +407,7 @@ jobs:
         run: |
           docker run -d --name cassandra --network kafka-test-network \
             -p 9042:9042 \
-            cassandra:latest
+            public.ecr.aws/docker/library/cassandra:latest
       - name: Wait for services to be ready
         run: |
           echo "Waiting for Cassandra and Kafka to be ready..."
@@ -434,7 +434,7 @@ jobs:
             -e PROSODY_CASSANDRA_NODES=cassandra:9042 \
             -v $(pwd):/repo \
             -v $(pwd)/gems:/gems \
-            ruby:3.3-alpine \
+            public.ecr.aws/docker/library/ruby:3.3-alpine \
             sh -c "set -e && cd /tmp && \
                    cp -r /repo/spec /tmp/ && \
                    apk add --no-cache build-base && \
