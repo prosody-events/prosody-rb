@@ -168,15 +168,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Set up mold
-        uses: rui314/setup-mold@10ca16bf91dc22e05ebdc935cad9c75ea248f621 # v1
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
-      - name: Install taplo from crates.io
-        uses: baptiste0928/cargo-install@v3
-        with:
-          crate: taplo-cli
+      - name: Install taplo
+        env:
+          TAPLO_VERSION: 0.10.0
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/taplo.gz" \
+            "https://github.com/tamasfe/taplo/releases/download/${TAPLO_VERSION}/taplo-linux-x86_64.gz"
+          gunzip "$RUNNER_TEMP/taplo.gz"
+          sudo install "$RUNNER_TEMP/taplo" /usr/local/bin/taplo
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -204,10 +206,14 @@ jobs:
       - name: Set up mold
         uses: rui314/setup-mold@10ca16bf91dc22e05ebdc935cad9c75ea248f621 # v1
       # Do not cache the Rust build. cargo-udeps enables -Z binary-dep-depinfo, and with it a full cache match still recompiled every crate.
-      - name: Install udeps from crates.io
-        uses: baptiste0928/cargo-install@v3
-        with:
-          crate: cargo-udeps
+      - name: Install cargo-udeps
+        env:
+          UDEPS_VERSION: 0.1.61
+        run: |
+          archive="cargo-udeps-v${UDEPS_VERSION}-x86_64-unknown-linux-musl"
+          curl -sSfL -o "$RUNNER_TEMP/udeps.tar.gz" \
+            "https://github.com/est31/cargo-udeps/releases/download/v${UDEPS_VERSION}/${archive}.tar.gz"
+          sudo tar -xzf "$RUNNER_TEMP/udeps.tar.gz" -C /usr/local/bin --strip-components=2 "./${archive}/cargo-udeps"
       - name: Install build dependencies
         uses: ./.github/actions/install-build-dependencies
       - name: Run cargo udeps
@@ -230,4 +236,4 @@ jobs:
       - name: Install build dependencies
         uses: ./.github/actions/install-build-dependencies
       - name: Check documentation
-        run: RUSTDOCFLAGS="-D warnings" cargo doc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
