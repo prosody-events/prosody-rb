@@ -1,0 +1,18 @@
+name: Install build dependencies
+description: Install protoc and the libcurl headers that the Prosody crate build needs.
+runs:
+  using: composite
+  steps:
+    # The runner image has cmake. librdkafka includes curl/curl.h, so it needs the libcurl headers.
+    # Do not cache apt packages: a cache saved after a failed install restores no packages.
+    - shell: bash
+      env:
+        PROTOC_VERSION: "36.2"
+      run: |
+        curl -sSfL -o "$RUNNER_TEMP/protoc.zip" \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/protoc-$PROTOC_VERSION-linux-x86_64.zip" &
+        protoc=$!
+        sudo apt-get update -qq
+        sudo apt-get install -qq --yes --no-install-recommends libcurl4-openssl-dev
+        wait "$protoc"
+        sudo unzip -q -o "$RUNNER_TEMP/protoc.zip" 'bin/*' 'include/*' -d /usr/local

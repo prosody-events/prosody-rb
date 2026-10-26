@@ -56,11 +56,7 @@ jobs:
         with:
           ruby-version: '3.4'
       - name: Install build dependencies
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: cmake libcurl4-openssl-dev protobuf-compiler
-          version: 1.0
+        uses: ./.github/actions/install-build-dependencies
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: loadingalias/cargo-rail-action/setup@409962f05d90a78aae995ef6b1c8466010c0a460 # v10.1.1
@@ -131,11 +127,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
       - name: Install build dependencies
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: cmake libcurl4-openssl-dev protobuf-compiler
-          version: 1.0
+        uses: ./.github/actions/install-build-dependencies
       - name: Install dependencies
         run: bundle install
       - name: Compile extension with debug info
@@ -185,7 +177,6 @@ jobs:
         uses: baptiste0928/cargo-install@v3
         with:
           crate: taplo-cli
-      - uses: Swatinem/rust-cache@v2
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -212,18 +203,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - name: Set up mold
         uses: rui314/setup-mold@10ca16bf91dc22e05ebdc935cad9c75ea248f621 # v1
-      - uses: Swatinem/rust-cache@v2
+      # Do not cache the Rust build. cargo-udeps enables -Z binary-dep-depinfo, and with it a full cache match still recompiled every crate.
       - name: Install udeps from crates.io
         uses: baptiste0928/cargo-install@v3
         with:
           crate: cargo-udeps
-      - uses: Swatinem/rust-cache@v2
       - name: Install build dependencies
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: cmake libcurl4-openssl-dev protobuf-compiler
-          version: 1.0
+        uses: ./.github/actions/install-build-dependencies
       - name: Run cargo udeps
         run: cargo +nightly udeps
 
@@ -242,10 +228,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install build dependencies
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: cmake libcurl4-openssl-dev protobuf-compiler
-          version: 1.0
+        uses: ./.github/actions/install-build-dependencies
       - name: Check documentation
         run: RUSTDOCFLAGS="-D warnings" cargo doc

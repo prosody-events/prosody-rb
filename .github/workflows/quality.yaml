@@ -67,11 +67,7 @@ jobs:
           crate: sarif-fmt
       - uses: Swatinem/rust-cache@v2
       - name: Install build dependencies
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: cmake libcurl4-openssl-dev protobuf-compiler
-          version: 1.0
+        uses: ./.github/actions/install-build-dependencies
       - name: Linting
         run:
           cargo clippy --all-features -- -D warnings
