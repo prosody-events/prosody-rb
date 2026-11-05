@@ -14,10 +14,6 @@ on:
           - release-please
           - validate
           - retry
-      release_as:
-        description: 'Force release version (e.g. 2.2.0.beta.1)'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -47,7 +43,6 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          release-as: ${{ github.event.inputs.release_as }}
 
   build-cross-compiled-gems:
     needs: [release-please]
