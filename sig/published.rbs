@@ -2,6 +2,7 @@ module Prosody
   # --- published-state readers, opened by Client#state -------------------
   class NativePublishedValue
     def get: (String key) -> json_value?
+    def contains: (String key) -> bool
   end
 
   class NativePublishedMap
@@ -32,6 +33,7 @@ module Prosody
 
   class PublishedValue[T = json_value]
     def get: (String key) -> T?
+    def exist?: (String key) -> bool
 
     private
     def initialize: (NativePublishedValue native) -> void

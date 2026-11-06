@@ -58,11 +58,11 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
         def on_message(context, _message)
           value = context.state(@def)
-          before = value.get
+          before = [value.get, value.exist?]
           value.set(@rich)
-          after = value.get
+          after = [value.get, value.exist?]
           value.clear
-          cleared = value.get
+          cleared = [value.get, value.exist?]
           @sink.push({before: before, after: after, cleared: cleared})
         end
       end
@@ -72,9 +72,9 @@ RSpec.describe "Prosody keyed state (integration)", integration: true do
 
       client.send_message(topic, "k1", {go: true})
       observation = sink.wait(1).first
-      expect(observation[:before]).to be_nil
-      expect(observation[:after]).to eq(rich)
-      expect(observation[:cleared]).to be_nil
+      expect(observation[:before]).to eq([nil, false])
+      expect(observation[:after]).to eq([rich, true])
+      expect(observation[:cleared]).to eq([nil, false])
     end
   end
 

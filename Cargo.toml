@@ -81,3 +81,5 @@ verbose_file_reads = "warn"
 [patch.crates-io]
 # TODO: Use a crates.io release after serde_magnus supports magnus 0.9.
 serde_magnus = { git = "https://github.com/hadronzoo/serde-magnus", rev = "27aee737829a6bca399289b6e64ce4bcc08bfd94" }
+# Temporary: build against unreleased prosody main. Remove after release.
+prosody = { git = "https://github.com/prosody-events/prosody", rev = "656cb911c96df03632025738288998ffbccac0e3" }

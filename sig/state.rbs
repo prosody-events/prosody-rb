@@ -110,6 +110,7 @@ module Prosody
   # Every op is fiber-yield async: it looks blocking but never blocks the thread.
   class ValueState[T = json_value] < State::Handle
     def get: () -> T?
+    def exist?: () -> bool
     def set: (T value) -> void
     def clear: () -> void
 
@@ -230,6 +231,7 @@ module Prosody
 
   interface _NativeValueHandle[T]
     def get: () -> T?
+    def contains: () -> bool
     def set: (T value) -> void
     def clear: () -> void
     def commit: () -> store_outcome

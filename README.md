@@ -636,7 +636,7 @@ State operations look synchronous. They yield the current fiber while Prosody pe
 
 | Collection | JSON payload | Kafka message | Main operations |
 | --- | --- | --- | --- |
-| Value | `Prosody.value` | `Prosody.message_value` | `get`, `set`, `clear` |
+| Value | `Prosody.value` | `Prosody.message_value` | `get`, `exist?`, `set`, `clear` |
 | Ordered string map | `Prosody.map` | `Prosody.message_map` | `get`, `get_many`, `key?`, `contains_many`, `empty?`, `set`, `delete`, `each_pair`, `each_key`, `clear` |
 | Ordered string set | `Prosody.set` | - | `add` / `<<`, `delete`, `include?`, `contains_many`, `empty?`, `each`, `clear` |
 | Deque | `Prosody.deque` | `Prosody.message_deque` | `push`, `unshift`, `pop`, `shift`, `get`, `length`, `each`, `clear` |
@@ -1274,7 +1274,7 @@ Definition constructors (each returns a frozen definition object used both in `C
 
 Each constructor returns a `StateDefinition`. It exposes `name`, `kind`, `payload`, all supplied options, and `to_state_config`.
 
-Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get`.
+Published readers take the user key as their first argument. `Prosody::PublishedValue` provides `get` and `exist?`.
 
 `Prosody::PublishedMap` provides `get`, `get_many`, `key?`, `has_key?`, `include?`, `member?`, `contains_many`, and `empty?`.
 
@@ -1288,7 +1288,7 @@ Traversal methods return an `Enumerator` without a block. Every traversal accept
 
 `Prosody::ValueState`:
 
-- `get` / `value`, `set(value)` / `value=`, `clear`, `commit`, and `rollback`
+- `get` / `value`, `exist?`, `set(value)` / `value=`, `clear`, `commit`, and `rollback`
 
 `Prosody::MapState` (keys are `String`):
 

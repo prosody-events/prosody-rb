@@ -60,7 +60,7 @@ RSpec.describe Prosody::Client, integration: true do
 
   describe "duration options" do
     options = %i[
-      send_timeout stall_threshold shutdown_timeout poll_interval commit_interval statistics_interval
+      send_timeout stall_threshold shutdown_timeout poll_interval commit_interval statistics_interval fetch_wait
       retry_base max_retry_delay idempotence_ttl peer_registration_ttl
       cassandra_retention slab_size scheduler_max_wait monopolization_window
       defer_base defer_max_delay defer_failure_window loader_seek_timeout timeout
@@ -87,6 +87,15 @@ RSpec.describe Prosody::Client, integration: true do
     it "passes statistics_interval to the consumer" do
       client = mock_client(statistics_interval: 0, subscribed_topics: "statistics")
       expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /statistics_interval/)
+    end
+
+    # Each value is out of the core range, so the option reaches the consumer
+    # only if core reports it by name.
+    {partition_prefetch: "1 B", fetch_max_bytes: "1 B", fetch_wait: 0}.each do |option, value|
+      it "passes #{option} to the consumer" do
+        client = mock_client(option => value, :subscribed_topics => "fetch")
+        expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /#{option}/)
+      end
     end
 
     it "accepts a max_uncommitted above 65535" do

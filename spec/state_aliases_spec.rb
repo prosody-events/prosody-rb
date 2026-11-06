@@ -17,6 +17,7 @@ RSpec.describe "keyed-state idiomatic aliases" do
     Class.new do
       def initialize = (@value = nil)
       def get = @value
+      def contains = !@value.nil?
 
       def set(v)
         @value = v
@@ -131,6 +132,17 @@ RSpec.describe "keyed-state idiomatic aliases" do
 
     it "returns the assigned value from #value= like a Ruby attribute writer" do
       expect(value.value = 42).to eq(42)
+    end
+
+    it "answers presence via #contains (not #get) with #exist?" do
+      native = value_native.new
+      presence = Prosody::ValueState.new(native)
+      native.set(false)
+      # The cheap presence path must never decode a value: assert it never reads.
+      expect(native).not_to receive(:get)
+      expect(presence.exist?).to be(true)
+      native.clear
+      expect(presence.exist?).to be(false)
     end
   end
 

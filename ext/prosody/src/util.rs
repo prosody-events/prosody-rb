@@ -9,6 +9,7 @@ use crate::logging::Logger;
 use crate::{BRIDGE, ROOT_MOD, RUNTIME, TRACING_INIT};
 use magnus::value::{BoxValue, ReprValue};
 use magnus::{Error, Ruby, Value, function};
+use prosody::ByteSize;
 use prosody::tracing::{
     TracingError, flush_telemetry as core_flush_telemetry, initialize_tracing,
     shutdown_telemetry as core_shutdown_telemetry,
@@ -193,6 +194,15 @@ pub(crate) fn report(message: fmt::Arguments<'_>) {
 pub(crate) fn seconds(option: &str, value: f64) -> Result<Duration, String> {
     Duration::try_from_secs_f64(value)
         .map_err(|_| format!("{option}: must be a finite, non-negative number of seconds"))
+}
+
+/// Parses a Ruby byte size, such as `"64 MiB"`, into a [`ByteSize`].
+///
+/// # Errors
+///
+/// Returns an error that names `option` if the size does not parse.
+pub(crate) fn byte_size(option: &str, value: &str) -> Result<ByteSize, String> {
+    value.parse().map_err(|error| format!("{option}: {error}"))
 }
 
 /// Detects the use of a native object in a forked child process.
