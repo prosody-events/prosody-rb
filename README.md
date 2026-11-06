@@ -36,6 +36,15 @@ State definitions carry their item types through `context.state`. A bare handler
 message, definition, or state handle uses `Prosody::json_value`. See the
 [typed examples](examples/) for Ruby and companion RBS files checked by Steep.
 
+### Kafka version
+
+Prosody requires Kafka 4.0 or later. Consumers use the broker-side consumer
+group protocol (KIP-848). The broker assigns partitions, and a rebalance
+changes only the members whose partitions move. Brokers older than 4.0 do
+not support this protocol, and the client does not fall back to the classic
+protocol. A consumer that connects to an older broker logs a fatal error and
+gets no partitions, so its readiness probe stays unready.
+
 ## Quick Start
 
 ```ruby
