@@ -84,6 +84,16 @@ pub struct NativeConfiguration {
     /// Interval between librdkafka statistics reports (in seconds)
     statistics_interval: Option<f64>,
 
+    /// Bytes of fetched records that wait for each assigned partition
+    partition_prefetch: Option<String>,
+
+    /// Maximum bytes in one fetch response from one broker
+    fetch_max_bytes: Option<String>,
+
+    /// How long a broker can hold a fetch request with no new records (in
+    /// seconds)
+    fetch_wait: Option<f64>,
+
     /// Operation mode of the client (`pipeline`, `low_latency`, `best_effort`)
     mode: Option<String>,
 

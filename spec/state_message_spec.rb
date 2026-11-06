@@ -37,7 +37,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
     rows = {
       Prosody.message_value(random_state_name("mval")) => [
         ->(value, message) { value.set(message) },
-        ->(value) { [value.get] }
+        ->(value) { [value.get, value.exist?] }
       ],
       Prosody.message_deque(random_state_name("mdeq")) => [
         ->(deque, message) { deque.push(message) },
@@ -59,7 +59,7 @@ RSpec.describe "Prosody message state (integration)", integration: true do
     expect(live).not_to eq(stored)
     message = [topic, "mk", {"step" => 1}, stored]
     expect(reads).to eq([
-      [message],
+      [message, true],
       [message, message],
       [message, message, nil, "café", message, "primary", message, "café", "primary"]
     ])

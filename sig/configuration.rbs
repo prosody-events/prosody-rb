@@ -59,13 +59,28 @@ module Prosody
     def poll_interval: () -> Float?
     def poll_interval=: (Numeric) -> Float
 
-    # Interval between offset commit operations (seconds)
+    # Interval between offset commit operations (seconds); 1 ms to 24 hours
     def commit_interval: () -> Float?
     def commit_interval=: (Numeric) -> Float
 
     # Interval between librdkafka statistics reports (seconds)
     def statistics_interval: () -> Float?
     def statistics_interval=: (Numeric) -> Float
+
+    # Bytes of fetched records that wait for each assigned partition. Accepts
+    # a human-readable size. Uses PROSODY_PARTITION_PREFETCH when omitted.
+    def partition_prefetch: () -> String?
+    def partition_prefetch=: (String | _ToS) -> String
+
+    # Maximum bytes in one fetch response from one broker. Accepts a
+    # human-readable size. Uses PROSODY_FETCH_MAX_BYTES when omitted.
+    def fetch_max_bytes: () -> String?
+    def fetch_max_bytes=: (String | _ToS) -> String
+
+    # How long a broker can hold a fetch request when no new records are
+    # available (seconds). Uses PROSODY_FETCH_WAIT when omitted.
+    def fetch_wait: () -> Float?
+    def fetch_wait=: (Numeric) -> Float
 
     # Base delay for retry operations (seconds)
     def retry_base: () -> Float?

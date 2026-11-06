@@ -42,12 +42,15 @@ Set `subsystem` to make this client answer requests. Without it, the client cons
 | `max_concurrency` / `PROSODY_MAX_CONCURRENCY` | Max messages being processed simultaneously     | 32                     |
 | `max_uncommitted` / `PROSODY_MAX_UNCOMMITTED` | Max in-flight messages; at the limit, only a partition with a waiting message pauses | 64                     |
 | `timeout` / `PROSODY_TIMEOUT`           | Cancel handler if it runs longer than this           | 80% of stall threshold |
-| `commit_interval` / `PROSODY_COMMIT_INTERVAL` | How often to save progress to Kafka            | 1s                     |
+| `commit_interval` / `PROSODY_COMMIT_INTERVAL` | How often to save progress to Kafka; must be between 1ms and 24h | 1s |
 | `poll_interval` / `PROSODY_POLL_INTERVAL` | How often to fetch new messages from Kafka         | 100ms                  |
 | `shutdown_timeout` / `PROSODY_SHUTDOWN_TIMEOUT` | Shutdown budget; handlers run freely until cancellation fires near the end of the timeout | 30s |
 | `stall_threshold` / `PROSODY_STALL_THRESHOLD` | Report unhealthy if no progress for this long  | 5m                     |
 | `probe_port` / `PROSODY_PROBE_PORT`     | HTTP port for health checks; use `false`, `:disabled`, or the environment value `none` to disable | 8000 |
 | `statistics_interval` / `PROSODY_STATISTICS_INTERVAL` | How often librdkafka reports client statistics; must be between 1ms and 24h | 5s |
+| `partition_prefetch` / `PROSODY_PARTITION_PREFETCH` | Bytes of fetched records that wait for each assigned partition; accepts sizes such as `128 KiB`. Fetched memory grows with the number of assigned partitions (about two times this value, plus one batch, per partition). Must be between 1 KiB and 1 GB | 128 KiB |
+| `fetch_max_bytes` / `PROSODY_FETCH_MAX_BYTES` | Maximum bytes in one fetch response from one broker; accepts sizes such as `50 MiB`. Must be between 1 MB and 2147483135 bytes | 50 MiB |
+| `fetch_wait` / `PROSODY_FETCH_WAIT` | How long a broker can hold a fetch request when no new records are available. A shorter wait lowers the delay for a partition that is behind, but an idle consumer sends more fetch requests. Must be between 1ms and 59s | 500ms |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
 | `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Capacity of the producer idempotence cache and of the consumer deduplication cache. Consumer deduplication cannot be turned off, so the value must be at least 1 | 8192 |
 | `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
