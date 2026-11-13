@@ -82,18 +82,11 @@ RSpec.describe Prosody::Client, integration: true do
         source_system: TestConfig::SOURCE_NAME, group_id: TestConfig.unique_group_id, **options)
     end
 
-    # Core validates the interval when the consumer starts. A zero interval
-    # fails only when the option reaches the consumer configuration.
-    it "passes statistics_interval to the consumer" do
-      client = mock_client(statistics_interval: 0, subscribed_topics: "statistics")
-      expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /statistics_interval/)
-    end
-
-    # Each value is out of the core range, so the option reaches the consumer
-    # only if core reports it by name.
-    {partition_prefetch: "1 B", fetch_max_bytes: "1 B", fetch_wait: 0}.each do |option, value|
+    # Each value is out of the core range. Core names the option in its error
+    # only when the binding passes it to the consumer.
+    {statistics_interval: 0, partition_prefetch: "1 B", fetch_max_bytes: "1 B", fetch_wait: 0}.each do |option, value|
       it "passes #{option} to the consumer" do
-        client = mock_client(option => value, :subscribed_topics => "fetch")
+        client = mock_client(option => value, :subscribed_topics => "consumer")
         expect { client.subscribe(CompleteHandler.new) }.to raise_error(RuntimeError, /#{option}/)
       end
     end
