@@ -12,7 +12,7 @@ strategies, and integrated OpenTelemetry support for distributed tracing.
 - **Keyed State**: Per-key value/map/deque collections that survive across events, transactional by default
 - **Quality of Service**: Fair scheduling limits concurrency and prevents failures from starving fresh traffic. Pipeline mode adds deferred retry and monopolization detection
 - **Distributed Tracing**: OpenTelemetry integration for tracing message flow across services
-- **Backpressure**: Pauses partitions when handlers fall behind
+- **Backpressure**: Stops reading a partition when handlers fall behind
 - **Mocking**: In-memory Kafka broker for tests (`mock: true`)
 - **Failure Handling**: Pipeline (retry forever), Low-Latency (dead letter), Best-Effort (log and skip)
 
@@ -119,7 +119,7 @@ Prosody enables efficient, parallel processing of Kafka messages while maintaini
 - **Partition-Level Parallelism**: Separate management of each Kafka partition
 - **Key-Based Queuing**: Ordered processing for each key within a partition
 - **Concurrent Processing**: Simultaneous processing of different keys
-- **Backpressure Management**: Pause consumption from backed-up partitions
+- **Backpressure Management**: Stop reading from backed-up partitions
 
 ## Quality of Service
 

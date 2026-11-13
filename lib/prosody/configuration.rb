@@ -121,8 +121,7 @@ module Prosody
     # Interval between Kafka poll operations (in seconds).
     config_param :poll_interval, converter: ->(v) { duration_converter(v) }
 
-    # Interval between offset commit operations (in seconds). Must be between
-    # 1 ms and 24 hours.
+    # Interval between offset commit operations (in seconds).
     config_param :commit_interval, converter: ->(v) { duration_converter(v) }
 
     # Interval between librdkafka statistics reports (in seconds).
