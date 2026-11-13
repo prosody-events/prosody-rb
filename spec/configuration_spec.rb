@@ -25,6 +25,9 @@ RSpec.describe Prosody::Configuration do
       expect(config.poll_interval).to be_nil
       expect(config.commit_interval).to be_nil
       expect(config.statistics_interval).to be_nil
+      expect(config.partition_prefetch).to be_nil
+      expect(config.fetch_max_bytes).to be_nil
+      expect(config.fetch_wait).to be_nil
       expect(config.mode).to be_nil
       expect(config.retry_base).to be_nil
       expect(config.max_retries).to be_nil
@@ -116,6 +119,7 @@ RSpec.describe Prosody::Configuration do
         poll_interval: 4.0,
         commit_interval: 5.0,
         statistics_interval: 60.0,
+        fetch_wait: 0.5,
         retry_base: 0.1,
         max_retry_delay: 1.0,
         cassandra_retention: 2_592_000.0,

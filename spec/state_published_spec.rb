@@ -82,6 +82,7 @@ RSpec.describe "Prosody published state (integration)", integration: true do
       value, map, set, deque = definitions.values.map { |definition| client.state(subsystem, definition) }
       {
         "value get" => -> { value.get("k") },
+        "value exist?" => -> { value.exist?("k") },
         "map get" => -> { map.get("k", "a") },
         "map get_many" => -> { map.get_many("k", %w[a]) },
         "map key?" => -> { map.key?("k", "a") },
@@ -167,6 +168,7 @@ RSpec.describe "Prosody published state (integration)", integration: true do
       ))
       published = reader.state(subsystem, definition)
       expect(published.get("k1")).to eq({"v" => 1})
+      expect([published.exist?("k1"), published.exist?("k2")]).to eq([true, false])
       expect { published.get(:k1) }.to raise_error(TypeError)
     end
   end

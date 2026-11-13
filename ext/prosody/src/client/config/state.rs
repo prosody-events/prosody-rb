@@ -4,7 +4,8 @@
 //! descriptor. It also maps the cache, read cache, and subsystem options.
 
 use super::NativeConfiguration;
-use crate::util::seconds;
+use crate::util::{byte_size, seconds};
+use prosody::JsonCodec;
 use prosody::consumer::KeyedStateConfiguration;
 use prosody::consumer::kafka_state::{message_deque_state, message_map_state, message_state};
 use prosody::loader::KafkaLoader;
@@ -13,7 +14,6 @@ use prosody::state::descriptor::{StateDescriptor, deque_state, map_state, set_st
 use prosody::state::order_codec::Utf8KeyCodec;
 use prosody::subsystem::SubsystemName;
 use prosody::timers::duration::CompactDuration;
-use prosody::{ByteSize, JsonCodec};
 use serde::Deserialize;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -275,24 +275,15 @@ pub(super) fn build_keyed_state_config(
     }
 
     if let Some(size) = &config.state_owned_cache_size {
-        let size = size
-            .parse::<ByteSize>()
-            .map_err(|error| format!("state_owned_cache_size: {error}"))?;
-        builder.owned_cache_size(Some(size));
+        builder.owned_cache_size(Some(byte_size("state_owned_cache_size", size)?));
     }
 
     if let Some(size) = &config.state_memtable_size {
-        let size = size
-            .parse::<ByteSize>()
-            .map_err(|error| format!("state_memtable_size: {error}"))?;
-        builder.memtable_size(Some(size));
+        builder.memtable_size(Some(byte_size("state_memtable_size", size)?));
     }
 
     if let Some(size) = &config.state_read_cache_size {
-        let size = size
-            .parse::<ByteSize>()
-            .map_err(|error| format!("state_read_cache_size: {error}"))?;
-        builder.read_cache_size(Some(size));
+        builder.read_cache_size(Some(byte_size("state_read_cache_size", size)?));
     }
 
     match read_cache_policy("state_read_cache", config.state_read_cache)? {

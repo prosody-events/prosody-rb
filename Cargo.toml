@@ -14,7 +14,7 @@ educe = "0.8"
 futures = "0.3"
 magnus = { version = "0.9", default-features = false }
 opentelemetry = "0.33"
-prosody = { version = "0.7.1", features = ["libz-static"] }
+prosody = { version = "0.8", features = ["libz-static"] }
 rb-sys = "0.9"
 rustfs-mimalloc = "0.7.3"
 serde = "1.0"

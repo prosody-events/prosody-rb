@@ -168,6 +168,10 @@ macro_rules! value_state {
                 ($restore)(ruby, run_op!(ruby, this, &this.state, get())?)
             }
 
+            fn contains(ruby: &Ruby, this: &Self) -> Result<bool, Error> {
+                run_op!(ruby, this, &this.state, contains())
+            }
+
             fn set(ruby: &Ruby, this: &Self, value: Value) -> Result<(), Error> {
                 let item = ($prepare)(ruby, value)?;
                 run_op!(ruby, this, &this.state, set(item))
@@ -193,6 +197,7 @@ macro_rules! value_state {
             pub(super) fn register(ruby: &Ruby, module: RModule) -> Result<(), Error> {
                 let class = wrapped_class(ruby, module, $class)?;
                 class.define_method("get", method!($name::get, 0))?;
+                class.define_method("contains", method!($name::contains, 0))?;
                 class.define_method("set", method!($name::set, 1))?;
                 class.define_method("clear", method!($name::clear, 0))?;
                 class.define_method("commit", method!($name::commit, 0))?;

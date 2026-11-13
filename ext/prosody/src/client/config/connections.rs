@@ -2,7 +2,7 @@
 //! consumer, Cassandra, and telemetry emitter builders.
 
 use super::{NativeConfiguration, ProbePort};
-use crate::util::seconds;
+use crate::util::{byte_size, seconds};
 use prosody::cassandra::config::CassandraConfigurationBuilder;
 use prosody::consumer::ConsumerConfigurationBuilder;
 use prosody::producer::ProducerConfigurationBuilder;
@@ -84,6 +84,18 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
 
         if let Some(statistics_interval) = &config.statistics_interval {
             builder.statistics_interval(seconds("statistics_interval", *statistics_interval)?);
+        }
+
+        if let Some(partition_prefetch) = &config.partition_prefetch {
+            builder.partition_prefetch(byte_size("partition_prefetch", partition_prefetch)?);
+        }
+
+        if let Some(fetch_max_bytes) = &config.fetch_max_bytes {
+            builder.fetch_max_bytes(byte_size("fetch_max_bytes", fetch_max_bytes)?);
+        }
+
+        if let Some(fetch_wait) = &config.fetch_wait {
+            builder.fetch_wait(seconds("fetch_wait", *fetch_wait)?);
         }
 
         if let Some(mock) = &config.mock {

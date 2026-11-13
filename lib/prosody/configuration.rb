@@ -128,6 +128,22 @@ module Prosody
     # Env: PROSODY_STATISTICS_INTERVAL. Default: 5 seconds.
     config_param :statistics_interval, converter: ->(v) { duration_converter(v) }
 
+    # Bytes of fetched records that wait for each assigned partition, such as
+    # "128 KiB". Fetched memory grows with the number of assigned partitions:
+    # about two times this value, plus one batch, per partition.
+    # Env: PROSODY_PARTITION_PREFETCH. Default: 128 KiB.
+    config_param :partition_prefetch, converter: lambda(&:to_s)
+
+    # Maximum bytes in one fetch response from one broker, such as "50 MiB".
+    # Env: PROSODY_FETCH_MAX_BYTES. Default: 50 MiB.
+    config_param :fetch_max_bytes, converter: lambda(&:to_s)
+
+    # How long a broker can hold a fetch request when no new records are
+    # available (in seconds). A shorter wait lowers the delay for a partition
+    # that is behind, but an idle consumer sends more fetch requests.
+    # Env: PROSODY_FETCH_WAIT. Default: 0.5 seconds.
+    config_param :fetch_wait, converter: ->(v) { duration_converter(v) }
+
     # Base delay for retry operations (in seconds).
     config_param :retry_base, converter: ->(v) { duration_converter(v) }
 

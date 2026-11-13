@@ -79,6 +79,12 @@ impl NativePublishedValue {
         this.reads
             .read_json(ruby, async move { inner.get(key).await })
     }
+
+    fn contains(ruby: &Ruby, this: &Self, key: String) -> Result<bool, Error> {
+        let inner = Arc::clone(&this.inner);
+        this.reads
+            .read(ruby, async move { inner.contains(key).await })
+    }
 }
 
 #[magnus::wrap(class = "Prosody::NativePublishedMap")]
@@ -259,6 +265,7 @@ pub(crate) fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.get_inner(&ROOT_MOD);
     let value = module.define_class(id!(ruby, "NativePublishedValue"), ruby.class_object())?;
     value.define_method("get", method!(NativePublishedValue::get, 1))?;
+    value.define_method("contains", method!(NativePublishedValue::contains, 1))?;
 
     let map = module.define_class(id!(ruby, "NativePublishedMap"), ruby.class_object())?;
     map.define_method("get", method!(NativePublishedMap::get, 2))?;

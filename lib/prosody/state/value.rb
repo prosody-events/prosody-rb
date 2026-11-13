@@ -16,6 +16,13 @@ module Prosody
     # @return [Object, nil] the stored value, or `nil` when absent
     def get = @native.get
 
+    # Returns true when the handle holds a value, including a buffered write.
+    # The check does not decode the value. For a message value, it does not
+    # fetch the Kafka message.
+    #
+    # @return [Boolean]
+    def exist? = @native.contains
+
     # Buffers a write of the value.
     #
     # @param value [Object] the value to store (JSON, or a message)
@@ -54,5 +61,12 @@ module Prosody
     # @param key [String] the user key
     # @return [Object, nil] the value, or +nil+ when it is absent
     def get(key) = @native.get(key)
+
+    # Returns true when a committed value exists for +key+. The check does not
+    # decode the value.
+    #
+    # @param key [String] the user key
+    # @return [Boolean]
+    def exist?(key) = @native.contains(key)
   end
 end
