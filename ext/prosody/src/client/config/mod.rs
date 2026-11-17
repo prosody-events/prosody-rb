@@ -94,6 +94,9 @@ pub struct NativeConfiguration {
     /// seconds)
     fetch_wait: Option<f64>,
 
+    /// Availability zone of this process, sent to Kafka as `client.rack`
+    kafka_rack: Option<String>,
+
     /// Operation mode of the client (`pipeline`, `low_latency`, `best_effort`)
     mode: Option<String>,
 

@@ -82,6 +82,12 @@ module Prosody
     def fetch_wait: () -> Float?
     def fetch_wait=: (Numeric) -> Float
 
+    # Availability zone (rack) of this process, sent to Kafka as client.rack
+    # so fetches use a replica in the same zone. Uses PROSODY_KAFKA_RACK when
+    # omitted.
+    def kafka_rack: () -> String?
+    def kafka_rack=: (_ToS) -> String
+
     # Base delay for retry operations (seconds)
     def retry_base: () -> Float?
     def retry_base=: (Numeric) -> Float

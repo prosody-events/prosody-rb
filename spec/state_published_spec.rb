@@ -14,15 +14,16 @@ RSpec.describe "Prosody published state (integration)", integration: true do
       definition = Prosody.value(name, published: true, read_cache: false)
       handler_class = Class.new(StateHandler) do
         def on_message(context, _message)
-          context.state(@def).set({"v" => 1})
-          @sink.push(:written)
+          value = context.state(@def)
+          value.set({"v" => 1})
+          @sink.push(value.commit)
         end
       end
 
       client = build_client(definition, subsystem: subsystem)
       client.subscribe(handler_class.new(sink, definition))
       client.send_message(topic, "k1", {go: true})
-      expect(sink.wait(1).first).to eq(:written)
+      expect(sink.wait(1).first).to eq(:applied)
 
       # Each reader names the published value collection with another kind, so
       # every read fails with a descriptor identity mismatch.
