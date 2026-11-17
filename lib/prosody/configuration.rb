@@ -144,6 +144,11 @@ module Prosody
     # Env: PROSODY_FETCH_WAIT. Default: 0.5 seconds.
     config_param :fetch_wait, converter: ->(v) { duration_converter(v) }
 
+    # Availability zone (rack) of this process. Sent to Kafka as client.rack so
+    # the consumer and the deferred-message loader fetch from a replica in the
+    # same zone. Env: PROSODY_KAFKA_RACK. Default: fetch from the partition leader.
+    config_param :kafka_rack, converter: lambda(&:to_s)
+
     # Base delay for retry operations (in seconds).
     config_param :retry_base, converter: ->(v) { duration_converter(v) }
 

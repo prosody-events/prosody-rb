@@ -54,6 +54,10 @@ impl<'a> TryFrom<&'a NativeConfiguration> for ConsumerConfigurationBuilder {
             builder.group_id(group_id.clone());
         }
 
+        if let Some(rack) = &config.kafka_rack {
+            builder.rack(rack.clone());
+        }
+
         if let Some(subscribed_topics) = &config.subscribed_topics {
             builder.subscribed_topics(subscribed_topics.clone());
         }

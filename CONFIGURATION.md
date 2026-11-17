@@ -51,6 +51,7 @@ Set `subsystem` to make this client answer requests. Without it, the client cons
 | `partition_prefetch` / `PROSODY_PARTITION_PREFETCH` | Bytes of fetched records that wait for each assigned partition; accepts sizes such as `128 KiB`. Fetched memory grows with the number of assigned partitions (about two times this value, plus one batch, per partition) | 128 KiB |
 | `fetch_max_bytes` / `PROSODY_FETCH_MAX_BYTES` | Maximum bytes in one fetch response from one broker; accepts sizes such as `50 MiB` | 50 MiB |
 | `fetch_wait` / `PROSODY_FETCH_WAIT` | How long a broker can hold a fetch request when no new records are available. A shorter wait lowers the delay for a partition that is behind, but an idle consumer sends more fetch requests | 500ms |
+| `kafka_rack` / `PROSODY_KAFKA_RACK` | Availability zone of this process, sent to Kafka as `client.rack`. The consumer and the deferred-message loader then fetch from a replica in the same zone. Brokers must use `RackAwareReplicaSelector`. Set `PROSODY_KAFKA_RACK_FILE` to name a file that holds the value. The plain variable has priority. A blank file counts as unset | - |
 | `failure_topic` / `PROSODY_FAILURE_TOPIC` | Send unprocessable messages here (dead letter queue) | -                     |
 | `idempotence_cache_size` / `PROSODY_IDEMPOTENCE_CACHE_SIZE` | Capacity of the producer idempotence cache and of the consumer deduplication cache. Consumer deduplication cannot be turned off, so the value must be at least 1 | 8192 |
 | `idempotence_version` / `PROSODY_IDEMPOTENCE_VERSION` | Version string for cache-busting dedup hashes | 1              |
@@ -136,7 +137,7 @@ Persistent storage for timers, deferral, deduplication, and keyed state. It is n
 | `cassandra_user` / `PROSODY_CASSANDRA_USER` | Username                          | -       |
 | `cassandra_password` / `PROSODY_CASSANDRA_PASSWORD` | Password                   | -       |
 | `cassandra_datacenter` / `PROSODY_CASSANDRA_DATACENTER` | Prefer this datacenter for queries | - |
-| `cassandra_rack` / `PROSODY_CASSANDRA_RACK` | Prefer this rack for queries      | -       |
+| `cassandra_rack` / `PROSODY_CASSANDRA_RACK` | Prefer this rack for queries. Set `PROSODY_CASSANDRA_RACK_FILE` to name a file that holds the value. The plain variable has priority. A blank file counts as unset | - |
 | `cassandra_retention` / `PROSODY_CASSANDRA_RETENTION` | Delete data older than this | 1y     |
 
 ## Keyed State

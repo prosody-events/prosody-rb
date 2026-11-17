@@ -38,6 +38,7 @@ RSpec.describe Prosody::Configuration do
       expect(config.cassandra_keyspace).to be_nil
       expect(config.cassandra_datacenter).to be_nil
       expect(config.cassandra_rack).to be_nil
+      expect(config.kafka_rack).to be_nil
       expect(config.cassandra_user).to be_nil
       expect(config.cassandra_password).to be_nil
       expect(config.cassandra_retention).to be_nil
@@ -209,6 +210,7 @@ RSpec.describe Prosody::Configuration do
         cassandra_keyspace: "test_keyspace",
         cassandra_datacenter: "dc1",
         cassandra_rack: "rack1",
+        kafka_rack: "zone-a",
         cassandra_user: "cassandra_user",
         cassandra_password: "cassandra_password",
         telemetry_topic: "prosody.telemetry-events",
@@ -340,6 +342,7 @@ RSpec.describe Prosody::Configuration do
         cassandra_keyspace: "test_keyspace",
         cassandra_datacenter: "dc1",
         cassandra_rack: "rack1",
+        kafka_rack: "zone-a",
         cassandra_user: "test_user",
         cassandra_password: "test_password",
         cassandra_retention: 2_592_000.0,
@@ -374,6 +377,7 @@ RSpec.describe Prosody::Configuration do
       expect(config.cassandra_keyspace).to eq("test_keyspace")
       expect(config.cassandra_datacenter).to eq("dc1")
       expect(config.cassandra_rack).to eq("rack1")
+      expect(config.kafka_rack).to eq("zone-a")
       expect(config.cassandra_user).to eq("test_user")
       expect(config.cassandra_password).to eq("test_password")
       expect(config.cassandra_retention).to eq(2_592_000.0)
